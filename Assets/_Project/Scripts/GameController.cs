@@ -4,6 +4,7 @@ using LunarDominion.Core;
 using LunarDominion.Economy;
 using LunarDominion.Progression;
 using LunarDominion.Save;
+using LunarDominion.Units;
 using UnityEngine;
 
 namespace LunarDominion
@@ -16,12 +17,14 @@ namespace LunarDominion
         [Header("Assign in Inspector (optional — defaults are created if empty)")]
         public BalanceData Balance;
         public List<BuildingDefinition> BuildingDefinitions;
+        public List<UnitDefinition> UnitDefinitions;
 
         public GameState State { get; private set; }
         public EconomyService Economy { get; private set; }
         public ProductionService Production { get; private set; }
         public EnergyService Energy { get; private set; }
         public ProgressionService Progression { get; private set; }
+        public RecruitmentService Recruitment { get; private set; }
         public SaveService Save { get; private set; }
 
         public event Action OnStateChanged;
@@ -33,6 +36,8 @@ namespace LunarDominion
             if (Balance == null) Balance = BalanceData.Default();
             if (BuildingDefinitions == null || BuildingDefinitions.Count == 0)
                 BuildingDefinitions = BuildingCatalog.CreateDefaultDefinitions();
+            if (UnitDefinitions == null || UnitDefinitions.Count == 0)
+                UnitDefinitions = UnitCatalog.CreateDefaultDefinitions();
 
             Save = new SaveService(Balance);
             if (!Save.TryLoad(out var loaded, out _))
@@ -48,6 +53,7 @@ namespace LunarDominion
             Production = new ProductionService(State, Economy, Balance);
             Energy = new EnergyService(State, Balance);
             Progression = new ProgressionService(State, Economy, Balance);
+            Recruitment = new RecruitmentService(State, Economy, BuildingDefinitions);
 
             // Apply offline production now that Economy exists.
             if (DateTime.TryParse(State.LastSaveTimeUtc, out var parsedLastSave))
@@ -109,6 +115,7 @@ namespace LunarDominion
             Production = new ProductionService(State, Economy, Balance);
             Energy = new EnergyService(State, Balance);
             Progression = new ProgressionService(State, Economy, Balance);
+            Recruitment = new RecruitmentService(State, Economy, BuildingDefinitions);
             NotifyChanged();
         }
     }

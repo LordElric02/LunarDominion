@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace LunarDominion.Core
 {
@@ -15,6 +16,10 @@ namespace LunarDominion.Core
         // Indexed by (int)BuildingId. All buildings start at level 1 once unlocked;
         // locked buildings are stored as 0 and shown as locked in the UI.
         public int[] BuildingLevels = new int[7];
+
+        // One entry per recruited unit instance (Phase 3). Units are
+        // tracked individually so Phase 4 XP/levels can differ per unit.
+        public List<OwnedUnit> Army = new List<OwnedUnit>();
 
         public string LastEnergyDate = "";
         public string LastSaveTimeUtc = "";

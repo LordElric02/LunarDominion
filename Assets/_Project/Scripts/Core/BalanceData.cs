@@ -11,6 +11,7 @@ namespace LunarDominion.Core
     {
         [Header("Progression")]
         public int MaxBuildingLevel = 30;
+        public int MaxUnitLevel = 20;
         public float CostGrowth = 1.22f;
         public float ProductionGrowth = 0.22f;
 

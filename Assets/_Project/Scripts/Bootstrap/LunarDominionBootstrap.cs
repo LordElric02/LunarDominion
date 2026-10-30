@@ -5,7 +5,7 @@ using UnityEngine.EventSystems;
 namespace LunarDominion.Bootstrap
 {
     /// <summary>Single entry point for a blank scene. Add this component to an
-    /// empty GameObject, press Play, and the whole Phase 2 interface is
+    /// empty GameObject, press Play, and the whole Phase 2–3 interface is
     /// built at runtime — no prefabs or scene assets required.
     /// Unity UI (uGUI) was chosen over UI Toolkit: it is the proven choice
     /// for in-game mobile HUDs with dynamic, per-frame resource text, and
@@ -16,6 +16,7 @@ namespace LunarDominion.Bootstrap
         private TopBarView _topBar;
         private BaseView _baseView;
         private BuildingPanelView _buildingPanel;
+        private ArmyView _armyView;
         private BottomNavView _bottomNav;
         private PlaceholderView _placeholder;
         private DevHUDView _devHud;
@@ -51,6 +52,9 @@ namespace LunarDominion.Bootstrap
             _buildingPanel = new GameObject("BuildingPanelView").AddComponent<BuildingPanelView>();
             _buildingPanel.Build(canvas, _controller);
 
+            _armyView = new GameObject("ArmyView").AddComponent<ArmyView>();
+            _armyView.Build(canvas, _controller);
+
             _placeholder = new GameObject("PlaceholderView").AddComponent<PlaceholderView>();
             _placeholder.Build(canvas);
 
@@ -75,6 +79,7 @@ namespace LunarDominion.Bootstrap
         private void OnTabSelected(NavTab tab)
         {
             _buildingPanel.Hide();
+            _armyView.Hide();
             switch (tab)
             {
                 case NavTab.Base:
@@ -83,7 +88,7 @@ namespace LunarDominion.Bootstrap
                     break;
                 case NavTab.Army:
                     _baseView.SetVisible(false);
-                    _placeholder.Show("Army", "Army management arrives in Phase 3.\nRecruitment, unit tiers, and XP will live here.");
+                    _armyView.Show();
                     break;
                 case NavTab.Expeditions:
                     _baseView.SetVisible(false);
@@ -100,6 +105,7 @@ namespace LunarDominion.Bootstrap
         {
             _topBar?.Refresh();
             _buildingPanel?.Refresh();
+            _armyView?.Refresh();
         }
     }
 }

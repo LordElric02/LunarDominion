@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using LunarDominion.Core;
 using UnityEngine;
@@ -16,6 +17,7 @@ namespace LunarDominion.Save
         public int Helium3;
         public int Energy;
         public int[] BuildingLevels = new int[7];
+        public List<OwnedUnit> Army = new List<OwnedUnit>();
         public string LastEnergyDate = "";
         public string LastSaveTimeUtc = "";
     }
@@ -55,6 +57,7 @@ namespace LunarDominion.Save
                 Helium3 = state.Helium3,
                 Energy = state.Energy,
                 BuildingLevels = (int[])state.BuildingLevels.Clone(),
+                Army = ValidateArmy(state.Army),
                 LastEnergyDate = state.LastEnergyDate,
                 LastSaveTimeUtc = state.LastSaveTimeUtc
             };
@@ -82,6 +85,7 @@ namespace LunarDominion.Save
                     Energy = Math.Max(0, Math.Min(data.Energy, _balance.MaxEnergy)),
                     BuildingLevels = data.BuildingLevels != null && data.BuildingLevels.Length == 7
                         ? (int[])data.BuildingLevels.Clone() : new int[7],
+                    Army = ValidateArmy(data.Army),
                     LastEnergyDate = data.LastEnergyDate ?? "",
                     LastSaveTimeUtc = data.LastSaveTimeUtc ?? ""
                 };
@@ -102,6 +106,28 @@ namespace LunarDominion.Save
                 message = "Save could not be loaded: " + e.Message;
                 return false;
             }
+        }
+
+        // Phase 2 saves have no Army field (null after JSON load), which
+        // correctly loads as an empty army. Drop invalid entries, never
+        // a whole save, and clamp levels/XP into valid ranges.
+        private List<OwnedUnit> ValidateArmy(List<OwnedUnit> army)
+        {
+            var result = new List<OwnedUnit>();
+            if (army == null) return result;
+            foreach (var unit in army)
+            {
+                if (unit == null) continue;
+                int id = (int)unit.Id;
+                if (id < 0 || id > 8) continue;
+                result.Add(new OwnedUnit
+                {
+                    Id = unit.Id,
+                    Level = Math.Max(1, Math.Min(unit.Level, _balance.MaxUnitLevel)),
+                    XP = Math.Max(0, unit.XP)
+                });
+            }
+            return result;
         }
 
         public void DeleteSave()
