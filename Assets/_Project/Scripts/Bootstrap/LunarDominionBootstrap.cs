@@ -26,7 +26,14 @@ namespace LunarDominion.Bootstrap
             {
                 var es = new GameObject("EventSystem");
                 es.AddComponent<EventSystem>();
+                // StandaloneInputModule uses the legacy Input API, so it
+                // also breaks under Input System Package only. Use the
+                // Input System UI module when that system is enabled.
+#if ENABLE_INPUT_SYSTEM
+                es.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+#else
                 es.AddComponent<StandaloneInputModule>();
+#endif
             }
 
             var canvas = UIHelpers.CreateCanvas("MainCanvas");

@@ -135,16 +135,45 @@ namespace LunarDominion.UI
 
         private void Update()
         {
-            bool tapped = Input.GetMouseButtonDown(0) || (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began);
+            // Input System note: Unity throws InvalidOperationException if
+            // the legacy UnityEngine.Input API is read while Player Settings
+            // > Active Input Handler is set to Input System Package only.
+            // When the new Input System is enabled, read Mouse/Touchscreen
+            // instead; otherwise keep the legacy path. This keeps the same
+            // script working in Input Manager, Both, and Input System only.
+            bool tapped = false;
+            Vector2 screenPos = Vector2.zero;
+            int touchPointerId = -1;
+#if ENABLE_INPUT_SYSTEM
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                tapped = true;
+                screenPos = mouse.position.ReadValue();
+            }
+            var touchscreen = UnityEngine.InputSystem.Touchscreen.current;
+            if (touchscreen != null && touchscreen.primaryTouch.press.wasPressedThisFrame)
+            {
+                tapped = true;
+                screenPos = touchscreen.primaryTouch.position.ReadValue();
+                touchPointerId = (int)touchscreen.primaryTouch.touchId.ReadValue();
+            }
+#else
+            tapped = Input.GetMouseButtonDown(0) || (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began);
+            if (tapped) screenPos = Input.touchCount > 0 ? Input.GetTouch(0).position : (Vector2)Input.mousePosition;
+#endif
             if (!tapped) return;
             if (EventSystem.current != null)
             {
+#if ENABLE_INPUT_SYSTEM
+                if (touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject()) return;
+#else
                 if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) return;
                 if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) return;
+#endif
             }
             var cam = Camera.main;
             if (cam == null) return;
-            Vector2 screenPos = Input.touchCount > 0 ? Input.GetTouch(0).position : (Vector2)Input.mousePosition;
             var ray = cam.ScreenPointToRay(screenPos);
             if (!Physics.Raycast(ray, out var hit, 100f)) return;
             foreach (var pair in _buildingObjects)
