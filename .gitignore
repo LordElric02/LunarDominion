@@ -1,0 +1,55 @@
+# Lunar Dominion — Unity .gitignore
+# Place this file in the project root, next to the Assets folder,
+# BEFORE your first commit in GitHub Desktop.
+#
+# What this keeps OUT (generated / local / rebuildable):
+#   Library, Temp, Logs, build outputs, Visual Studio files
+# What this keeps IN (do NOT add these to this file):
+#   Assets/ (including all .meta files — Unity needs those),
+#   Packages/, ProjectSettings/
+# .meta files must be tracked. Never ignore *.meta.
+
+# Unity generated folders — Unity rebuilds these on open
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Aa]sset[Ss]tore[Tt]ools/
+
+# Visual Studio / Rider generated files
+.vs/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.idea/
+*.sln.docstates
+
+# Android / iOS build outputs
+*.apk
+*.aab
+*.ipa
+*.app
+.gradle/
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# Local crash / profiling dumps
+*.dmp
