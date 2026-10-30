@@ -16,11 +16,14 @@ namespace LunarDominion.UI
         {
             _controller = controller;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var safe = SafeArea.Get(canvas);
+            float topFrac = Screen.height > 0 ? safe.TopPx / Screen.height : 0f;
+            float rightFrac = Screen.width > 0 ? safe.RightPx / Screen.width : 0f;
             var toggle = UIHelpers.Button(canvas.gameObject, "DevToggle", "DEV", 24,
                 UIHelpers.Hex("#7A3B00"), Color.white);
             var trt = toggle.GetComponent<RectTransform>();
-            trt.anchorMin = new Vector2(0.86f, 0.88f);
-            trt.anchorMax = new Vector2(0.98f, 0.93f);
+            trt.anchorMin = new Vector2(0.86f - rightFrac, 0.88f - topFrac);
+            trt.anchorMax = new Vector2(0.98f - rightFrac, 0.93f - topFrac);
             trt.offsetMin = Vector2.zero;
             trt.offsetMax = Vector2.zero;
             toggle.onClick.AddListener(() => _root.SetActive(!_root.activeSelf));

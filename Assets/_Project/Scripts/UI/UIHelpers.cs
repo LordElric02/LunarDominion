@@ -54,6 +54,10 @@ namespace LunarDominion.UI
             t.fontSize = size;
             t.color = color;
             t.alignment = alignment;
+            // Phase 5: on a narrower portrait screen (e.g. 360 dp wide)
+            // long labels must wrap inside their rect, never run off it.
+            t.horizontalOverflow = HorizontalWrapMode.Wrap;
+            t.verticalOverflow = VerticalWrapMode.Truncate;
             var rt = go.GetComponent<RectTransform>();
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
@@ -95,6 +99,8 @@ namespace LunarDominion.UI
             t.fontSize = fontSize;
             t.color = fg;
             t.alignment = TextAnchor.MiddleCenter;
+            t.horizontalOverflow = HorizontalWrapMode.Wrap;
+            t.verticalOverflow = VerticalWrapMode.Truncate;
             var rt = txt.GetComponent<RectTransform>();
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;

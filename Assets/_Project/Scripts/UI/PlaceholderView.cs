@@ -14,8 +14,9 @@ namespace LunarDominion.UI
 
         public void Build(Canvas canvas)
         {
+            var safe = SafeArea.Get(canvas);
             _root = UIHelpers.Panel(canvas.gameObject, "PlaceholderPanel", UIHelpers.Hex("#16202F"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310), new Vector2(-20, 1200));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310 + safe.Bottom), new Vector2(-20, 1200 + safe.Bottom));
             _titleText = UIHelpers.LabelInRect(_root, "Title", "", 40, Color.white,
                 new Rect(0.05f, 0.80f, 0.95f, 0.95f), TextAnchor.MiddleCenter);
             _bodyText = UIHelpers.LabelInRect(_root, "Body", "", 30, UIHelpers.Hex("#C0C8D0"),

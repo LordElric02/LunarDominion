@@ -17,8 +17,9 @@ namespace LunarDominion.UI
         public void Build(Canvas canvas, GameController controller)
         {
             _controller = controller;
+            var safe = SafeArea.Get(canvas);
             var bar = UIHelpers.Panel(canvas.gameObject, "TopBar", UIHelpers.Hex("#101826"),
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -140), new Vector2(0, 0));
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -140 - safe.Top), new Vector2(0, -safe.Top));
 
             var title = UIHelpers.LabelInRect(bar, "Title", "LUNAR DOMINION", 36,
                 Color.white, new Rect(0.02f, 0.55f, 0.98f, 1f), TextAnchor.MiddleCenter);

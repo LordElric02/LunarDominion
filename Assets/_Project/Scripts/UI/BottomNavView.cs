@@ -14,8 +14,9 @@ namespace LunarDominion.UI
 
         public void Build(Canvas canvas)
         {
+            var safe = SafeArea.Get(canvas);
             var bar = UIHelpers.Panel(canvas.gameObject, "BottomNav", UIHelpers.Hex("#101826"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, 180));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, safe.Bottom), new Vector2(0, 180 + safe.Bottom));
             string[] labels = { "Base", "Army", "Expeditions", "Research" };
             NavTab[] tabs = { NavTab.Base, NavTab.Army, NavTab.Expeditions, NavTab.Research };
             for (int i = 0; i < labels.Length; i++)

@@ -35,8 +35,9 @@ namespace LunarDominion.UI
         public void Build(Canvas canvas, GameController controller)
         {
             _controller = controller;
+            var safe = SafeArea.Get(canvas);
             _root = UIHelpers.Panel(canvas.gameObject, "ArmyPanel", UIHelpers.Hex("#16202F"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310), new Vector2(-20, 1200));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310 + safe.Bottom), new Vector2(-20, 1200 + safe.Bottom));
             UIHelpers.LabelInRect(_root, "Title", "ARMY", 36, Color.white,
                 new Rect(0.04f, 0.90f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
             _summaryText = UIHelpers.LabelInRect(_root, "Summary", "", 26, Color.white,

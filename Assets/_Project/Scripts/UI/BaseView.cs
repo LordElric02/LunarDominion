@@ -44,14 +44,26 @@ namespace LunarDominion.UI
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.1f;
+            light.intensity = 1.25f;
             lightGo.transform.position = new Vector3(5f, 10f, 0f);
             lightGo.transform.LookAt(Vector3.zero);
+
+            // Phase 5 fill light: a soft cool light from the opposite
+            // side, so buildings are readable from the isometric camera
+            // instead of having one fully dark face. Primitives only —
+            // no final art, no new models.
+            var fillGo = new GameObject("Fill Light");
+            var fill = fillGo.AddComponent<Light>();
+            fill.type = LightType.Directional;
+            fill.intensity = 0.35f;
+            fill.color = new Color(0.8f, 0.85f, 1f);
+            fillGo.transform.position = new Vector3(-5f, 8f, -5f);
+            fillGo.transform.LookAt(Vector3.zero);
 
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "LunarGround";
             ground.transform.localScale = new Vector3(2.2f, 1f, 2.2f);
-            ground.GetComponent<Renderer>().material.color = new Color(0.23f, 0.25f, 0.29f);
+            ground.GetComponent<Renderer>().material.color = new Color(0.27f, 0.29f, 0.33f);
 
             // A few crater placeholders.
             for (int i = 0; i < 5; i++)
@@ -92,7 +104,7 @@ namespace LunarDominion.UI
             marker.name = shortName + "Marker";
             marker.transform.SetParent(go.transform, false);
             marker.transform.localPosition = new Vector3(0f, 0.7f, 0f);
-            marker.transform.localScale = new Vector3(0.25f, 0.25f, 0.25f);
+            marker.transform.localScale = new Vector3(0.30f, 0.30f, 0.30f);
             marker.GetComponent<Renderer>().material.color = Color.white;
         }
 
@@ -100,8 +112,10 @@ namespace LunarDominion.UI
         {
             // Accessibility fallback: tapping a 3D building can be fiddly on a
             // small screen, so a row of building buttons sits above the nav.
+            // It shifts up with the bottom safe area, in step with the nav.
+            var safe = SafeArea.Get(canvas);
             _quickSelectRow = UIHelpers.Panel(canvas.gameObject, "QuickSelect", UIHelpers.Hex("#1A2436"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 220), new Vector2(0, 300));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 220 + safe.Bottom), new Vector2(0, 300 + safe.Bottom));
             var defs = _controller.BuildingDefinitions;
             float step = 1f / defs.Count;
             for (int i = 0; i < defs.Count; i++)
