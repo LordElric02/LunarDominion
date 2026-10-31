@@ -21,8 +21,8 @@ namespace LunarDominion.Core
 
         [Header("Energy (GDD §6)")]
         // Proof-of-concept early-game abundance (2026-10-31, Patrick's call):
-        // was 100. Refill at local midnight now gives 1500.
-        public int MaxEnergy = 1500;
+        // was 100, then 1500. Refill at local midnight now gives 5000.
+        public int MaxEnergy = 5000;
 
         [Header("Production (GDD §4)")]
         public float OfflineProductionCapHours = 8f;
@@ -36,8 +36,8 @@ namespace LunarDominion.Core
         public int StartingAlloy = 400;
         public int StartingHelium3 = 150;
         // Proof-of-concept early-game abundance (2026-10-31, Patrick's call):
-        // was 100. A new game starts with 1500.
-        public int StartingEnergy = 1500;
+        // was 100, then 1500. A new game starts with 5000.
+        public int StartingEnergy = 5000;
 
         public static BalanceData Default()
         {
