@@ -113,6 +113,12 @@ namespace LunarDominion
             NotifyChanged();
         }
 
+        public void GrantEnergy(int amount)
+        {
+            Energy.Grant(amount);
+            NotifyChanged();
+        }
+
         public void ResetGame()
         {
             Save.DeleteSave();

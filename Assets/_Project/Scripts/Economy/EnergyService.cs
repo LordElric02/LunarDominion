@@ -32,5 +32,12 @@ namespace LunarDominion.Economy
             _state.Energy -= amount;
             return true;
         }
+
+        // Dev / test helper only, called via GameController.GrantEnergy.
+        // Clamped to MaxEnergy, so a grant tops up to the cap, never over it.
+        public void Grant(int amount)
+        {
+            _state.Energy = Math.Min(_balance.MaxEnergy, _state.Energy + amount);
+        }
     }
 }

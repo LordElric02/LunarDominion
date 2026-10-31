@@ -32,10 +32,11 @@ namespace LunarDominion.UI
                 new Vector2(0.05f, 0.55f), new Vector2(0.95f, 0.88f), Vector2.zero, Vector2.zero);
             var title = UIHelpers.LabelInRect(_root, "Title", "DEV — Test menu", 32, Color.white,
                 new Rect(0.05f, 0.85f, 0.95f, 0.98f), TextAnchor.MiddleCenter);
-            AddButton("Grant +1000 Biomass", 0.68f, () => _controller.GrantResources(1000, 0, 0));
-            AddButton("Grant +1000 Alloy", 0.54f, () => _controller.GrantResources(0, 1000, 0));
-            AddButton("Grant +1000 Helium-3", 0.40f, () => _controller.GrantResources(0, 0, 1000));
-            AddButton("Reset save (new game)", 0.26f, () => { _controller.ResetGame(); _controller.SaveGame(); });
+            AddButton("Grant +1000 Biomass", 0.72f, () => _controller.GrantResources(1000, 0, 0));
+            AddButton("Grant +1000 Alloy", 0.60f, () => _controller.GrantResources(0, 1000, 0));
+            AddButton("Grant +1000 Helium-3", 0.48f, () => _controller.GrantResources(0, 0, 1000));
+            AddButton("Grant +1000 Energy", 0.36f, () => _controller.GrantEnergy(1000));
+            AddButton("Reset save (new game)", 0.24f, () => { _controller.ResetGame(); _controller.SaveGame(); });
             AddButton("Save now", 0.12f, () => _controller.SaveGame());
             _root.SetActive(false);
         }
@@ -45,7 +46,7 @@ namespace LunarDominion.UI
             var btn = UIHelpers.Button(_root, label, label, 26, UIHelpers.Hex("#3A3A3A"), Color.white);
             var rt = btn.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.05f, yMin);
-            rt.anchorMax = new Vector2(0.95f, yMin + 0.12f);
+            rt.anchorMax = new Vector2(0.95f, yMin + 0.10f);
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
             btn.onClick.AddListener(() => { action(); _controller.NotifyChanged(); });
