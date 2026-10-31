@@ -20,6 +20,12 @@ namespace LunarDominion.Save
         public List<OwnedUnit> Army = new List<OwnedUnit>();
         public string LastEnergyDate = "";
         public string LastSaveTimeUtc = "";
+        // Fractional production carry (<1 per resource). Phase 6 fix:
+        // previously in GameState only, so it reset to 0 on every load.
+        // Old saves without these fields load as 0, which is correct.
+        public float ProductionCarryBiomass;
+        public float ProductionCarryAlloy;
+        public float ProductionCarryHelium3;
     }
 
     public class SaveService
@@ -59,13 +65,19 @@ namespace LunarDominion.Save
                 BuildingLevels = (int[])state.BuildingLevels.Clone(),
                 Army = ValidateArmy(state.Army),
                 LastEnergyDate = state.LastEnergyDate,
-                LastSaveTimeUtc = state.LastSaveTimeUtc
+                LastSaveTimeUtc = state.LastSaveTimeUtc,
+                ProductionCarryBiomass = state.ProductionCarryBiomass,
+                ProductionCarryAlloy = state.ProductionCarryAlloy,
+                ProductionCarryHelium3 = state.ProductionCarryHelium3
             };
             string json = JsonUtility.ToJson(data, true);
             string temp = SavePath + ".tmp";
             File.WriteAllText(temp, json);
-            if (File.Exists(SavePath)) File.Delete(SavePath);
-            File.Move(temp, SavePath);
+            // Phase 6 fix (S5): File.Replace swaps the temp file into
+            // place atomically. The old delete-then-move had a window
+            // where a crash left no save file at all.
+            if (File.Exists(SavePath)) File.Replace(temp, SavePath, null);
+            else File.Move(temp, SavePath);
         }
 
         public bool TryLoad(out GameState state, out string message)
@@ -87,7 +99,10 @@ namespace LunarDominion.Save
                         ? (int[])data.BuildingLevels.Clone() : new int[7],
                     Army = ValidateArmy(data.Army),
                     LastEnergyDate = data.LastEnergyDate ?? "",
-                    LastSaveTimeUtc = data.LastSaveTimeUtc ?? ""
+                    LastSaveTimeUtc = data.LastSaveTimeUtc ?? "",
+                    ProductionCarryBiomass = Math.Max(0f, data.ProductionCarryBiomass),
+                    ProductionCarryAlloy = Math.Max(0f, data.ProductionCarryAlloy),
+                    ProductionCarryHelium3 = Math.Max(0f, data.ProductionCarryHelium3)
                 };
                 // Clamp levels: 0-30, and no building above the Nexus.
                 int nexus = Math.Max(1, Math.Min(state.NexusLevel, _balance.MaxBuildingLevel));
@@ -119,7 +134,12 @@ namespace LunarDominion.Save
             {
                 if (unit == null) continue;
                 int id = (int)unit.Id;
-                if (id < 0 || id > 8) continue;
+                if (id < 0 || id > 8)
+                {
+                    // Phase 6 fix (S4): §9 asks for a warning on drop.
+                    Debug.LogWarning($"[Lunar Dominion] Dropped unknown unit ID {id} from save.");
+                    continue;
+                }
                 result.Add(new OwnedUnit
                 {
                     Id = unit.Id,

@@ -119,7 +119,9 @@ namespace LunarDominion.Expeditions
                 return false;
             }
 
-            var outcome = CombatService.Resolve(squad, encounter);
+            // Phase 6: pass the player's Nexus level so enemies scale
+            // above their gate (1.0 at the gate itself).
+            var outcome = CombatService.Resolve(squad, encounter, _state.NexusLevel);
 
             result = new BattleResult
             {

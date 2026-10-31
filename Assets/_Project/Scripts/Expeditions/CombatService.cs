@@ -29,7 +29,11 @@ namespace LunarDominion.Expeditions
     /// changes here — it reports an outcome and ExpeditionService
     /// applies rewards, XP, and casualties. Enemies are level 1 in
     /// this prototype: the GDD tables give no enemy level, so the
-    /// level modifier is computed against 1 for both sides' enemies.</summary>
+    /// level modifier is computed against 1 for both sides' enemies.
+    /// Phase 6: enemy stats scale with Nexus level above the
+    /// encounter's gate, so lower tiers stay challenging as the
+    /// player grows. At the gate itself the scale is 1.0, so every
+    /// Play-verified gate battle is unchanged.</summary>
     public static class CombatService
     {
         private class Fighter
@@ -69,6 +73,24 @@ namespace LunarDominion.Expeditions
 
         public static CombatOutcome Resolve(List<SquadCombatant> squad, EncounterDefinition encounter)
         {
+            // Backwards-compatible entry point: scale as if at the gate.
+            return Resolve(squad, encounter, encounter.RequiredNexusLevel);
+        }
+
+        /// <summary>Enemy scale for a Nexus level: 1.0 at the encounter's
+        /// gate, +4% per Nexus level above it. Applied to HP, Attack
+        /// and Defense (rounded). Examples: Tier 1 at Nexus 8 = 1.28
+        /// (Spore Crawler 80 HP / 12 ATK / 5 DEF -> 102 / 15 / 6);
+        /// Tier 2 at Nexus 15 = 1.28; Tier 3 at Nexus 20 = 1.20.
+        /// Rewards and XP pools are NOT scaled — only enemy stats.</summary>
+        public static float EnemyScale(int nexusLevel, int requiredNexusLevel)
+        {
+            int aboveGate = Math.Max(0, nexusLevel - requiredNexusLevel);
+            return 1f + 0.04f * aboveGate;
+        }
+
+        public static CombatOutcome Resolve(List<SquadCombatant> squad, EncounterDefinition encounter, int nexusLevel)
+        {
             var players = new List<Fighter>();
             foreach (var member in squad)
             {
@@ -87,6 +109,7 @@ namespace LunarDominion.Expeditions
             }
 
             var enemies = new List<Fighter>();
+            float scale = EnemyScale(nexusLevel, encounter.RequiredNexusLevel);
             foreach (var spawn in encounter.Spawns)
             {
                 for (int i = 0; i < spawn.Count; i++)
@@ -96,9 +119,9 @@ namespace LunarDominion.Expeditions
                         Name = spawn.DisplayName,
                         Class = spawn.Class,
                         Level = 1,
-                        Attack = spawn.Attack,
-                        Defense = spawn.Defense,
-                        Health = spawn.Health,
+                        Attack = (int)Math.Round(spawn.Attack * scale),
+                        Defense = (int)Math.Round(spawn.Defense * scale),
+                        Health = (int)Math.Round(spawn.Health * scale),
                         IsPlayer = false
                     });
                 }
