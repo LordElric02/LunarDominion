@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using LunarDominion.Core;
 using LunarDominion.Economy;
 
@@ -70,10 +71,20 @@ namespace LunarDominion.Research
             return TimerMinutesByLevel[targetLevel - 1];
         }
 
+        // BUG FIX (2026-11-01, Alloy Refining 2 completed instantly):
+        // Plain DateTime.TryParse converts a UTC "o" timestamp to local
+        // time. In Chicago that shifts the finish 5-6 hours earlier, so
+        // UtcNow already looks past it and TryComplete fires on the
+        // next 1-second tick. RoundtripKind preserves the UTC instant.
+        public static bool TryParseFinishUtc(string text, out DateTime finish)
+        {
+            return DateTime.TryParse(text, null, DateTimeStyles.RoundtripKind, out finish);
+        }
+
         public double RemainingSeconds(DateTime nowUtc)
         {
             if (!IsResearching) return 0;
-            if (!DateTime.TryParse(_state.ActiveResearchFinishUtc, out var finish)) return 0;
+            if (!TryParseFinishUtc(_state.ActiveResearchFinishUtc, out var finish)) return 0;
             return Math.Max(0, (finish - nowUtc).TotalSeconds);
         }
 
@@ -173,7 +184,7 @@ namespace LunarDominion.Research
         {
             completed = null;
             if (!IsResearching) return false;
-            if (!DateTime.TryParse(_state.ActiveResearchFinishUtc, out var finish))
+            if (!TryParseFinishUtc(_state.ActiveResearchFinishUtc, out var finish))
             {
                 // Corrupt finish time: drop the in-progress research
                 // rather than leaving the player blocked forever.

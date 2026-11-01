@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using LunarDominion.Core;
 using UnityEngine;
@@ -174,7 +175,9 @@ namespace LunarDominion.Save
             if (data.ActiveResearchId < 0 || data.ActiveResearchId > 9) return -1;
             if (data.ActiveResearchTargetLevel < 1 || data.ActiveResearchTargetLevel > 5) return -1;
             if (string.IsNullOrEmpty(data.ActiveResearchFinishUtc)) return -1;
-            if (!DateTime.TryParse(data.ActiveResearchFinishUtc, out _)) return -1;
+            // Same UTC round-trip pitfall as ResearchService: plain
+            // TryParse would shift the finish to local time.
+            if (!DateTime.TryParse(data.ActiveResearchFinishUtc, null, DateTimeStyles.RoundtripKind, out _)) return -1;
             return data.ActiveResearchId;
         }
 

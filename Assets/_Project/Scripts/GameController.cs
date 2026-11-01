@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using LunarDominion.Core;
 using LunarDominion.Economy;
 using LunarDominion.Progression;
@@ -72,7 +73,10 @@ namespace LunarDominion
             Research.TryComplete(DateTime.UtcNow, out _);
 
             // Apply offline production now that Economy exists.
-            if (DateTime.TryParse(State.LastSaveTimeUtc, out var parsedLastSave))
+            // RoundtripKind, same UTC pitfall as ResearchService:
+            // plain TryParse would shift the last-save time to local
+            // time and over-credit offline production by 5-6 hours.
+            if (DateTime.TryParse(State.LastSaveTimeUtc, null, DateTimeStyles.RoundtripKind, out var parsedLastSave))
             {
                 // Only apply if this was a loaded save, not a fresh game.
                 if (!string.IsNullOrEmpty(State.LastSaveTimeUtc))
