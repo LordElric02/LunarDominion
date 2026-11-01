@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using LunarDominion.Core;
 using LunarDominion.Economy;
 using LunarDominion.Progression;
+using LunarDominion.Research;
 using LunarDominion.Expeditions;
 using LunarDominion.Save;
 using LunarDominion.Units;
@@ -20,6 +21,7 @@ namespace LunarDominion
         public List<BuildingDefinition> BuildingDefinitions;
         public List<UnitDefinition> UnitDefinitions;
         public List<EncounterDefinition> EncounterDefinitions;
+        public List<ResearchDefinition> ResearchDefinitions;
 
         public GameState State { get; private set; }
         public EconomyService Economy { get; private set; }
@@ -28,6 +30,7 @@ namespace LunarDominion
         public ProgressionService Progression { get; private set; }
         public RecruitmentService Recruitment { get; private set; }
         public ExpeditionService Expeditions { get; private set; }
+        public ResearchService Research { get; private set; }
         public SaveService Save { get; private set; }
 
         public event Action OnStateChanged;
@@ -43,6 +46,8 @@ namespace LunarDominion
                 UnitDefinitions = UnitCatalog.CreateDefaultDefinitions();
             if (EncounterDefinitions == null || EncounterDefinitions.Count == 0)
                 EncounterDefinitions = EncounterCatalog.CreateDefaultEncounters();
+            if (ResearchDefinitions == null || ResearchDefinitions.Count == 0)
+                ResearchDefinitions = ResearchCatalog.CreateDefaultDefinitions();
 
             Save = new SaveService(Balance);
             if (!Save.TryLoad(out var loaded, out _))
@@ -55,11 +60,16 @@ namespace LunarDominion
             }
 
             Economy = new EconomyService(State, Balance);
-            Production = new ProductionService(State, Economy, Balance);
+            Research = new ResearchService(State, Economy, Balance, ResearchDefinitions);
+            Economy.Research = Research;
+            Production = new ProductionService(State, Economy, Balance, Research);
             Energy = new EnergyService(State, Balance);
             Progression = new ProgressionService(State, Economy, Balance);
             Recruitment = new RecruitmentService(State, Economy, BuildingDefinitions);
-            Expeditions = new ExpeditionService(State, Economy, Energy, Balance, UnitDefinitions);
+            Expeditions = new ExpeditionService(State, Economy, Energy, Balance, UnitDefinitions, Research);
+
+            // A research timer may have finished while the game was closed.
+            Research.TryComplete(DateTime.UtcNow, out _);
 
             // Apply offline production now that Economy exists.
             if (DateTime.TryParse(State.LastSaveTimeUtc, out var parsedLastSave))
@@ -82,6 +92,10 @@ namespace LunarDominion
             {
                 Production.Tick(_tickTimer / 3600f, BuildingDefinitions);
                 _tickTimer = 0f;
+                // Research timers complete in real time, checked here
+                // once a second, and are saved when they complete.
+                if (Research != null && Research.TryComplete(DateTime.UtcNow, out _))
+                    SaveGame();
                 OnStateChanged?.Invoke();
             }
         }
@@ -124,11 +138,13 @@ namespace LunarDominion
             Save.DeleteSave();
             State = Save.NewGame();
             Economy = new EconomyService(State, Balance);
-            Production = new ProductionService(State, Economy, Balance);
+            Research = new ResearchService(State, Economy, Balance, ResearchDefinitions);
+            Economy.Research = Research;
+            Production = new ProductionService(State, Economy, Balance, Research);
             Energy = new EnergyService(State, Balance);
             Progression = new ProgressionService(State, Economy, Balance);
             Recruitment = new RecruitmentService(State, Economy, BuildingDefinitions);
-            Expeditions = new ExpeditionService(State, Economy, Energy, Balance, UnitDefinitions);
+            Expeditions = new ExpeditionService(State, Economy, Energy, Balance, UnitDefinitions, Research);
             NotifyChanged();
         }
     }

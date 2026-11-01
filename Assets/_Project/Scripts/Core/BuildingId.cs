@@ -1,7 +1,8 @@
 namespace LunarDominion.Core
 {
-    /// <summary>Stable IDs for the seven buildings in the Lunar Dominion GDD.
-    /// These IDs are what the save file stores, so never renumber them.</summary>
+    /// <summary>Stable IDs for the buildings in the Lunar Dominion GDD
+    /// plus the Research Lab (Research, 2026-11-01). These IDs are
+    /// what the save file stores, so never renumber them.</summary>
     public enum BuildingId
     {
         CommandNexus = 0,
@@ -10,6 +11,7 @@ namespace LunarDominion.Core
         AegisMotorPool = 3,
         HydroponicsDome = 4,
         AlloyExtractor = 5,
-        HeliumHarvester = 6
+        HeliumHarvester = 6,
+        ResearchLab = 7
     }
 }

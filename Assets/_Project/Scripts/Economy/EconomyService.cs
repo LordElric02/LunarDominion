@@ -1,5 +1,6 @@
 using System;
 using LunarDominion.Core;
+using LunarDominion.Research;
 
 namespace LunarDominion.Economy
 {
@@ -10,13 +11,25 @@ namespace LunarDominion.Economy
         private readonly GameState _state;
         private readonly BalanceData _balance;
 
+        // Set by GameController after ResearchService is created.
+        // Null means no research bonuses (e.g. before wiring).
+        public ResearchService Research { get; set; }
+
         public EconomyService(GameState state, BalanceData balance)
         {
             _state = state;
             _balance = balance;
         }
 
-        public int StorageCap => _balance.StorageBase + _balance.StoragePerNexusLevel * _state.NexusLevel;
+        public int StorageCap
+        {
+            get
+            {
+                int baseCap = _balance.StorageBase + _balance.StoragePerNexusLevel * _state.NexusLevel;
+                float mult = Research != null ? Research.StorageMultiplier() : 1f;
+                return (int)Math.Round(baseCap * mult);
+            }
+        }
 
         public bool CanAfford(ResourceCost cost)
         {

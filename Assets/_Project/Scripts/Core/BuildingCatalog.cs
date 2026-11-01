@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace LunarDominion.Core
 {
-    /// <summary>Builds the seven GDD building definitions at runtime when the
+    /// <summary>Builds the eight building definitions at runtime when the
     /// project has no BuildingDefinition assets yet. Bases match GDD §4
     /// (unified formula: base x 1.22^(level-2)). Replace with assigned
     /// ScriptableObject assets later without changing any service code.</summary>
@@ -33,6 +33,12 @@ namespace LunarDominion.Core
             list.Add(Make(BuildingId.HeliumHarvester, "Helium-3 Harvester",
                 "Generates Helium-3.",
                 4, 200, 150, 0, 3, 6f));
+            // Research Lab (Research, 2026-11-01): unlocks at Nexus 1,
+            // first build free like other buildings in the prototype.
+            // Its level caps research node levels (see ResearchService).
+            list.Add(Make(BuildingId.ResearchLab, "Research Lab",
+                "Unlocks research. Research node levels cannot exceed Lab level.",
+                1, 150, 150, 0, 0, 0f));
             return list;
         }
 

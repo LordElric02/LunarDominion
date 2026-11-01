@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using LunarDominion.Core;
 using LunarDominion.Economy;
+using LunarDominion.Research;
 using LunarDominion.Units;
 
 namespace LunarDominion.Expeditions
@@ -50,15 +51,17 @@ namespace LunarDominion.Expeditions
         private readonly EnergyService _energy;
         private readonly BalanceData _balance;
         private readonly List<UnitDefinition> _units;
+        private readonly ResearchService _research;
 
         public ExpeditionService(GameState state, EconomyService economy, EnergyService energy,
-            BalanceData balance, List<UnitDefinition> units)
+            BalanceData balance, List<UnitDefinition> units, ResearchService research = null)
         {
             _state = state;
             _economy = economy;
             _energy = energy;
             _balance = balance;
             _units = units;
+            _research = research;
         }
 
         public ExpeditionStatus CheckExpedition(EncounterDefinition encounter, int squadSize, out string reason)
@@ -121,7 +124,8 @@ namespace LunarDominion.Expeditions
 
             // Phase 6: pass the player's Nexus level so enemies scale
             // above their gate (1.0 at the gate itself).
-            var outcome = CombatService.Resolve(squad, encounter, _state.NexusLevel);
+            // Research: pass research so class bonuses apply to players.
+            var outcome = CombatService.Resolve(squad, encounter, _state.NexusLevel, _research);
 
             result = new BattleResult
             {
@@ -139,18 +143,24 @@ namespace LunarDominion.Expeditions
             }
             result.Flawless = outcome.Victory && outcome.DeadSquadIndices.Count == 0;
 
-            // XP pool: full on victory (+25% if flawless), half on a
-            // timeout defeat with survivors, none on an all-dead defeat.
+            // XP pool: full on victory (+flawless bonus if flawless),
+            // half on a timeout defeat with survivors, none on an
+            // all-dead defeat. Research (2026-11-01): Combat Training
+            // multiplies the pool, Flawless Drills raises the flawless
+            // bonus from its 25% base. No research means 1.25x / 1.0x
+            // exactly as before.
+            float xpMult = _research != null ? _research.XpMultiplier() : 1f;
+            float flawlessBonus = _research != null ? _research.FlawlessBonus() : 0.25f;
             int pool = 0;
             if (outcome.Victory)
             {
                 pool = result.Flawless
-                    ? (int)Math.Round(encounter.XpPool * 1.25f)
-                    : encounter.XpPool;
+                    ? (int)Math.Round(encounter.XpPool * (1f + flawlessBonus) * xpMult)
+                    : (int)Math.Round(encounter.XpPool * xpMult);
             }
             else if (outcome.Timeout && outcome.SurvivingSquadIndices.Count > 0)
             {
-                pool = encounter.XpPool / 2;
+                pool = (int)Math.Round(encounter.XpPool / 2f * xpMult);
             }
             result.XpPool = pool;
 
@@ -185,10 +195,17 @@ namespace LunarDominion.Expeditions
 
             // Victory reward only. Report what actually landed after
             // the storage cap, not the table value, if the cap clipped it.
+            // Research (2026-11-01): Salvage Protocols multiplies the
+            // reward before the cap is applied.
             if (outcome.Victory)
             {
+                float rewardMult = _research != null ? _research.RewardMultiplier() : 1f;
+                var scaledReward = new ResourceCost(
+                    (int)Math.Round(encounter.Reward.Biomass * rewardMult),
+                    (int)Math.Round(encounter.Reward.Alloy * rewardMult),
+                    (int)Math.Round(encounter.Reward.Helium3 * rewardMult));
                 int beforeB = _state.Biomass, beforeA = _state.Alloy, beforeH = _state.Helium3;
-                _economy.Earn(encounter.Reward);
+                _economy.Earn(scaledReward);
                 result.RewardEarned = new ResourceCost(
                     _state.Biomass - beforeB, _state.Alloy - beforeA, _state.Helium3 - beforeH);
             }

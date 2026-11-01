@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using LunarDominion.Core;
+using LunarDominion.Research;
 
 namespace LunarDominion.Economy
 {
@@ -11,12 +12,15 @@ namespace LunarDominion.Economy
         private readonly GameState _state;
         private readonly EconomyService _economy;
         private readonly BalanceData _balance;
+        private readonly ResearchService _research;
 
-        public ProductionService(GameState state, EconomyService economy, BalanceData balance)
+        public ProductionService(GameState state, EconomyService economy, BalanceData balance,
+            ResearchService research = null)
         {
             _state = state;
             _economy = economy;
             _balance = balance;
+            _research = research;
         }
 
         public void Tick(float deltaHours, IReadOnlyList<BuildingDefinition> definitions)
@@ -38,6 +42,7 @@ namespace LunarDominion.Economy
             {
                 int level = _state.GetLevel(def.Id);
                 float rate = _economy.ProductionPerHour(def, level);
+                if (_research != null) rate *= _research.ProductionMultiplier(def.ProducedResource);
                 if (rate <= 0f) continue;
                 float amount = rate * hours;
                 switch (def.ProducedResource)

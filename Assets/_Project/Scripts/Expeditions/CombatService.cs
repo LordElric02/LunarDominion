@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using LunarDominion.Core;
+using LunarDominion.Research;
 using LunarDominion.Units;
 
 namespace LunarDominion.Expeditions
@@ -91,18 +92,29 @@ namespace LunarDominion.Expeditions
 
         public static CombatOutcome Resolve(List<SquadCombatant> squad, EncounterDefinition encounter, int nexusLevel)
         {
+            return Resolve(squad, encounter, nexusLevel, null);
+        }
+
+        /// <summary>Research-aware entry point. Research bonuses multiply
+        /// the unit's XP-scaled stats (Research proposal stacking rule),
+        /// never replace them. Null research means no bonuses.</summary>
+        public static CombatOutcome Resolve(List<SquadCombatant> squad, EncounterDefinition encounter, int nexusLevel,
+            ResearchService research)
+        {
             var players = new List<Fighter>();
             foreach (var member in squad)
             {
                 int level = Math.Max(1, member.Unit.Level);
+                float hpMult = 1f, atkMult = 1f, defMult = 1f;
+                if (research != null) research.ClassMultipliers(member.Definition.Class, out hpMult, out atkMult, out defMult);
                 players.Add(new Fighter
                 {
                     Name = member.Definition.DisplayName,
                     Class = member.Definition.Class,
                     Level = level,
-                    Attack = UnitStats.ScaledAttack(member.Definition, level),
-                    Defense = UnitStats.ScaledDefense(member.Definition, level),
-                    Health = UnitStats.ScaledHealth(member.Definition, level),
+                    Attack = (int)Math.Round(UnitStats.ScaledAttack(member.Definition, level) * atkMult),
+                    Defense = (int)Math.Round(UnitStats.ScaledDefense(member.Definition, level) * defMult),
+                    Health = (int)Math.Round(UnitStats.ScaledHealth(member.Definition, level) * hpMult),
                     SquadIndex = member.SquadIndex,
                     IsPlayer = true
                 });

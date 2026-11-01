@@ -19,7 +19,7 @@ namespace LunarDominion.Bootstrap
         private ArmyView _armyView;
         private ExpeditionsView _expeditionsView;
         private BottomNavView _bottomNav;
-        private PlaceholderView _placeholder;
+        private ResearchView _researchView;
         private DevHUDView _devHud;
 
         private void Awake()
@@ -59,8 +59,8 @@ namespace LunarDominion.Bootstrap
             _expeditionsView = new GameObject("ExpeditionsView").AddComponent<ExpeditionsView>();
             _expeditionsView.Build(canvas, _controller);
 
-            _placeholder = new GameObject("PlaceholderView").AddComponent<PlaceholderView>();
-            _placeholder.Build(canvas);
+            _researchView = new GameObject("ResearchView").AddComponent<ResearchView>();
+            _researchView.Build(canvas, _controller);
 
             _bottomNav = new GameObject("BottomNavView").AddComponent<BottomNavView>();
             _bottomNav.Build(canvas);
@@ -75,7 +75,7 @@ namespace LunarDominion.Bootstrap
 
         private void OnBuildingSelected(Core.BuildingDefinition def)
         {
-            _placeholder.Hide();
+            _researchView.Hide();
             _baseView.Highlight(def.Id, _controller.State.GetLevel(def.Id) == 0);
             _buildingPanel.Show(def);
         }
@@ -85,10 +85,10 @@ namespace LunarDominion.Bootstrap
             _buildingPanel.Hide();
             _armyView.Hide();
             _expeditionsView.Hide();
+            _researchView.Hide();
             switch (tab)
             {
                 case NavTab.Base:
-                    _placeholder.Hide();
                     _baseView.SetVisible(true);
                     break;
                 case NavTab.Army:
@@ -101,7 +101,7 @@ namespace LunarDominion.Bootstrap
                     break;
                 case NavTab.Research:
                     _baseView.SetVisible(false);
-                    _placeholder.Show("Research", "Research is a placeholder in Phase 2.\nNo research system is defined in the GDD yet.");
+                    _researchView.Show();
                     break;
             }
         }
@@ -112,6 +112,7 @@ namespace LunarDominion.Bootstrap
             _buildingPanel?.Refresh();
             _armyView?.Refresh();
             _expeditionsView?.Refresh();
+            _researchView?.Refresh();
         }
     }
 }

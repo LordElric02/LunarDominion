@@ -87,6 +87,9 @@ namespace LunarDominion.UI
             AddBuilding(BuildingId.MarineFoundry, new Vector3(-4f, 0f, -3.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             AddBuilding(BuildingId.NovaArsenal, new Vector3(4f, 0f, -3.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -5.5f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
+            // Research Lab (2026-11-01): west side, clear of the other
+            // buildings, so it stays tappable at phone size.
+            AddBuilding(BuildingId.ResearchLab, new Vector3(-6.5f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
         }
 
         private void AddBuilding(BuildingId id, Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, string shortName)
@@ -143,6 +146,7 @@ namespace LunarDominion.UI
                 case BuildingId.HydroponicsDome: return "Hydro";
                 case BuildingId.AlloyExtractor: return "Alloy";
                 case BuildingId.HeliumHarvester: return "He-3";
+                case BuildingId.ResearchLab: return "Lab";
                 default: return id.ToString();
             }
         }
