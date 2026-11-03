@@ -63,7 +63,7 @@ namespace LunarDominion.UI
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "LunarGround";
             ground.transform.localScale = new Vector3(2.2f, 1f, 2.2f);
-            ground.GetComponent<Renderer>().material.color = new Color(0.27f, 0.29f, 0.33f);
+            SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
 
             // A few crater placeholders.
             for (int i = 0; i < 5; i++)
@@ -72,7 +72,7 @@ namespace LunarDominion.UI
                 crater.name = "Crater";
                 crater.transform.position = new Vector3(-7f + i * 3.5f, 0.01f, -6f + (i % 2) * 9f);
                 crater.transform.localScale = new Vector3(1.2f, 0.05f, 1.2f);
-                crater.GetComponent<Renderer>().material.color = new Color(0.16f, 0.17f, 0.20f);
+                SetPrimitiveColor(crater.GetComponent<Renderer>(), new Color(0.16f, 0.17f, 0.20f));
             }
         }
 
@@ -98,7 +98,7 @@ namespace LunarDominion.UI
             go.name = shortName + "Building";
             go.transform.position = new Vector3(pos.x, scale.y / 2f, pos.z);
             go.transform.localScale = scale;
-            go.GetComponent<Renderer>().material.color = color;
+            SetPrimitiveColor(go.GetComponent<Renderer>(), color);
             _buildingObjects[id] = go;
             _baseColors[id] = color;
 
@@ -108,7 +108,37 @@ namespace LunarDominion.UI
             marker.transform.SetParent(go.transform, false);
             marker.transform.localPosition = new Vector3(0f, 0.7f, 0f);
             marker.transform.localScale = new Vector3(0.30f, 0.30f, 0.30f);
-            marker.GetComponent<Renderer>().material.color = Color.white;
+            SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+        }
+
+        // Android magenta fix (2026-11-02): CreatePrimitive's default
+        // material rendered as Unity's missing-shader magenta on the
+        // phone, even though it looked coloured in the Editor. Assign an
+        // explicit URP Lit material to every runtime primitive instead,
+        // so the intended colour is carried by a shader that is present
+        // in the URP Android build. Fall back to the primitive's own
+        // material if URP Lit cannot be found (e.g. a Built-in project).
+        private static void SetPrimitiveColor(Renderer renderer, Color color)
+        {
+            if (renderer == null) return;
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader != null)
+            {
+                var material = new Material(shader);
+                SetMaterialColor(material, color);
+                renderer.material = material;
+            }
+            else
+            {
+                SetMaterialColor(renderer.material, color);
+            }
+        }
+
+        private static void SetMaterialColor(Material material, Color color)
+        {
+            if (material == null) return;
+            material.color = color;
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
         }
 
         private void BuildQuickSelect(Canvas canvas)
@@ -219,9 +249,9 @@ namespace LunarDominion.UI
                 var rend = pair.Value.GetComponent<Renderer>();
                 if (rend == null) continue;
                 if (pair.Key == selected)
-                    rend.material.color = isLocked ? new Color(0.4f, 0.4f, 0.4f) : _baseColors[pair.Key] * 1.4f;
+                    SetMaterialColor(rend.material, isLocked ? new Color(0.4f, 0.4f, 0.4f) : _baseColors[pair.Key] * 1.4f);
                 else
-                    rend.material.color = _baseColors[pair.Key];
+                    SetMaterialColor(rend.material, _baseColors[pair.Key]);
             }
         }
     }
