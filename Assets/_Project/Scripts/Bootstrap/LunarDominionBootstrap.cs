@@ -21,6 +21,7 @@ namespace LunarDominion.Bootstrap
         private BottomNavView _bottomNav;
         private ResearchView _researchView;
         private DevHUDView _devHud;
+        private SplashView _splashView;
 
         private void Awake()
         {
@@ -71,6 +72,12 @@ namespace LunarDominion.Bootstrap
 
             _controller.OnStateChanged += RefreshAll;
             RefreshAll();
+
+            // In-game splash: artwork holds ~2s over the finished base,
+            // then fades out. Tap anywhere to skip. Built last so it
+            // covers everything, on its own canvas above MainCanvas.
+            _splashView = new GameObject("SplashView").AddComponent<SplashView>();
+            _splashView.Build();
         }
 
         private void OnBuildingSelected(Core.BuildingDefinition def)
