@@ -17,8 +17,8 @@ namespace LunarDominion.UI
         private readonly Dictionary<BuildingId, GameObject> _buildingObjects = new Dictionary<BuildingId, GameObject>();
         private readonly Dictionary<BuildingId, Color> _baseColors = new Dictionary<BuildingId, Color>();
         // Blender-model buildings (Command Nexus, Hydroponics Dome, Alloy
-        // Extractor, Helium-3 Harvester, Marine Foundry, Nova Arsenal and
-        // Aegis Motor Pool, for now): the
+        // Extractor, Helium-3 Harvester, Marine Foundry, Nova Arsenal,
+        // Aegis Motor Pool and Research Lab — all eight buildings): the
         // renderers and each part's original colour, so Highlight() can
         // brighten/dim each part from its own colour instead of flattening
         // the whole model to one colour. Primitives keep the old path.
@@ -123,9 +123,13 @@ namespace LunarDominion.UI
             // still builds when the model file is missing.
             if (!TryAddModelAegisMotorPool())
                 AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -5.5f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
-            // Research Lab (2026-11-01): west side, clear of the other
-            // buildings, so it stays tappable at phone size.
-            AddBuilding(BuildingId.ResearchLab, new Vector3(-6.5f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
+            // Research Lab (Blender model, 2026-11-05): use the FBX model if
+            // it loads, otherwise fall back to the old purple cylinder so
+            // the base still builds when the model file is missing.
+            // (2026-11-01 note: west side, clear of the other buildings,
+            // so it stays tappable at phone size.)
+            if (!TryAddModelResearchLab())
+                AddBuilding(BuildingId.ResearchLab, new Vector3(-6.5f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
         }
 
         private void AddBuilding(BuildingId id, Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, string shortName)
@@ -787,6 +791,92 @@ namespace LunarDominion.UI
 #if UNITY_EDITOR
             return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/_Project/Resources/Models/AegisMotorPool.fbx");
+#else
+            return null;
+#endif
+        }
+
+        private bool TryAddModelResearchLab()
+        {
+            var prefab = LoadResearchLabModelPrefab();
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "LabBuilding";
+                go.transform.position = new Vector3(-6.5f, 0f, 0f);
+                go.transform.localScale = Vector3.one;
+
+                // Capture the model's part renderers BEFORE adding the marker,
+                // so Highlight() recolours the model parts but not the marker.
+                // Held in locals until the end: if anything below fails, the
+                // fallback primitive must not inherit a half-built model entry.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared imported material.
+                    partColors[rend] = rend.material.color;
+                }
+
+                // The FBX has no collider, and tapping raycasts against
+                // colliders — give the model one covering the tower, dome
+                // and antenna above it (2.2 wide, 2.3 tall, 2.2 deep,
+                // centred at y = 1.15).
+                if (go.GetComponentInChildren<Collider>() == null)
+                {
+                    var box = go.AddComponent<BoxCollider>();
+                    box.center = new Vector3(0f, 1.15f, 0f);
+                    box.size = new Vector3(2.2f, 2.3f, 2.2f);
+                }
+
+                // Same white marker as the primitives, just above the
+                // antenna tip (model top is ~2.24, so 2.5 sits on it).
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "LabMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(0f, 2.5f, 0f);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.ResearchLab] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.ResearchLab] = go;
+                _baseColors[BuildingId.ResearchLab] = new Color(0.55f, 0.30f, 0.85f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Research Lab model failed to load, using primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Load the Research Lab FBX as a prefab. In a built
+        /// player only assets under a Resources folder can be loaded by
+        /// path, so for Android/iOS builds the FBX lives at
+        /// Assets/_Project/Resources/Models/ResearchLab.fbx. In the
+        /// Editor it loads straight from that same path, so Editor Play
+        /// shows the model without moving the file.</summary>
+        private static GameObject LoadResearchLabModelPrefab()
+        {
+            var fromResources = Resources.Load<GameObject>("Models/ResearchLab");
+            if (fromResources != null) return fromResources;
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/_Project/Resources/Models/ResearchLab.fbx");
 #else
             return null;
 #endif
