@@ -32,7 +32,6 @@ namespace LunarDominion.UI
             _controller = controller;
             BuildGroundAndCamera();
             BuildBuildings();
-            BuildDerelictShipScene();
             BuildQuickSelect(canvas);
         }
 
@@ -71,11 +70,7 @@ namespace LunarDominion.UI
 
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "LunarGround";
-            // 2026-11-05: extended from 17 to 36 units wide so the
-            // derelict spaceship in the distance sits on moon surface
-            // instead of black void. Buildings, craters, patches and
-            // rocks are unchanged and still sit near the centre.
-            ground.transform.localScale = new Vector3(3.6f, 1f, 3.6f);
+            ground.transform.localScale = new Vector3(1.7f, 1f, 1.7f);
             SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
 
             // 2026-11-05: moon-like surface. The old flat dark discs read as
@@ -165,51 +160,6 @@ namespace LunarDominion.UI
         {
             var collider = go.GetComponent<Collider>();
             if (collider != null) Destroy(collider);
-        }
-
-        // Derelict spaceship scene (2026-11-05): a crashed ship in the
-        // distance on the far side of the base from the camera, at
-        // (-13, 0, -11), with debris scattered around it. Framing check:
-        // with the camera at (9,11,9) looking at the origin at 60 degrees
-        // vertical FOV in portrait, the ship centre lands at about
-        // NDC (0.15, +0.71) — upper middle of the frame, in view with
-        // margin — and the extended 36-wide ground reaches it. The ship
-        // is scenery, not a building: it is never registered in
-        // _buildingObjects/_baseColors, has no quick-select button, no
-        // marker, and no colliders, so the tap raycast is unaffected.
-        private void BuildDerelictShipScene()
-        {
-            if (!TryAddDerelictShip())
-                AddDerelictShipPrimitive();
-
-            // Debris within ~4 units of the ship, some half-buried. All
-            // fixed positions, all colliders stripped, all ~13+ units
-            // from the nearest building (the Lab at (-4.9, 0)).
-            var rust = new Color(0.75f, 0.38f, 0.12f);
-            var dark = new Color(0.15f, 0.15f, 0.18f);
-            AddDebris(new Vector3(-11.2f, 0f, -9.3f), PrimitiveType.Cube, new Vector3(1.2f, 0.3f, 0.8f), rust, 20f);
-            AddDebris(new Vector3(-15f, 0f, -12.8f), PrimitiveType.Cylinder, new Vector3(0.6f, 1.4f, 0.6f), dark, 0f);
-            AddDebris(new Vector3(-12f, 0f, -13.6f), PrimitiveType.Cube, new Vector3(0.9f, 0.4f, 0.7f), rust, 65f);
-            AddDebris(new Vector3(-14.6f, 0f, -9.4f), PrimitiveType.Cube, new Vector3(0.8f, 0.5f, 0.6f), dark, 110f);
-            AddDebris(new Vector3(-10.6f, 0f, -11.6f), PrimitiveType.Sphere, new Vector3(0.7f, 0.7f, 0.7f), dark, 0f);
-            AddDebris(new Vector3(-13.2f, 0f, -14.2f), PrimitiveType.Cube, new Vector3(1f, 0.3f, 0.6f), dark, 40f);
-            AddDebris(new Vector3(-16.2f, 0f, -11f), PrimitiveType.Cylinder, new Vector3(0.7f, 1.2f, 0.7f), rust, 0f);
-            AddDebris(new Vector3(-11.6f, 0f, -12.6f), PrimitiveType.Cube, new Vector3(0.7f, 0.4f, 0.5f), dark, 80f);
-            AddDebris(new Vector3(-14.2f, 0f, -8.6f), PrimitiveType.Cube, new Vector3(0.9f, 0.35f, 0.7f), rust, 15f);
-            AddDebris(new Vector3(-12.6f, 0f, -10.2f), PrimitiveType.Sphere, new Vector3(0.5f, 0.5f, 0.5f), rust, 0f);
-        }
-
-        // One piece of wreck debris: a panel, pipe section or tank, sunk
-        // a quarter of its height into the ground so it reads half-buried.
-        private void AddDebris(Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, float yRot)
-        {
-            var piece = GameObject.CreatePrimitive(shape);
-            piece.name = "Debris";
-            piece.transform.position = new Vector3(pos.x, scale.y * 0.25f, pos.z);
-            piece.transform.localScale = scale;
-            piece.transform.rotation = Quaternion.Euler(0f, yRot, 0f);
-            SetPrimitiveColor(piece.GetComponent<Renderer>(), color);
-            StripCollider(piece);
         }
 
         private void BuildBuildings()
@@ -1012,101 +962,6 @@ namespace LunarDominion.UI
 #else
             return null;
 #endif
-        }
-
-        /// <summary>Instantiate the Blender derelict spaceship FBX at
-        /// (-13, 0, -11) if it can be loaded. Returns false (caller falls
-        /// back to the primitive wreck) when the model is missing, has no
-        /// meshes, or fails to instantiate. The model is built ~5.5 units
-        /// long with its nose-down crash tilt baked into the geometry, so
-        /// only the -45 degree yaw is applied here, pointing the nose
-        /// toward the camera side. Scenery only: no building registration,
-        /// no marker, and all colliders are stripped so taps are unaffected.
-        /// Its imported materials are used as-is (URP Lit on import).</summary>
-        private bool TryAddDerelictShip()
-        {
-            var prefab = LoadDerelictShipPrefab();
-            if (prefab == null) return false;
-
-            GameObject go = null;
-            try
-            {
-                go = Instantiate(prefab);
-                go.name = "DerelictShip";
-                go.transform.position = new Vector3(-13f, 0f, -11f);
-                go.transform.rotation = Quaternion.Euler(0f, -45f, 0f);
-                go.transform.localScale = Vector3.one;
-
-                var renderers = go.GetComponentsInChildren<Renderer>();
-                if (renderers.Length == 0)
-                {
-                    Destroy(go);
-                    return false;
-                }
-                foreach (var collider in go.GetComponentsInChildren<Collider>())
-                    Destroy(collider);
-                return true;
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning("[BaseView] Derelict ship model failed to load, using primitive: " + e.Message);
-                if (go != null) Destroy(go);
-                return false;
-            }
-        }
-
-        /// <summary>Load the derelict spaceship FBX as a prefab. Same
-        /// Resources/ + Editor AssetDatabase pattern as the buildings:
-        /// in a built player only assets under a Resources folder can be
-        /// loaded by path, so the FBX lives at
-        /// Assets/_Project/Resources/Models/DerelictShip.fbx.</summary>
-        private static GameObject LoadDerelictShipPrefab()
-        {
-            var fromResources = Resources.Load<GameObject>("Models/DerelictShip");
-            if (fromResources != null) return fromResources;
-#if UNITY_EDITOR
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-                "Assets/_Project/Resources/Models/DerelictShip.fbx");
-#else
-            return null;
-#endif
-        }
-
-        /// <summary>Primitive fallback wreck, used only when the FBX is
-        /// missing: a grey cylinder hull lying along the ship's yawed axis
-        /// with a wing and a dark cockpit. Same position and yaw as the
-        /// model; the nose-down tilt is model-only and not reproduced here.
-        /// Colliders are stripped on every part, as with the model.</summary>
-        private void AddDerelictShipPrimitive()
-        {
-            var go = new GameObject("DerelictShip");
-            go.transform.position = new Vector3(-13f, 0f, -11f);
-            go.transform.rotation = Quaternion.Euler(0f, -45f, 0f);
-
-            var hull = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            hull.name = "DerelictHull";
-            hull.transform.SetParent(go.transform, false);
-            hull.transform.localPosition = new Vector3(0f, 1f, 0f);
-            hull.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-            hull.transform.localScale = new Vector3(1.4f, 2.5f, 1.4f);
-            SetPrimitiveColor(hull.GetComponent<Renderer>(), new Color(0.32f, 0.33f, 0.36f));
-            StripCollider(hull);
-
-            var wing = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            wing.name = "DerelictWing";
-            wing.transform.SetParent(go.transform, false);
-            wing.transform.localPosition = new Vector3(0.2f, 0.9f, 1f);
-            wing.transform.localScale = new Vector3(1.6f, 0.12f, 1.4f);
-            SetPrimitiveColor(wing.GetComponent<Renderer>(), new Color(0.15f, 0.15f, 0.18f));
-            StripCollider(wing);
-
-            var cockpit = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            cockpit.name = "DerelictCockpit";
-            cockpit.transform.SetParent(go.transform, false);
-            cockpit.transform.localPosition = new Vector3(1.8f, 1.3f, 0f);
-            cockpit.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
-            SetPrimitiveColor(cockpit.GetComponent<Renderer>(), new Color(0.08f, 0.10f, 0.16f));
-            StripCollider(cockpit);
         }
 
         // Android magenta fix (2026-11-02): CreatePrimitive's default
