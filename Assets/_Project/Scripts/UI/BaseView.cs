@@ -30,6 +30,7 @@ namespace LunarDominion.UI
         // planet, so SetVisible() can hide them with the rest of the base
         // view. Sky objects are never buildings: no colliders, no panels,
         // no quick-select buttons.
+        private readonly List<GameObject> _skyObjects = new List<GameObject>();
 
         public void Build(GameController controller, Canvas canvas)
         {
