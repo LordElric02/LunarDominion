@@ -17,7 +17,7 @@ namespace LunarDominion.UI
         private readonly Dictionary<BuildingId, GameObject> _buildingObjects = new Dictionary<BuildingId, GameObject>();
         private readonly Dictionary<BuildingId, Color> _baseColors = new Dictionary<BuildingId, Color>();
         // Blender-model buildings (Command Nexus, Hydroponics Dome, Alloy
-        // Extractor and Helium-3 Harvester, for now): the model's part
+        // Extractor, Helium-3 Harvester and Marine Foundry, for now): the
         // renderers and each part's original colour, so Highlight() can
         // brighten/dim each part from its own colour instead of flattening
         // the whole model to one colour. Primitives keep the old path.
@@ -107,7 +107,11 @@ namespace LunarDominion.UI
             // base still builds when the model file is missing.
             if (!TryAddModelHeliumHarvester())
                 AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 5.5f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
-            AddBuilding(BuildingId.MarineFoundry, new Vector3(-4f, 0f, -3.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
+            // Marine Foundry (Blender model, 2026-11-05): use the FBX model if
+            // it loads, otherwise fall back to the old green-grey cube so the
+            // base still builds when the model file is missing.
+            if (!TryAddModelMarineFoundry())
+                AddBuilding(BuildingId.MarineFoundry, new Vector3(-4f, 0f, -3.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             AddBuilding(BuildingId.NovaArsenal, new Vector3(4f, 0f, -3.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -5.5f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
             // Research Lab (2026-11-01): west side, clear of the other
@@ -500,6 +504,99 @@ namespace LunarDominion.UI
 #if UNITY_EDITOR
             return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/_Project/Resources/Models/HeliumHarvester.fbx");
+#else
+            return null;
+#endif
+        }
+
+        /// <summary>Instantiate the Blender Marine Foundry FBX at (-4,0,-3.5)
+        /// if it can be loaded. Returns false (caller falls back to the
+        /// primitive) when the model is missing, has no meshes, or fails to
+        /// instantiate. The model is built at ground level, ~2 units wide
+        /// and ~1.47 tall, so it drops into the exact spot and scale of the
+        /// old cube. Its imported materials are used as-is (URP Lit on
+        /// import); only the white marker sphere still gets the runtime URP
+        /// Lit material.</summary>
+        private bool TryAddModelMarineFoundry()
+        {
+            var prefab = LoadMarineFoundryModelPrefab();
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "MarineBuilding";
+                go.transform.position = new Vector3(-4f, 0f, -3.5f);
+                go.transform.localScale = Vector3.one;
+
+                // Capture the model's part renderers BEFORE adding the marker,
+                // so Highlight() recolours the model parts but not the marker.
+                // Held in locals until the end: if anything below fails, the
+                // fallback primitive must not inherit a half-built model entry.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared imported material.
+                    partColors[rend] = rend.material.color;
+                }
+
+                // The FBX has no collider, and tapping raycasts against
+                // colliders — give the model one matching the old primitive's
+                // footprint (2 wide, 1.4 tall, centred at y = 0.7).
+                if (go.GetComponentInChildren<Collider>() == null)
+                {
+                    var box = go.AddComponent<BoxCollider>();
+                    box.center = new Vector3(0f, 0.7f, 0f);
+                    box.size = new Vector3(2f, 1.4f, 2f);
+                }
+
+                // Same white marker as the primitives, just above the flag
+                // (model top is ~1.47, so 1.7 sits on it).
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "MarineMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(0f, 1.7f, 0f);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.MarineFoundry] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.MarineFoundry] = go;
+                _baseColors[BuildingId.MarineFoundry] = new Color(0.35f, 0.65f, 0.25f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Marine Foundry model failed to load, using primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Load the Marine Foundry FBX as a prefab. In a built
+        /// player only assets under a Resources folder can be loaded by
+        /// path, so for Android/iOS builds the FBX lives at
+        /// Assets/_Project/Resources/Models/MarineFoundry.fbx. In the
+        /// Editor it loads straight from that same path, so Editor Play
+        /// shows the model without moving the file.</summary>
+        private static GameObject LoadMarineFoundryModelPrefab()
+        {
+            var fromResources = Resources.Load<GameObject>("Models/MarineFoundry");
+            if (fromResources != null) return fromResources;
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/_Project/Resources/Models/MarineFoundry.fbx");
 #else
             return null;
 #endif
