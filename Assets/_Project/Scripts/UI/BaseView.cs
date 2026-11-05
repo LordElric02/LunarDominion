@@ -17,8 +17,8 @@ namespace LunarDominion.UI
         private readonly Dictionary<BuildingId, GameObject> _buildingObjects = new Dictionary<BuildingId, GameObject>();
         private readonly Dictionary<BuildingId, Color> _baseColors = new Dictionary<BuildingId, Color>();
         // Blender-model buildings (Command Nexus, Hydroponics Dome, Alloy
-        // Extractor, Helium-3 Harvester, Marine Foundry and Nova Arsenal,
-        // for now): the
+        // Extractor, Helium-3 Harvester, Marine Foundry, Nova Arsenal and
+        // Aegis Motor Pool, for now): the
         // renderers and each part's original colour, so Highlight() can
         // brighten/dim each part from its own colour instead of flattening
         // the whole model to one colour. Primitives keep the old path.
@@ -118,7 +118,11 @@ namespace LunarDominion.UI
             // base still builds when the model file is missing.
             if (!TryAddModelNovaArsenal())
                 AddBuilding(BuildingId.NovaArsenal, new Vector3(4f, 0f, -3.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
-            AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -5.5f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
+            // Aegis Motor Pool (Blender model, 2026-11-05): use the FBX model if
+            // it loads, otherwise fall back to the old grey cube so the base
+            // still builds when the model file is missing.
+            if (!TryAddModelAegisMotorPool())
+                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -5.5f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
             // Research Lab (2026-11-01): west side, clear of the other
             // buildings, so it stays tappable at phone size.
             AddBuilding(BuildingId.ResearchLab, new Vector3(-6.5f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
@@ -696,6 +700,93 @@ namespace LunarDominion.UI
 #if UNITY_EDITOR
             return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/_Project/Resources/Models/NovaArsenal.fbx");
+#else
+            return null;
+#endif
+        }
+
+        private bool TryAddModelAegisMotorPool()
+        {
+            var prefab = LoadAegisMotorPoolModelPrefab();
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "AegisBuilding";
+                go.transform.position = new Vector3(0f, 0f, -5.5f);
+                go.transform.localScale = Vector3.one;
+
+                // Capture the model's part renderers BEFORE adding the marker,
+                // so Highlight() recolours the model parts but not the marker.
+                // Held in locals until the end: if anything below fails, the
+                // fallback primitive must not inherit a half-built model entry.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared imported material.
+                    partColors[rend] = rend.material.color;
+                }
+
+                // The FBX has no collider, and tapping raycasts against
+                // colliders — give the model one covering the garage block,
+                // the antenna above it, and the rover parked out front on
+                // the camera-facing side (2.4 wide, 1.7 tall, 2.8 deep,
+                // centred at y = 0.85, z = 0.2 toward the rover).
+                if (go.GetComponentInChildren<Collider>() == null)
+                {
+                    var box = go.AddComponent<BoxCollider>();
+                    box.center = new Vector3(0f, 0.85f, 0.2f);
+                    box.size = new Vector3(2.4f, 1.7f, 2.8f);
+                }
+
+                // Same white marker as the primitives, just above the antenna
+                // tip (model top is ~1.67, so 1.9 sits on it).
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "AegisMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(0f, 1.9f, 0f);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.AegisMotorPool] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.AegisMotorPool] = go;
+                _baseColors[BuildingId.AegisMotorPool] = new Color(0.55f, 0.55f, 0.60f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Aegis Motor Pool model failed to load, using primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Load the Aegis Motor Pool FBX as a prefab. In a built
+        /// player only assets under a Resources folder can be loaded by
+        /// path, so for Android/iOS builds the FBX lives at
+        /// Assets/_Project/Resources/Models/AegisMotorPool.fbx. In the
+        /// Editor it loads straight from that same path, so Editor Play
+        /// shows the model without moving the file.</summary>
+        private static GameObject LoadAegisMotorPoolModelPrefab()
+        {
+            var fromResources = Resources.Load<GameObject>("Models/AegisMotorPool");
+            if (fromResources != null) return fromResources;
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/_Project/Resources/Models/AegisMotorPool.fbx");
 #else
             return null;
 #endif
