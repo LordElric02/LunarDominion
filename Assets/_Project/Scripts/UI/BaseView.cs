@@ -70,7 +70,7 @@ namespace LunarDominion.UI
 
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "LunarGround";
-            ground.transform.localScale = new Vector3(2.2f, 1f, 2.2f);
+            ground.transform.localScale = new Vector3(1.7f, 1f, 1.7f);
             SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
 
             // A few crater placeholders.
@@ -78,7 +78,7 @@ namespace LunarDominion.UI
             {
                 var crater = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 crater.name = "Crater";
-                crater.transform.position = new Vector3(-7f + i * 3.5f, 0.01f, -6f + (i % 2) * 9f);
+                crater.transform.position = new Vector3(-5.2f + i * 2.6f, 0.01f, -4.5f + (i % 2) * 6.75f);
                 crater.transform.localScale = new Vector3(1.2f, 0.05f, 1.2f);
                 SetPrimitiveColor(crater.GetComponent<Renderer>(), new Color(0.16f, 0.17f, 0.20f));
             }
@@ -88,6 +88,10 @@ namespace LunarDominion.UI
         {
             // Layout: Nexus centre, generators top, barracks bottom — readable
             // from the isometric camera and tappable on a phone screen.
+            // 2026-11-05: positions tightened to 0.75x toward the centre so
+            // the base fills the portrait frame better (was spread over 13
+            // units wide with a lot of empty ground); ground plane and
+            // craters shrunk to match. Building sizes unchanged.
             // Command Nexus (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old blue cylinder so the
             // base still builds when the model file is missing.
@@ -97,39 +101,39 @@ namespace LunarDominion.UI
             // it loads, otherwise fall back to the old green sphere so the
             // base still builds when the model file is missing.
             if (!TryAddModelHydroponicsDome())
-                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-4f, 0f, 3.5f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
+                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-3f, 0f, 2.6f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
             // Alloy Extractor (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelAlloyExtractor())
-                AddBuilding(BuildingId.AlloyExtractor, new Vector3(4f, 0f, 3.5f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
+                AddBuilding(BuildingId.AlloyExtractor, new Vector3(3f, 0f, 2.6f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
             // Helium-3 Harvester (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old cyan cylinder so the
             // base still builds when the model file is missing.
             if (!TryAddModelHeliumHarvester())
-                AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 5.5f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
+                AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 4.1f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
             // Marine Foundry (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old green-grey cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelMarineFoundry())
-                AddBuilding(BuildingId.MarineFoundry, new Vector3(-4f, 0f, -3.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
+                AddBuilding(BuildingId.MarineFoundry, new Vector3(-3f, 0f, -2.6f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             // Nova Arsenal (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old red cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelNovaArsenal())
-                AddBuilding(BuildingId.NovaArsenal, new Vector3(4f, 0f, -3.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
+                AddBuilding(BuildingId.NovaArsenal, new Vector3(3f, 0f, -2.6f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             // Aegis Motor Pool (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the base
             // still builds when the model file is missing.
             if (!TryAddModelAegisMotorPool())
-                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -5.5f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
+                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -4.1f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
             // Research Lab (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old purple cylinder so
             // the base still builds when the model file is missing.
             // (2026-11-01 note: west side, clear of the other buildings,
             // so it stays tappable at phone size.)
             if (!TryAddModelResearchLab())
-                AddBuilding(BuildingId.ResearchLab, new Vector3(-6.5f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
+                AddBuilding(BuildingId.ResearchLab, new Vector3(-4.9f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
         }
 
         private void AddBuilding(BuildingId id, Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, string shortName)
@@ -244,7 +248,7 @@ namespace LunarDominion.UI
         }
 
         /// <summary>Instantiate the Blender Hydroponics Dome FBX at
-        /// (-4,0,3.5) if it can be loaded. Returns false (caller falls back
+        /// (-3,0,2.6) if it can be loaded. Returns false (caller falls back
         /// to the primitive) when the model is missing, has no meshes, or
         /// fails to instantiate. The model is built at ground level, ~2
         /// units wide and ~1.24 tall, so it drops into the exact spot and
@@ -261,7 +265,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "HydroBuilding";
-                go.transform.position = new Vector3(-4f, 0f, 3.5f);
+                go.transform.position = new Vector3(-3f, 0f, 2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -337,7 +341,7 @@ namespace LunarDominion.UI
         }
 
         /// <summary>Instantiate the Blender Alloy Extractor FBX at
-        /// (4,0,3.5) if it can be loaded. Returns false (caller falls back
+        /// (3,0,2.6) if it can be loaded. Returns false (caller falls back
         /// to the primitive) when the model is missing, has no meshes, or
         /// fails to instantiate. The model is built at ground level, ~1.8
         /// units wide and ~1.6 tall, so it drops into the exact spot and
@@ -354,7 +358,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AlloyBuilding";
-                go.transform.position = new Vector3(4f, 0f, 3.5f);
+                go.transform.position = new Vector3(3f, 0f, 2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -430,7 +434,7 @@ namespace LunarDominion.UI
         }
 
         /// <summary>Instantiate the Blender Helium-3 Harvester FBX at
-        /// (0,0,5.5) if it can be loaded. Returns false (caller falls back
+        /// (0,0,4.1) if it can be loaded. Returns false (caller falls back
         /// to the primitive) when the model is missing, has no meshes, or
         /// fails to instantiate. The model is built at ground level, ~1.4
         /// units wide and ~2.4 tall, so it drops into the exact spot and
@@ -447,7 +451,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "He3Building";
-                go.transform.position = new Vector3(0f, 0f, 5.5f);
+                go.transform.position = new Vector3(0f, 0f, 4.1f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -522,7 +526,7 @@ namespace LunarDominion.UI
 #endif
         }
 
-        /// <summary>Instantiate the Blender Marine Foundry FBX at (-4,0,-3.5)
+        /// <summary>Instantiate the Blender Marine Foundry FBX at (-3,0,-2.6)
         /// if it can be loaded. Returns false (caller falls back to the
         /// primitive) when the model is missing, has no meshes, or fails to
         /// instantiate. The model is built at ground level, ~2 units wide
@@ -540,7 +544,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "MarineBuilding";
-                go.transform.position = new Vector3(-4f, 0f, -3.5f);
+                go.transform.position = new Vector3(-3f, 0f, -2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -615,7 +619,7 @@ namespace LunarDominion.UI
 #endif
         }
 
-        /// <summary>Instantiate the Blender Nova Arsenal FBX at (4,0,-3.5)
+        /// <summary>Instantiate the Blender Nova Arsenal FBX at (3,0,-2.6)
         /// if it can be loaded. Returns false (caller falls back to the
         /// primitive) when the model is missing, has no meshes, or fails to
         /// instantiate. The model is built at ground level, ~2 units wide
@@ -633,7 +637,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "NovaBuilding";
-                go.transform.position = new Vector3(4f, 0f, -3.5f);
+                go.transform.position = new Vector3(3f, 0f, -2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -719,7 +723,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AegisBuilding";
-                go.transform.position = new Vector3(0f, 0f, -5.5f);
+                go.transform.position = new Vector3(0f, 0f, -4.1f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -806,7 +810,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "LabBuilding";
-                go.transform.position = new Vector3(-6.5f, 0f, 0f);
+                go.transform.position = new Vector3(-4.9f, 0f, 0f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
