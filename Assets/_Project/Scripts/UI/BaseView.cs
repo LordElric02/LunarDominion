@@ -73,15 +73,93 @@ namespace LunarDominion.UI
             ground.transform.localScale = new Vector3(1.7f, 1f, 1.7f);
             SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
 
-            // A few crater placeholders.
-            for (int i = 0; i < 5; i++)
+            // 2026-11-05: moon-like surface. The old flat dark discs read as
+            // stains, so the ground now has tonal patches, two proper 3D
+            // craters (dark bowl + raised rim of small rocks) and scattered
+            // boulders. All decor is low, fixed-position (no randomness at
+            // runtime), clear of every building, and has its collider
+            // stripped so a tap ray can never be swallowed by a rock in
+            // front of a building. Building positions are unchanged.
+            AddGroundPatch(new Vector3(-5f, 0.005f, 5.5f), 3.2f, new Color(0.22f, 0.24f, 0.28f));
+            AddGroundPatch(new Vector3(5.8f, 0.005f, -1.5f), 2.8f, new Color(0.32f, 0.34f, 0.38f));
+            AddGroundPatch(new Vector3(-2.5f, 0.005f, -6.8f), 3f, new Color(0.23f, 0.25f, 0.29f));
+            AddGroundPatch(new Vector3(7f, 0.005f, -5.5f), 2.6f, new Color(0.31f, 0.33f, 0.37f));
+            AddCrater(new Vector3(-6.3f, 0f, -3.2f), 1.6f);
+            AddCrater(new Vector3(6.2f, 0f, 3f), 1.3f);
+            AddRock(new Vector3(-7f, 0f, 4f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(-1f, 0f, 7f), 0.4f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(7.5f, 0f, 0.5f), 0.45f, new Color(0.38f, 0.4f, 0.44f));
+            AddRock(new Vector3(2f, 0f, -7f), 0.55f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(-7.5f, 0f, -5.5f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(4.5f, 0f, 6.5f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
+            AddRock(new Vector3(-3.5f, 0f, 6.8f), 0.35f, new Color(0.38f, 0.4f, 0.44f));
+            AddRock(new Vector3(7f, 0f, -6.8f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+        }
+
+
+        // A large flat tonal patch, to break up the single grey ground.
+        private void AddGroundPatch(Vector3 pos, float diameter, Color color)
+        {
+            var patch = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            patch.name = "GroundPatch";
+            patch.transform.position = pos;
+            patch.transform.localScale = new Vector3(diameter, 0.02f, diameter);
+            SetPrimitiveColor(patch.GetComponent<Renderer>(), color);
+            StripCollider(patch);
+        }
+
+        // A lunar crater: dark bowl sunk into the ground, a raised rim of
+        // small rocks around the edge, and a low mound in the middle.
+        private void AddCrater(Vector3 pos, float radius)
+        {
+            var bowl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            bowl.name = "CraterBowl";
+            bowl.transform.position = new Vector3(pos.x, 0.01f, pos.z);
+            bowl.transform.localScale = new Vector3(radius * 2f, 0.05f, radius * 2f);
+            SetPrimitiveColor(bowl.GetComponent<Renderer>(), new Color(0.13f, 0.14f, 0.17f));
+            StripCollider(bowl);
+
+            int rimStones = 9;
+            for (int i = 0; i < rimStones; i++)
             {
-                var crater = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                crater.name = "Crater";
-                crater.transform.position = new Vector3(-5.2f + i * 2.6f, 0.01f, -4.5f + (i % 2) * 6.75f);
-                crater.transform.localScale = new Vector3(1.2f, 0.05f, 1.2f);
-                SetPrimitiveColor(crater.GetComponent<Renderer>(), new Color(0.16f, 0.17f, 0.20f));
+                float angle = i * Mathf.PI * 2f / rimStones;
+                var stone = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                stone.name = "CraterRim";
+                stone.transform.position = new Vector3(
+                    pos.x + Mathf.Cos(angle) * radius,
+                    0.06f,
+                    pos.z + Mathf.Sin(angle) * radius);
+                stone.transform.localScale = new Vector3(0.32f, 0.18f, 0.32f);
+                SetPrimitiveColor(stone.GetComponent<Renderer>(), new Color(0.38f, 0.4f, 0.44f));
+                StripCollider(stone);
             }
+
+            var mound = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            mound.name = "CraterMound";
+            mound.transform.position = new Vector3(pos.x, 0.04f, pos.z);
+            mound.transform.localScale = new Vector3(radius * 0.5f, 0.12f, radius * 0.5f);
+            SetPrimitiveColor(mound.GetComponent<Renderer>(), new Color(0.2f, 0.21f, 0.24f));
+            StripCollider(mound);
+        }
+
+        // A single boulder, squashed slightly so it reads as a rock.
+        private void AddRock(Vector3 pos, float size, Color color)
+        {
+            var rock = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            rock.name = "Rock";
+            rock.transform.position = new Vector3(pos.x, size * 0.25f, pos.z);
+            rock.transform.localScale = new Vector3(size, size * 0.6f, size * 0.85f);
+            SetPrimitiveColor(rock.GetComponent<Renderer>(), color);
+            StripCollider(rock);
+        }
+
+        // Ground decor must never block a building tap: the tap raycast
+        // takes the first hit, so decor colliders are removed on creation.
+        // (The ground plane itself keeps its original collider.)
+        private static void StripCollider(GameObject go)
+        {
+            var collider = go.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
         }
 
         private void BuildBuildings()
