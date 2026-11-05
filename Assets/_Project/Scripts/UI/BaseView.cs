@@ -16,6 +16,12 @@ namespace LunarDominion.UI
 
         private readonly Dictionary<BuildingId, GameObject> _buildingObjects = new Dictionary<BuildingId, GameObject>();
         private readonly Dictionary<BuildingId, Color> _baseColors = new Dictionary<BuildingId, Color>();
+        // Blender-model buildings (Command Nexus only, for now): the model's
+        // part renderers and each part's original colour, so Highlight() can
+        // brighten/dim each part from its own colour instead of flattening
+        // the whole model to one colour. Primitives keep the old path.
+        private readonly Dictionary<BuildingId, List<Renderer>> _modelRenderers = new Dictionary<BuildingId, List<Renderer>>();
+        private readonly Dictionary<Renderer, Color> _modelBaseColors = new Dictionary<Renderer, Color>();
         private GameController _controller;
         private GameObject _quickSelectRow;
 
@@ -80,7 +86,11 @@ namespace LunarDominion.UI
         {
             // Layout: Nexus centre, generators top, barracks bottom — readable
             // from the isometric camera and tappable on a phone screen.
-            AddBuilding(BuildingId.CommandNexus, new Vector3(0f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(2f, 3f, 2f), new Color(0.15f, 0.35f, 0.75f), "Nexus");
+            // Command Nexus (Blender model, 2026-11-05): use the FBX model if
+            // it loads, otherwise fall back to the old blue cylinder so the
+            // base still builds when the model file is missing.
+            if (!TryAddModelNexus())
+                AddBuilding(BuildingId.CommandNexus, new Vector3(0f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(2f, 3f, 2f), new Color(0.15f, 0.35f, 0.75f), "Nexus");
             AddBuilding(BuildingId.HydroponicsDome, new Vector3(-4f, 0f, 3.5f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
             AddBuilding(BuildingId.AlloyExtractor, new Vector3(4f, 0f, 3.5f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
             AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 5.5f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
@@ -109,6 +119,98 @@ namespace LunarDominion.UI
             marker.transform.localPosition = new Vector3(0f, 0.7f, 0f);
             marker.transform.localScale = new Vector3(0.30f, 0.30f, 0.30f);
             SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+        }
+
+        /// <summary>Instantiate the Blender Command Nexus FBX at (0,0,0) if it
+        /// can be loaded. Returns false (caller falls back to the primitive)
+        /// when the model is missing, has no meshes, or fails to instantiate.
+        /// The model is built at ground level, ~2 units wide and ~2.9 tall,
+        /// so it drops into the exact spot and scale of the old cylinder.
+        /// Its imported materials are used as-is (URP Lit on import); only
+        /// the white marker sphere still gets the runtime URP Lit material.</summary>
+        private bool TryAddModelNexus()
+        {
+            var prefab = LoadNexusModelPrefab();
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "NexusBuilding";
+                go.transform.position = Vector3.zero;
+                go.transform.localScale = Vector3.one;
+
+                // Capture the model's part renderers BEFORE adding the marker,
+                // so Highlight() recolours the model parts but not the marker.
+                // Held in locals until the end: if anything below fails, the
+                // fallback primitive must not inherit a half-built model entry.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared imported material.
+                    partColors[rend] = rend.material.color;
+                }
+
+                // The FBX has no collider, and tapping raycasts against
+                // colliders — give the model one matching the old primitive's
+                // footprint (2 wide, 3 tall, centred at y = 1.5).
+                if (go.GetComponentInChildren<Collider>() == null)
+                {
+                    var box = go.AddComponent<BoxCollider>();
+                    box.center = new Vector3(0f, 1.5f, 0f);
+                    box.size = new Vector3(2f, 3f, 2f);
+                }
+
+                // Same white marker as the primitives, just above the antenna
+                // tip (model top is ~2.9, so 3.15 sits on it).
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "NexusMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(0f, 3.15f, 0f);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.CommandNexus] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.CommandNexus] = go;
+                _baseColors[BuildingId.CommandNexus] = new Color(0.15f, 0.35f, 0.75f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Command Nexus model failed to load, using primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Load the Nexus FBX as a prefab. In a built player only
+        /// assets under a Resources folder can be loaded by path, so for
+        /// Android/iOS builds the FBX must also live at
+        /// Assets/_Project/Resources/Models/CommandNexus.fbx. In the Editor
+        /// it loads straight from Assets/_Project/Models/, so Editor Play
+        /// shows the model without moving the file.</summary>
+        private static GameObject LoadNexusModelPrefab()
+        {
+            var fromResources = Resources.Load<GameObject>("Models/CommandNexus");
+            if (fromResources != null) return fromResources;
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/_Project/Resources/Models/CommandNexus.fbx");
+#else
+            return null;
+#endif
         }
 
         // Android magenta fix (2026-11-02): CreatePrimitive's default
@@ -246,12 +348,29 @@ namespace LunarDominion.UI
         {
             foreach (var pair in _buildingObjects)
             {
-                var rend = pair.Value.GetComponent<Renderer>();
-                if (rend == null) continue;
+                // Blender-model building: recolour each part from its own
+                // stored colour, so the dome, ring and tower keep their own
+                // colours instead of all flattening to the Nexus blue.
+                if (_modelRenderers.TryGetValue(pair.Key, out var modelRends))
+                {
+                    foreach (var rend in modelRends)
+                    {
+                        if (rend == null) continue;
+                        if (!_modelBaseColors.TryGetValue(rend, out var partColor)) continue;
+                        if (pair.Key == selected)
+                            SetMaterialColor(rend.material, isLocked ? new Color(0.4f, 0.4f, 0.4f) : partColor * 1.4f);
+                        else
+                            SetMaterialColor(rend.material, partColor);
+                    }
+                    continue;
+                }
+
+                var rend0 = pair.Value.GetComponent<Renderer>();
+                if (rend0 == null) continue;
                 if (pair.Key == selected)
-                    SetMaterialColor(rend.material, isLocked ? new Color(0.4f, 0.4f, 0.4f) : _baseColors[pair.Key] * 1.4f);
+                    SetMaterialColor(rend0.material, isLocked ? new Color(0.4f, 0.4f, 0.4f) : _baseColors[pair.Key] * 1.4f);
                 else
-                    SetMaterialColor(rend.material, _baseColors[pair.Key]);
+                    SetMaterialColor(rend0.material, _baseColors[pair.Key]);
             }
         }
     }
