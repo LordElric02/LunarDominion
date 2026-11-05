@@ -62,6 +62,7 @@ namespace LunarDominion
             }
 
             Economy = new EconomyService(State, Balance);
+            Economy.NexusDefinition = BuildingDefinitions.Find(d => d.IsCommandNexus);
             Research = new ResearchService(State, Economy, Balance, ResearchDefinitions);
             Economy.Research = Research;
             Production = new ProductionService(State, Economy, Balance, Research);
@@ -144,6 +145,7 @@ namespace LunarDominion
             Save.DeleteSave();
             State = Save.NewGame();
             Economy = new EconomyService(State, Balance);
+            Economy.NexusDefinition = BuildingDefinitions.Find(d => d.IsCommandNexus);
             Research = new ResearchService(State, Economy, Balance, ResearchDefinitions);
             Economy.Research = Research;
             Production = new ProductionService(State, Economy, Balance, Research);

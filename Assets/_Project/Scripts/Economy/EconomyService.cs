@@ -15,6 +15,11 @@ namespace LunarDominion.Economy
         // Null means no research bonuses (e.g. before wiring).
         public ResearchService Research { get; set; }
 
+        // Set by GameController after construction (same pattern as
+        // Research). Null means no Nexus definition wired: the cap falls
+        // back to the plain linear formula.
+        public BuildingDefinition NexusDefinition { get; set; }
+
         public EconomyService(GameState state, BalanceData balance)
         {
             _state = state;
@@ -26,6 +31,26 @@ namespace LunarDominion.Economy
             get
             {
                 int baseCap = _balance.StorageBase + _balance.StoragePerNexusLevel * _state.NexusLevel;
+                // Storage-cap floor (2026-11-05, soft-lock fix): the linear
+                // cap grows slower than Nexus costs (x1.22 per level), so
+                // at Nexus 17 the cap (4750) was already below the Nexus 18
+                // cost (4817 Biomass) and no amount of winning could save
+                // up for it. Keep the cap at or above the next Nexus
+                // upgrade's Biomass cost times StorageCapNexusCostFactor, so
+                // the next Nexus is always affordable. Biomass is the
+                // binding resource (Nexus base 200B vs 160A, Helium only as
+                // a sampled extra at 20/25/30), so flooring on Biomass
+                // covers Alloy and Helium-3 too. No floor past max level.
+                // The > 0 guard keeps the fix working if a BalanceData asset
+                // predates this field and deserializes it as 0.
+                if (NexusDefinition != null && _state.NexusLevel < _balance.MaxBuildingLevel)
+                {
+                    float factor = _balance.StorageCapNexusCostFactor > 0f
+                        ? _balance.StorageCapNexusCostFactor : 1.5f;
+                    int nextNexusBiomass = UpgradeCost(NexusDefinition, _state.NexusLevel + 1).Biomass;
+                    int floor = (int)Math.Ceiling(nextNexusBiomass * factor);
+                    if (floor > baseCap) baseCap = floor;
+                }
                 float mult = Research != null ? Research.StorageMultiplier() : 1f;
                 return (int)Math.Round(baseCap * mult);
             }

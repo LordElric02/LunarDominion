@@ -30,6 +30,14 @@ namespace LunarDominion.Core
         [Header("Storage (GDD §4, provisional)")]
         public int StorageBase = 500;
         public int StoragePerNexusLevel = 250;
+        // Storage-cap floor (2026-11-05, soft-lock fix): the linear cap
+        // above grows slower than Nexus costs (x1.22 per level), so from
+        // Nexus 18 the next Nexus upgrade cost more Biomass than the cap
+        // could hold. The cap never drops under this multiple of the next
+        // Nexus upgrade's Biomass cost, so the next Nexus is always
+        // affordable. Early game is unchanged: the floor only takes over
+        // from Nexus 15, where the linear cap first falls behind it.
+        public float StorageCapNexusCostFactor = 1.5f;
 
         [Header("Starting resources (GDD §4, provisional)")]
         public int StartingBiomass = 500;
