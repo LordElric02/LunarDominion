@@ -32,6 +32,15 @@ namespace LunarDominion.UI
         // are children of this object, so the whole base turns 45 degrees
         // while the ground plane and mountains stay unrotated.
         private GameObject _layoutRoot;
+        // Reactor animation (2026-11-06): the Nexus FBX keeps the reactor
+        // sphere and each containment ring as separate named objects, so
+        // they can move independently. Collected after the model loads;
+        // empty when the model is missing or is the primitive fallback.
+        private Transform _reactorCore;
+        private Vector3 _reactorCoreBaseScale = Vector3.one;
+        private readonly List<Transform> _reactorRings = new List<Transform>();
+        private readonly List<float> _reactorRingSpeeds = new List<float>();
+        private float _reactorAnimTime;
 
         public void Build(GameController controller)
         {
@@ -502,6 +511,7 @@ namespace LunarDominion.UI
                 foreach (var pair in partColors)
                     _modelBaseColors[pair.Key] = pair.Value;
                 _buildingObjects[BuildingId.CommandNexus] = go;
+                CollectReactorAnimation(go);
                 _baseColors[BuildingId.CommandNexus] = new Color(0.15f, 0.35f, 0.75f);
                 return true;
             }
@@ -510,6 +520,60 @@ namespace LunarDominion.UI
                 Debug.LogWarning("[BaseView] Command Nexus model failed to load, using primitive: " + e.Message);
                 if (go != null) Destroy(go);
                 return false;
+            }
+        }
+
+        /// <summary>Find the reactor sphere and containment rings inside
+        /// the loaded Nexus model, for the idle animation. Names match the
+        /// v3/v4 Blender scripts (Reactor_Core, Containment_Ring_01..04).
+        /// Missing parts are simply skipped, so the primitive fallback and
+        /// older models animate nothing instead of erroring.</summary>
+        private void CollectReactorAnimation(GameObject nexusGo)
+        {
+            _reactorCore = FindDeep(nexusGo.transform, "Reactor_Core");
+            if (_reactorCore != null) _reactorCoreBaseScale = _reactorCore.localScale;
+            // Ring speeds in degrees/second: alternating directions, slow.
+            float[] speeds = { 12f, -10f, 8f, -14f };
+            _reactorRings.Clear();
+            _reactorRingSpeeds.Clear();
+            for (int i = 0; i < speeds.Length; i++)
+            {
+                var ring = FindDeep(nexusGo.transform, "Containment_Ring_0" + (i + 1));
+                if (ring != null)
+                {
+                    _reactorRings.Add(ring);
+                    _reactorRingSpeeds.Add(speeds[i]);
+                }
+            }
+        }
+
+        private static Transform FindDeep(Transform root, string name)
+        {
+            if (root.name == name) return root;
+            foreach (Transform child in root)
+            {
+                var found = FindDeep(child, name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        /// <summary>Idle reactor motion: the containment rings sweep slowly
+        /// around the reactor (gyroscopic — each tilted ring turns about the
+        /// world vertical through the reactor centre, alternating
+        /// directions), and the core breathes subtly. Runs every frame; a
+        /// few transform rotations, and a no-op when the model has no
+        /// reactor parts.</summary>
+        private void AnimateReactor()
+        {
+            if (_reactorRings.Count == 0 && _reactorCore == null) return;
+            _reactorAnimTime += Time.deltaTime;
+            for (int i = 0; i < _reactorRings.Count; i++)
+                _reactorRings[i].Rotate(Vector3.up, _reactorRingSpeeds[i] * Time.deltaTime, Space.World);
+            if (_reactorCore != null)
+            {
+                float s = 1f + 0.03f * Mathf.Sin(_reactorAnimTime * 1.5f);
+                _reactorCore.localScale = _reactorCoreBaseScale * s;
             }
         }
 
@@ -1209,6 +1273,9 @@ namespace LunarDominion.UI
 
         private void Update()
         {
+            // The reactor animation runs every frame, unlike the tap
+            // handling below, which returns early when nothing is tapped.
+            AnimateReactor();
             // Input System note: Unity throws InvalidOperationException if
             // the legacy UnityEngine.Input API is read while Player Settings
             // > Active Input Handler is set to Input System Package only.
