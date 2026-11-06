@@ -26,10 +26,28 @@ namespace LunarDominion.UI
         private readonly Dictionary<Renderer, Color> _modelBaseColors = new Dictionary<Renderer, Color>();
         private GameController _controller;
         private GameObject _quickSelectRow;
+        // Rotated layout root (2026-11-06): buildings, wall and decor
+        // are children of this object, so the whole base turns 45 degrees
+        // while the ground plane and mountains stay unrotated.
+        private GameObject _layoutRoot;
 
         public void Build(GameController controller, Canvas canvas)
         {
             _controller = controller;
+            // 2026-11-06: rotate the base 45 degrees so the wall perimeter
+            // reads parallel to the screen's horizontal borders. The camera
+            // sits at (10,16,10), so screen-right is world (0.707,0,-0.707);
+            // a +45-degree Y rotation maps the layout's local X axis onto
+            // screen-right and its local Z axis onto screen-depth, so the
+            // wall's north/south edges run horizontal on screen and its
+            // east/west edges run vertical. Buildings, wall and decor are
+            // parented under this root (see ParentToLayout); the ground
+            // plane and mountains are NOT rotated — the ground is a flat
+            // plane that still covers the frame, and the mountains are the
+            // horizon fixed to the far edges.
+            _layoutRoot = new GameObject("BaseLayout");
+            _layoutRoot.transform.position = Vector3.zero;
+            _layoutRoot.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
             BuildGroundAndCamera();
             BuildBuildings();
             BuildQuickSelect(canvas);
@@ -48,12 +66,17 @@ namespace LunarDominion.UI
             // degrees, over the 56x48 ground. Checked with real camera
             // math (60-degree vertical FOV, 16:9): every frame edge is
             // covered by ground or mountains (0 uncovered boundary
-            // samples), buildings span NDC x -0.25..0.29 and y
-            // -0.40..0.45 — inside the frame, clear of the top bar
+            // samples). 2026-11-06 rotation: the layout turns 45 degrees
+            // under BaseLayout, so buildings now span NDC x -0.42..0.28
+            // and y -0.29..0.35 — inside the frame, clear of the top bar
             // (bottom edge NDC y 0.74) and the quick-select row (top
-            // edge NDC y -0.44). The old (11,13,11) camera left the
-            // far ground corner at NDC x 0.83, so dark background
-            // showed around the ground.
+            // edge NDC y -0.50). The wall's near edge is horizontal at
+            // NDC y -0.46 (top), its base at -0.495, just 0.009 above
+            // the quick-select row top (-0.504) — the tightest margin in
+            // the layout; moving the camera to widen it breaks the
+            // mountain coverage, so the camera stays at (10,16,10). The
+            // old (11,13,11) camera left the far ground corner at NDC x
+            // 0.83, so dark background showed around the ground.
             cam.transform.position = new Vector3(10f, 16f, 10f);
             cam.transform.LookAt(Vector3.zero);
             cam.backgroundColor = new Color(0.02f, 0.03f, 0.06f);
@@ -106,14 +129,20 @@ namespace LunarDominion.UI
             // ground edges. Positions are fixed (no randomness at
             // runtime), colliders stripped so a tap ray can never be
             // swallowed by a rock in front of a building.
+            // 2026-11-06 rotation: the decor turns 45 degrees with the
+            // layout root, so six outer items were moved — three rocks
+            // and two patches that would have landed outside the ground
+            // or inside a mountain after the rotation now sit in the
+            // +X/+Z outer band, clear of the wall, buildings and
+            // mountains.
             AddGroundPatch(new Vector3(-8.5f, 0.005f, 4f), 2.8f, new Color(0.22f, 0.24f, 0.28f));
             AddGroundPatch(new Vector3(8.8f, 0.005f, -1f), 2.8f, new Color(0.32f, 0.34f, 0.38f));
             AddGroundPatch(new Vector3(-3.2f, 0.005f, -5f), 2.4f, new Color(0.23f, 0.25f, 0.29f));
             AddGroundPatch(new Vector3(2.5f, 0.005f, 5f), 2.4f, new Color(0.31f, 0.33f, 0.37f));
             AddGroundPatch(new Vector3(-13f, 0.005f, 10f), 3.4f, new Color(0.22f, 0.24f, 0.28f));
-            AddGroundPatch(new Vector3(14f, 0.005f, -9f), 3.2f, new Color(0.32f, 0.34f, 0.38f));
+            AddGroundPatch(new Vector3(14f, 0.005f, 18f), 3.2f, new Color(0.32f, 0.34f, 0.38f));
             AddGroundPatch(new Vector3(16f, 0.005f, 10f), 3f, new Color(0.23f, 0.25f, 0.29f));
-            AddGroundPatch(new Vector3(-12f, 0.005f, -14f), 3f, new Color(0.31f, 0.33f, 0.37f));
+            AddGroundPatch(new Vector3(-14f, 0.005f, 14f), 3f, new Color(0.31f, 0.33f, 0.37f));
             AddCrater(new Vector3(-7.5f, 0f, -4.5f), 1f);
             AddCrater(new Vector3(8.5f, 0f, 2.5f), 1f);
             AddCrater(new Vector3(-13.5f, 0f, -4.5f), 1.3f);
@@ -122,13 +151,13 @@ namespace LunarDominion.UI
             AddRock(new Vector3(-2f, 0f, 5.5f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
             AddRock(new Vector3(2.5f, 0f, -5.5f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
             AddRock(new Vector3(-16f, 0f, 16f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
-            AddRock(new Vector3(20f, 0f, -14f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(-24f, 0f, -8f), 0.45f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(24f, 0f, 8f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(12f, 0f, 16f), 0.45f, new Color(0.35f, 0.37f, 0.41f));
             AddRock(new Vector3(24f, 0f, 2f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
             AddRock(new Vector3(8f, 0f, 18f), 0.4f, new Color(0.38f, 0.4f, 0.44f));
-            AddRock(new Vector3(18f, 0f, -20f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(16f, 0f, 14f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
             AddRock(new Vector3(22f, 0f, 12f), 0.45f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(-25f, 0f, 18f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
+            AddRock(new Vector3(20f, 0f, 16f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
 
             BuildWall();
             BuildMountains();
@@ -138,12 +167,23 @@ namespace LunarDominion.UI
         // it is reserved for a future exterior view. The code lives in
         // git history (commits 69011168, 899f63a5).
 
+        // Parent an object under the rotated layout root. SetParent with
+        // worldPositionStays=false keeps the local transform, so callers
+        // must set localPosition (not position) afterwards — setting
+        // position would place the object in world space and undo the
+        // rotation. The ground plane and mountains never call this.
+        private void ParentToLayout(GameObject go)
+        {
+            go.transform.SetParent(_layoutRoot.transform, false);
+        }
+
         // A large flat tonal patch, to break up the single grey ground.
         private void AddGroundPatch(Vector3 pos, float diameter, Color color)
         {
             var patch = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             patch.name = "GroundPatch";
-            patch.transform.position = pos;
+            ParentToLayout(patch);
+            patch.transform.localPosition = pos;
             patch.transform.localScale = new Vector3(diameter, 0.02f, diameter);
             SetPrimitiveColor(patch.GetComponent<Renderer>(), color);
             StripCollider(patch);
@@ -155,7 +195,8 @@ namespace LunarDominion.UI
         {
             var bowl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             bowl.name = "CraterBowl";
-            bowl.transform.position = new Vector3(pos.x, 0.01f, pos.z);
+            ParentToLayout(bowl);
+            bowl.transform.localPosition = new Vector3(pos.x, 0.01f, pos.z);
             bowl.transform.localScale = new Vector3(radius * 2f, 0.05f, radius * 2f);
             SetPrimitiveColor(bowl.GetComponent<Renderer>(), new Color(0.13f, 0.14f, 0.17f));
             StripCollider(bowl);
@@ -166,7 +207,8 @@ namespace LunarDominion.UI
                 float angle = i * Mathf.PI * 2f / rimStones;
                 var stone = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 stone.name = "CraterRim";
-                stone.transform.position = new Vector3(
+                ParentToLayout(stone);
+                stone.transform.localPosition = new Vector3(
                     pos.x + Mathf.Cos(angle) * radius,
                     0.06f,
                     pos.z + Mathf.Sin(angle) * radius);
@@ -177,7 +219,8 @@ namespace LunarDominion.UI
 
             var mound = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             mound.name = "CraterMound";
-            mound.transform.position = new Vector3(pos.x, 0.04f, pos.z);
+            ParentToLayout(mound);
+            mound.transform.localPosition = new Vector3(pos.x, 0.04f, pos.z);
             mound.transform.localScale = new Vector3(radius * 0.5f, 0.12f, radius * 0.5f);
             SetPrimitiveColor(mound.GetComponent<Renderer>(), new Color(0.2f, 0.21f, 0.24f));
             StripCollider(mound);
@@ -188,7 +231,8 @@ namespace LunarDominion.UI
         {
             var rock = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             rock.name = "Rock";
-            rock.transform.position = new Vector3(pos.x, size * 0.25f, pos.z);
+            ParentToLayout(rock);
+            rock.transform.localPosition = new Vector3(pos.x, size * 0.25f, pos.z);
             rock.transform.localScale = new Vector3(size, size * 0.6f, size * 0.85f);
             SetPrimitiveColor(rock.GetComponent<Renderer>(), color);
             StripCollider(rock);
@@ -201,9 +245,12 @@ namespace LunarDominion.UI
         // from the west wall). Four segments 0.8 high, 0.35 thick,
         // gunmetal grey-blue, with a thin cyan strip light along the
         // top of each segment and a 1.4-high corner tower (with cap)
-        // at each corner. No gate: the near side runs off the bottom
-        // of the frame behind the bottom nav, so a gate gap there
-        // would not land cleanly — the wall stays continuous.
+        // at each corner. 2026-11-06: the whole layout rotates 45
+        // degrees under BaseLayout, so the north/south edges read
+        // horizontal on screen and the east/west edges vertical. No
+        // gate yet: the near edge now sits just above the quick-select
+        // row, so a gate gap there would land cleanly — a follow-up
+        // if Patrick wants one.
         // No colliders, same as the decor, so taps are never swallowed.
         private void BuildWall()
         {
@@ -242,7 +289,8 @@ namespace LunarDominion.UI
         {
             var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
             box.name = "Wall";
-            box.transform.position = pos;
+            ParentToLayout(box);
+            box.transform.localPosition = pos;
             box.transform.localScale = size;
             SetPrimitiveColor(box.GetComponent<Renderer>(), color);
             StripCollider(box);
@@ -373,7 +421,8 @@ namespace LunarDominion.UI
         {
             var go = GameObject.CreatePrimitive(shape);
             go.name = shortName + "Building";
-            go.transform.position = new Vector3(pos.x, scale.y / 2f, pos.z);
+            ParentToLayout(go);
+            go.transform.localPosition = new Vector3(pos.x, scale.y / 2f, pos.z);
             go.transform.localScale = scale;
             SetPrimitiveColor(go.GetComponent<Renderer>(), color);
             _buildingObjects[id] = go;
@@ -405,7 +454,8 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "NexusBuilding";
-                go.transform.position = Vector3.zero;
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = Vector3.zero;
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -498,7 +548,8 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "HydroBuilding";
-                go.transform.position = new Vector3(-5.1f, 0f, 2.6f);
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = new Vector3(-5.1f, 0f, 2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -591,7 +642,8 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AlloyBuilding";
-                go.transform.position = new Vector3(5.1f, 0f, 2.6f);
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = new Vector3(5.1f, 0f, 2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -684,7 +736,8 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "He3Building";
-                go.transform.position = new Vector3(0f, 0f, 4.1f);
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = new Vector3(0f, 0f, 4.1f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -777,7 +830,8 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "MarineBuilding";
-                go.transform.position = new Vector3(-5.1f, 0f, -2.6f);
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = new Vector3(-5.1f, 0f, -2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -870,7 +924,8 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "NovaBuilding";
-                go.transform.position = new Vector3(5.1f, 0f, -2.6f);
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = new Vector3(5.1f, 0f, -2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -956,7 +1011,8 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AegisBuilding";
-                go.transform.position = new Vector3(0f, 0f, -4.1f);
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = new Vector3(0f, 0f, -4.1f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1043,7 +1099,8 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "LabBuilding";
-                go.transform.position = new Vector3(-8.3f, 0f, 0f);
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = new Vector3(-8.3f, 0f, 0f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1154,9 +1211,12 @@ namespace LunarDominion.UI
             // Accessibility fallback: tapping a 3D building can be fiddly on a
             // small screen, so a row of building buttons sits above the nav.
             // It shifts up with the bottom safe area, in step with the nav.
+            // 2026-11-06: minimal gap to the nav — the row is 80 ref px tall
+            // with its bottom 8 ref px above the 180 px nav (188..268), so
+            // the two bottom menus read as one strip.
             var safe = SafeArea.Get(canvas);
             _quickSelectRow = UIHelpers.Panel(canvas.gameObject, "QuickSelect", UIHelpers.Hex("#1A2436"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 220 + safe.Bottom), new Vector2(0, 300 + safe.Bottom));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 188 + safe.Bottom), new Vector2(0, 268 + safe.Bottom));
             var defs = _controller.BuildingDefinitions;
             float step = 1f / defs.Count;
             for (int i = 0; i < defs.Count; i++)
