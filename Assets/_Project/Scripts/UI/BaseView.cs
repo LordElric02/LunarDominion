@@ -44,12 +44,17 @@ namespace LunarDominion.UI
                 cam = camGo.AddComponent<Camera>();
                 camGo.tag = "MainCamera";
             }
-            // 2026-11-06 landscape: pulled back to (11,13,11) so the
-            // wider 26-unit base fits a 16:9 frame with margin (checked
-            // with real camera math: 60-degree FOV, buildings span
-            // NDC x -0.26..0.33 and y -0.15..0.42, far ground corner
-            // NDC x 0.83 — inside the frame, clear of the top bar).
-            cam.transform.position = new Vector3(11f, 13f, 11f);
+            // 2026-11-06 full-bleed: camera (10,16,10), pitch 48.5
+            // degrees, over the 56x48 ground. Checked with real camera
+            // math (60-degree vertical FOV, 16:9): every frame edge is
+            // covered by ground or mountains (0 uncovered boundary
+            // samples), buildings span NDC x -0.25..0.29 and y
+            // -0.40..0.45 — inside the frame, clear of the top bar
+            // (bottom edge NDC y 0.74) and the quick-select row (top
+            // edge NDC y -0.44). The old (11,13,11) camera left the
+            // far ground corner at NDC x 0.83, so dark background
+            // showed around the ground.
+            cam.transform.position = new Vector3(10f, 16f, 10f);
             cam.transform.LookAt(Vector3.zero);
             cam.backgroundColor = new Color(0.02f, 0.03f, 0.06f);
             cam.clearFlags = CameraClearFlags.SolidColor;
@@ -73,13 +78,15 @@ namespace LunarDominion.UI
             fillGo.transform.position = new Vector3(-5f, 8f, -5f);
             fillGo.transform.LookAt(Vector3.zero);
 
-            // 2026-11-06 landscape: ground widened in X to 26 units
-            // (localScale 2.6 on the 10-unit plane) by 17 deep, so the
-            // spread base fits with margin — the Lab at x -8.3 (edge
-            // -9.4) leaves 3.6 units to the ground edge at -13.
+            // 2026-11-06 full-bleed: ground 56 wide by 48 deep
+            // (localScale 5.6 x 4.8 on the 10-unit plane), so it runs
+            // past all four frame edges from the (10,16,10) camera —
+            // the whole screen is terrain, with no black bars around
+            // it. The wall sits at x +/-10.5, z +/-6.5 and the
+            // mountains at the far edges, all on this ground.
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "LunarGround";
-            ground.transform.localScale = new Vector3(2.6f, 1f, 1.7f);
+            ground.transform.localScale = new Vector3(5.6f, 1f, 4.8f);
             SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
 
             // 2026-11-05: moon-like surface. The old flat dark discs read as
@@ -89,27 +96,42 @@ namespace LunarDominion.UI
             // runtime), clear of every building, and has its collider
             // stripped so a tap ray can never be swallowed by a rock in
             // front of a building.
-            // 2026-11-06 landscape: decor re-spread onto the wider
-            // 26x17 ground, clear of every building (>= 0.6 edge gap,
-            // checked) and inside the ground edges. Positions are
-            // fixed (no randomness at runtime), colliders stripped so
-            // a tap ray can never be swallowed by a rock in front of
-            // a building. Building positions are spread, see
-            // BuildBuildings.
-            AddGroundPatch(new Vector3(-10.8f, 0.005f, 6f), 3.2f, new Color(0.22f, 0.24f, 0.28f));
-            AddGroundPatch(new Vector3(9.5f, 0.005f, -1.5f), 2.8f, new Color(0.32f, 0.34f, 0.38f));
-            AddGroundPatch(new Vector3(-4.5f, 0.005f, -6.8f), 3f, new Color(0.23f, 0.25f, 0.29f));
-            AddGroundPatch(new Vector3(10.5f, 0.005f, -5.5f), 2.6f, new Color(0.31f, 0.33f, 0.37f));
-            AddCrater(new Vector3(-10.5f, 0f, -3.5f), 1.6f);
-            AddCrater(new Vector3(9.8f, 0f, 3.2f), 1.3f);
-            AddRock(new Vector3(-12.2f, 0f, 4.2f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(-1f, 0f, 7f), 0.4f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(12f, 0f, 0.5f), 0.45f, new Color(0.38f, 0.4f, 0.44f));
-            AddRock(new Vector3(2f, 0f, -7f), 0.55f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(-12f, 0f, -6f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(4.5f, 0f, 6.5f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
-            AddRock(new Vector3(-3.5f, 0f, 6.8f), 0.35f, new Color(0.38f, 0.4f, 0.44f));
-            AddRock(new Vector3(12f, 0f, -6.8f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+            // 2026-11-06 full-bleed: decor re-spread onto the 56x48
+            // ground — four patches, two craters and two rocks inside
+            // the compound, four more patches, three more craters and
+            // eight more rocks in the outer band between the wall and
+            // the ground edge, so the wider ground does not read
+            // empty. Every item is clear of every building (>= 0.6
+            // edge gap, checked), clear of the wall, and inside the
+            // ground edges. Positions are fixed (no randomness at
+            // runtime), colliders stripped so a tap ray can never be
+            // swallowed by a rock in front of a building.
+            AddGroundPatch(new Vector3(-8.5f, 0.005f, 4f), 2.8f, new Color(0.22f, 0.24f, 0.28f));
+            AddGroundPatch(new Vector3(8.8f, 0.005f, -1f), 2.8f, new Color(0.32f, 0.34f, 0.38f));
+            AddGroundPatch(new Vector3(-3.2f, 0.005f, -5f), 2.4f, new Color(0.23f, 0.25f, 0.29f));
+            AddGroundPatch(new Vector3(2.5f, 0.005f, 5f), 2.4f, new Color(0.31f, 0.33f, 0.37f));
+            AddGroundPatch(new Vector3(-13f, 0.005f, 10f), 3.4f, new Color(0.22f, 0.24f, 0.28f));
+            AddGroundPatch(new Vector3(14f, 0.005f, -9f), 3.2f, new Color(0.32f, 0.34f, 0.38f));
+            AddGroundPatch(new Vector3(16f, 0.005f, 10f), 3f, new Color(0.23f, 0.25f, 0.29f));
+            AddGroundPatch(new Vector3(-12f, 0.005f, -14f), 3f, new Color(0.31f, 0.33f, 0.37f));
+            AddCrater(new Vector3(-7.5f, 0f, -4.5f), 1f);
+            AddCrater(new Vector3(8.5f, 0f, 2.5f), 1f);
+            AddCrater(new Vector3(-13.5f, 0f, -4.5f), 1.3f);
+            AddCrater(new Vector3(15f, 0f, 5f), 1.4f);
+            AddCrater(new Vector3(0f, 0f, -12.5f), 1.4f);
+            AddRock(new Vector3(-2f, 0f, 5.5f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(2.5f, 0f, -5.5f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(-16f, 0f, 16f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
+            AddRock(new Vector3(20f, 0f, -14f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(-24f, 0f, -8f), 0.45f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(24f, 0f, 2f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
+            AddRock(new Vector3(8f, 0f, 18f), 0.4f, new Color(0.38f, 0.4f, 0.44f));
+            AddRock(new Vector3(18f, 0f, -20f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(22f, 0f, 12f), 0.45f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(-25f, 0f, 18f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
+
+            BuildWall();
+            BuildMountains();
         }
 
         // 2026-11-06: planet-and-stars sky removed from the base view —
@@ -172,6 +194,113 @@ namespace LunarDominion.UI
             StripCollider(rock);
         }
 
+        // 2026-11-06 full-bleed: perimeter wall around the building
+        // area, like the walled compound in the reference layout.
+        // Rectangle x +/-10.5, z +/-6.5 — every building sits inside
+        // with margin (worst case Lab at x -8.3, edge -9.4, is 1.1
+        // from the west wall). Four segments 0.8 high, 0.35 thick,
+        // gunmetal grey-blue, with a thin cyan strip light along the
+        // top of each segment and a 1.4-high corner tower (with cap)
+        // at each corner. No gate: the near side runs off the bottom
+        // of the frame behind the bottom nav, so a gate gap there
+        // would not land cleanly — the wall stays continuous.
+        // No colliders, same as the decor, so taps are never swallowed.
+        private void BuildWall()
+        {
+            var wallColor = new Color(0.32f, 0.35f, 0.42f);
+            var towerColor = new Color(0.25f, 0.28f, 0.36f);
+            var capColor = new Color(0.30f, 0.33f, 0.40f);
+            var stripColor = new Color(0.38f, 0.85f, 1.0f);
+
+            // North (+Z) and south (-Z) segments, corner to corner.
+            AddWallBox(new Vector3(0f, 0.4f, 6.5f), new Vector3(21.35f, 0.8f, 0.35f), wallColor);
+            AddWallBox(new Vector3(0f, 0.4f, -6.5f), new Vector3(21.35f, 0.8f, 0.35f), wallColor);
+            // East (+X) and west (-X) segments, corner to corner.
+            AddWallBox(new Vector3(10.5f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 13.35f), wallColor);
+            AddWallBox(new Vector3(-10.5f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 13.35f), wallColor);
+
+            // Cyan strip lights along the top of each segment.
+            AddWallBox(new Vector3(0f, 0.83f, 6.5f), new Vector3(21f, 0.06f, 0.12f), stripColor);
+            AddWallBox(new Vector3(0f, 0.83f, -6.5f), new Vector3(21f, 0.06f, 0.12f), stripColor);
+            AddWallBox(new Vector3(10.5f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 13f), stripColor);
+            AddWallBox(new Vector3(-10.5f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 13f), stripColor);
+
+            // Corner towers with caps.
+            foreach (float x in new[] { -10.5f, 10.5f })
+            {
+                foreach (float z in new[] { -6.5f, 6.5f })
+                {
+                    AddWallBox(new Vector3(x, 0.7f, z), new Vector3(1f, 1.4f, 1f), towerColor);
+                    AddWallBox(new Vector3(x, 1.525f, z), new Vector3(1.3f, 0.25f, 1.3f), capColor);
+                }
+            }
+        }
+
+        // One wall piece: a plain box, coloured, collider stripped.
+        // Cubes are 1x1x1, so localScale is the world size.
+        private void AddWallBox(Vector3 pos, Vector3 size, Color color)
+        {
+            var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            box.name = "Wall";
+            box.transform.position = pos;
+            box.transform.localScale = size;
+            SetPrimitiveColor(box.GetComponent<Renderer>(), color);
+            StripCollider(box);
+        }
+
+        // 2026-11-06 full-bleed: low-poly mountain ridge around the
+        // far (-X and -Z) edges of the ground, outside the wall — the
+        // lunar horizon that fills the top and side edges of the
+        // frame. Each mountain is three stacked cylinders, narrower
+        // and lighter toward the peak. No colliders. The +X and +Z
+        // edges need no mountains: the ground plane itself covers
+        // those frame edges from this camera (checked: 0 uncovered
+        // boundary samples). Mountain tops project to NDC y 0.85..1.18,
+        // so they rise behind the top bar, as in the reference.
+        private void BuildMountains()
+        {
+            AddMountain(new Vector3(-22f, 0f, 11f), 4f, 8f);
+            AddMountain(new Vector3(-19f, 0f, 6f), 4f, 7.5f);
+            AddMountain(new Vector3(-18f, 0f, 0f), 3.5f, 6.5f);
+            AddMountain(new Vector3(-19f, 0f, -6f), 3.5f, 6f);
+            AddMountain(new Vector3(-18f, 0f, -12f), 4f, 7f);
+            AddMountain(new Vector3(-23f, 0f, 2f), 4f, 7f);
+            AddMountain(new Vector3(-12f, 0f, -18f), 3.5f, 6.5f);
+            AddMountain(new Vector3(-8f, 0f, -19f), 3f, 5.5f);
+            AddMountain(new Vector3(-4f, 0f, -18f), 4f, 7.5f);
+            AddMountain(new Vector3(0f, 0f, -18.5f), 3.5f, 7f);
+            AddMountain(new Vector3(4f, 0f, -18f), 3.5f, 6.5f);
+            AddMountain(new Vector3(7.5f, 0f, -18.5f), 3.5f, 7f);
+            AddMountain(new Vector3(11f, 0f, -19f), 4f, 8f);
+        }
+
+        // A stepped mountain: three cylinders, each narrower and
+        // lighter than the one below. The cylinder primitive is 2
+        // units high and 1 in diameter, so localScale is
+        // (2 x radius, height / 2, 2 x radius) and the tier sits at
+        // y = base + height / 2.
+        private void AddMountain(Vector3 pos, float radius, float height)
+        {
+            AddMountainTier(pos, radius, height, 0f, 0.40f, new Color(0.32f, 0.30f, 0.27f));
+            AddMountainTier(pos, radius * 0.65f, height, 0.40f, 0.75f, new Color(0.38f, 0.36f, 0.33f));
+            AddMountainTier(pos, radius * 0.35f, height, 0.75f, 1f, new Color(0.46f, 0.44f, 0.40f));
+        }
+
+        private void AddMountainTier(Vector3 pos, float tierRadius, float totalHeight,
+            float fromFraction, float toFraction, Color color)
+        {
+            float tierHeight = totalHeight * (toFraction - fromFraction);
+            var tier = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            tier.name = "Mountain";
+            tier.transform.position = new Vector3(
+                pos.x,
+                totalHeight * fromFraction + tierHeight / 2f,
+                pos.z);
+            tier.transform.localScale = new Vector3(tierRadius * 2f, tierHeight / 2f, tierRadius * 2f);
+            SetPrimitiveColor(tier.GetComponent<Renderer>(), color);
+            StripCollider(tier);
+        }
+
         // Ground decor must never block a building tap: the tap raycast
         // takes the first hit, so decor colliders are removed on creation.
         // (The ground plane itself keeps its original collider.)
@@ -195,7 +324,7 @@ namespace LunarDominion.UI
             // high-quality games in the genre lay out. Worst
             // building-to-building edge gap is 1.7 (Nexus-Aegis); Lab
             // stays clear of Hydro/Marine (2.0). Ground widened to
-            // 26x17 and the camera pulled back to (11,13,11) to match.
+            // 56x48 and the camera moved to (10,16,10) to match.
             // Command Nexus (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old blue cylinder so the
             // base still builds when the model file is missing.
