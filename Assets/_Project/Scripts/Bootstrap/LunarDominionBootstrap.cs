@@ -48,11 +48,12 @@ namespace LunarDominion.Bootstrap
             _topBar.Build(canvas, _controller);
 
             _baseView = new GameObject("BaseView").AddComponent<BaseView>();
-            _baseView.Build(_controller, canvas);
+            _baseView.Build(_controller);
             _baseView.OnBuildingSelected += OnBuildingSelected;
 
             _buildingPanel = new GameObject("BuildingPanelView").AddComponent<BuildingPanelView>();
             _buildingPanel.Build(canvas, _controller);
+            _baseView.OnEmptyBaseTapped += OnEmptyBaseTapped;
 
             _armyView = new GameObject("ArmyView").AddComponent<ArmyView>();
             _armyView.Build(canvas, _controller);
@@ -85,6 +86,13 @@ namespace LunarDominion.Bootstrap
             _researchView.Hide();
             _baseView.Highlight(def.Id, _controller.State.GetLevel(def.Id) == 0);
             _buildingPanel.Show(def);
+        }
+
+        // Tap on empty base ground (not a building) hides any building
+        // panel that is showing. Hide() is a no-op when already hidden.
+        private void OnEmptyBaseTapped()
+        {
+            _buildingPanel.Hide();
         }
 
         private void OnTabSelected(NavTab tab)

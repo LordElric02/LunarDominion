@@ -8,11 +8,14 @@ namespace LunarDominion.UI
 {
     /// <summary>Central lunar base scene, built from primitives only.
     /// Isometric-style camera, lunar ground, and one placeholder building
-    /// per GDD building. Tapping a building (or its quick-select button)
-    /// opens the building panel. No rules live here.</summary>
+    /// per GDD building. Tapping a building opens the building panel.
+    /// No rules live here.</summary>
     public class BaseView : MonoBehaviour
     {
         public event Action<BuildingDefinition> OnBuildingSelected;
+        // Raised when a tap lands on the base but not on a building —
+        // empty ground, or a ray that hits nothing at all.
+        public event Action OnEmptyBaseTapped;
 
         private readonly Dictionary<BuildingId, GameObject> _buildingObjects = new Dictionary<BuildingId, GameObject>();
         private readonly Dictionary<BuildingId, Color> _baseColors = new Dictionary<BuildingId, Color>();
@@ -25,13 +28,12 @@ namespace LunarDominion.UI
         private readonly Dictionary<BuildingId, List<Renderer>> _modelRenderers = new Dictionary<BuildingId, List<Renderer>>();
         private readonly Dictionary<Renderer, Color> _modelBaseColors = new Dictionary<Renderer, Color>();
         private GameController _controller;
-        private GameObject _quickSelectRow;
         // Rotated layout root (2026-11-06): buildings, wall and decor
         // are children of this object, so the whole base turns 45 degrees
         // while the ground plane and mountains stay unrotated.
         private GameObject _layoutRoot;
 
-        public void Build(GameController controller, Canvas canvas)
+        public void Build(GameController controller)
         {
             _controller = controller;
             // 2026-11-06: rotate the base 45 degrees so the wall perimeter
@@ -50,7 +52,6 @@ namespace LunarDominion.UI
             _layoutRoot.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
             BuildGroundAndCamera();
             BuildBuildings();
-            BuildQuickSelect(canvas);
         }
 
         private void BuildGroundAndCamera()
@@ -1206,49 +1207,6 @@ namespace LunarDominion.UI
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
         }
 
-        private void BuildQuickSelect(Canvas canvas)
-        {
-            // Accessibility fallback: tapping a 3D building can be fiddly on a
-            // small screen, so a row of building buttons sits above the nav.
-            // It shifts up with the bottom safe area, in step with the nav.
-            // 2026-11-06: minimal gap to the nav — the row is 80 ref px tall
-            // with its bottom 8 ref px above the 180 px nav (188..268), so
-            // the two bottom menus read as one strip.
-            var safe = SafeArea.Get(canvas);
-            _quickSelectRow = UIHelpers.Panel(canvas.gameObject, "QuickSelect", UIHelpers.Hex("#1A2436"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 188 + safe.Bottom), new Vector2(0, 268 + safe.Bottom));
-            var defs = _controller.BuildingDefinitions;
-            float step = 1f / defs.Count;
-            for (int i = 0; i < defs.Count; i++)
-            {
-                var def = defs[i];
-                var btn = UIHelpers.Button(_quickSelectRow, def.DisplayName + "Btn", ShortName(def.Id), 22,
-                    UIHelpers.Hex("#2A3A55"), Color.white);
-                var rt = btn.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(i * step + 0.01f, 0.15f);
-                rt.anchorMax = new Vector2((i + 1) * step - 0.01f, 0.85f);
-                rt.offsetMin = Vector2.zero;
-                rt.offsetMax = Vector2.zero;
-                btn.onClick.AddListener(() => OnBuildingSelected?.Invoke(def));
-            }
-        }
-
-        private static string ShortName(BuildingId id)
-        {
-            switch (id)
-            {
-                case BuildingId.CommandNexus: return "Nexus";
-                case BuildingId.MarineFoundry: return "Marine";
-                case BuildingId.NovaArsenal: return "Nova";
-                case BuildingId.AegisMotorPool: return "Aegis";
-                case BuildingId.HydroponicsDome: return "Hydro";
-                case BuildingId.AlloyExtractor: return "Alloy";
-                case BuildingId.HeliumHarvester: return "He-3";
-                case BuildingId.ResearchLab: return "Lab";
-                default: return id.ToString();
-            }
-        }
-
         private void Update()
         {
             // Input System note: Unity throws InvalidOperationException if
@@ -1291,22 +1249,30 @@ namespace LunarDominion.UI
             var cam = Camera.main;
             if (cam == null) return;
             var ray = cam.ScreenPointToRay(screenPos);
-            if (!Physics.Raycast(ray, out var hit, 100f)) return;
-            foreach (var pair in _buildingObjects)
+            // Tap on a building opens its panel; a tap anywhere else on
+            // the base (empty ground, or a ray that hits nothing) hides
+            // any building panel that is showing. UI taps never reach
+            // here — EventSystem filters them out above.
+            bool hitBuilding = false;
+            if (Physics.Raycast(ray, out var hit, 100f))
             {
-                if (hit.transform == pair.Value.transform || hit.transform.IsChildOf(pair.Value.transform))
+                foreach (var pair in _buildingObjects)
                 {
-                    var def = _controller.BuildingDefinitions.Find(d => d.Id == pair.Key);
-                    if (def != null) OnBuildingSelected?.Invoke(def);
-                    break;
+                    if (hit.transform == pair.Value.transform || hit.transform.IsChildOf(pair.Value.transform))
+                    {
+                        var def = _controller.BuildingDefinitions.Find(d => d.Id == pair.Key);
+                        if (def != null) OnBuildingSelected?.Invoke(def);
+                        hitBuilding = true;
+                        break;
+                    }
                 }
             }
+            if (!hitBuilding) OnEmptyBaseTapped?.Invoke();
         }
 
         public void SetVisible(bool visible)
         {
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
-            if (_quickSelectRow != null) _quickSelectRow.SetActive(visible);
         }
 
         /// <summary>Highlight the selected building; locked buildings stay dim.</summary>
