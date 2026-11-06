@@ -26,17 +26,11 @@ namespace LunarDominion.UI
         private readonly Dictionary<Renderer, Color> _modelBaseColors = new Dictionary<Renderer, Color>();
         private GameController _controller;
         private GameObject _quickSelectRow;
-        // Planet-and-stars sky (2026-11-05): the star dome and the Earth
-        // planet, so SetVisible() can hide them with the rest of the base
-        // view. Sky objects are never buildings: no colliders, no panels,
-        // no quick-select buttons.
-        private readonly List<GameObject> _skyObjects = new List<GameObject>();
 
         public void Build(GameController controller, Canvas canvas)
         {
             _controller = controller;
             BuildGroundAndCamera();
-            BuildSky();
             BuildBuildings();
             BuildQuickSelect(canvas);
         }
@@ -118,202 +112,9 @@ namespace LunarDominion.UI
             AddRock(new Vector3(12f, 0f, -6.8f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
         }
 
-        // 2026-11-05: planet and stars. The black background behind the
-        // base is replaced with a starfield dome and an Earth-like planet
-        // hanging low over the far horizon. All runtime primitives plus a
-        // runtime-generated star texture — no Blender model, no FBX.
-        // Framing note (checked with real camera math, not eyeballed): the
-        // camera sits at (11,13,11) looking at the origin, so it pitches down
-        // about 40 degrees — the frame's top edge is still looking 10
-        // degrees DOWN, and the first guess (-28,26,-38) would land at
-        // NDC y 2.19, far off-screen. Anything in the sky has to sit low
-        // over the far horizon: the planet centre (-17.3,-4,-10.7), radius
-        // 6, lands at NDC (-0.12, 0.44), top 0.71 (clear of the top bar,
-        // whose bottom edge is NDC 0.74 in the Editor), with its lower
-        // part hidden behind the ground's far edge — an Earth-rise, not a
-        // planet high in the sky. Same geometry for the dome: the only dome
-        // surface the camera can ever see is the band v 0.35..0.47 (just
-        // below the equator), so the stars are painted in a band straddling
-        // the equator (v 0.33..0.67) — that covers the visible band
-        // whichever way Unity's sphere UVs run, and the poles stay plain dark.
-        private void BuildSky()
-        {
-            // Starfield dome: a big sphere centred on the origin with the
-            // camera inside it. Radius 85 is well inside the camera's
-            // default far clip of 1000. No collider, not a building, never
-            // tappable — hidden/shown with the rest of the sky in
-            // SetVisible().
-            var dome = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            dome.name = "StarDome";
-            dome.transform.position = Vector3.zero;
-            dome.transform.localScale = new Vector3(170f, 170f, 170f);
-            StripCollider(dome);
-            var domeRenderer = dome.GetComponent<Renderer>();
-            // The dome encloses the whole scene, so it must never cast a
-            // shadow: with shadows ever enabled it would shade the entire
-            // base. (The runtime lights cast no shadows by default, but
-            // the dome must not be the thing that breaks if that changes.)
-            domeRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            domeRenderer.receiveShadows = false;
-            var starTex = CreateStarTexture();
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader != null)
-            {
-                var material = new Material(shader);
-                // Black base so the lit part of the dome stays dark; the
-                // stars come from emission, which shows regardless of the
-                // scene lights (the inside of the dome is lit from behind).
-                SetMaterialColor(material, Color.black);
-                material.SetTexture("_BaseMap", starTex);
-                material.SetTexture("_EmissionMap", starTex);
-                material.SetColor("_EmissionColor", Color.white);
-                material.EnableKeyword("_EMISSION");
-                // We see the dome from the inside, so render both faces.
-                if (material.HasProperty("_Cull"))
-                    material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-                domeRenderer.material = material;
-            }
-            else
-            {
-                SetMaterialColor(domeRenderer.material, Color.black);
-            }
-            _skyObjects.Add(dome);
-
-            AddPlanet();
-        }
-
-        // Starfield texture, generated at runtime so no image asset is
-        // needed: 1024x512, very dark blue-black background (close to the
-        // camera background colour, so any uncovered dome stays dark), with
-        // ~700 stars of varying size and brightness. Fixed seed, so the sky
-        // is identical every run. Stars live in a band straddling the
-        // equator (v 0.33..0.67) — see the BuildSky framing note.
-        private static Texture2D CreateStarTexture()
-        {
-            const int width = 1024;
-            const int height = 512;
-            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
-            tex.wrapMode = TextureWrapMode.Repeat;
-            var bg = new Color(0.01f, 0.015f, 0.04f);
-            var pixels = new Color[width * height];
-            for (int i = 0; i < pixels.Length; i++) pixels[i] = bg;
-            var rng = new System.Random(1337);
-            int starCount = 700;
-            for (int s = 0; s < starCount; s++)
-            {
-                float u = (float)rng.NextDouble();
-                float v = 0.33f + (float)rng.NextDouble() * 0.34f;
-                int x = (int)(u * width);
-                int y = (int)(v * height);
-                // Most stars are 1px, a few are 2-3px.
-                int size = rng.NextDouble() < 0.75 ? 1 : (rng.NextDouble() < 0.8 ? 2 : 3);
-                float brightness = 0.55f + (float)rng.NextDouble() * 0.45f;
-                // A few stars are slightly blue or warm instead of white.
-                var tint = Color.white;
-                double tintRoll = rng.NextDouble();
-                if (tintRoll < 0.12) tint = new Color(0.75f, 0.85f, 1f);
-                else if (tintRoll < 0.2) tint = new Color(1f, 0.9f, 0.75f);
-                var starColor = tint * brightness;
-                for (int dx = 0; dx < size; dx++)
-                    for (int dy = 0; dy < size; dy++)
-                    {
-                        int px = (x + dx) % width;
-                        int py = Mathf.Clamp(y + dy, 0, height - 1);
-                        pixels[py * width + px] = starColor;
-                    }
-            }
-            tex.SetPixels(pixels);
-            tex.Apply();
-            return tex;
-        }
-
-        // Earth-like planet (the base is on the Moon, so Earth hanging low
-        // over the horizon is the natural choice): blue ocean sphere with
-        // green/brown land patches, white polar caps and thin cloud wisps,
-        // all runtime primitives with the same URP Lit material pattern as
-        // the buildings. Position/radius from the framing math in the
-        // BuildSky header comment: centre (-17.3,-4,-10.7), radius 6, NDC
-        // (-0.42, 0.50). Scenery, not a building: no collider on any part,
-        // not registered, not tappable. No ring — Earth has none.
-        private void AddPlanet()
-        {
-            const float radius = 6f;
-            var planet = new GameObject("PlanetEarth");
-            planet.transform.position = new Vector3(-17.3f, -4f, -10.7f);
-            _skyObjects.Add(planet);
-
-            var ocean = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            ocean.name = "PlanetOcean";
-            ocean.transform.SetParent(planet.transform, false);
-            ocean.transform.localPosition = Vector3.zero;
-            ocean.transform.localScale = new Vector3(radius * 2f, radius * 2f, radius * 2f);
-            SetPrimitiveColor(ocean.GetComponent<Renderer>(), new Color(0.16f, 0.38f, 0.78f));
-            StripCollider(ocean);
-
-            // Land patches on the camera-facing hemisphere: flattened
-            // spheres oriented along the surface normal, sunk so only a
-            // low cap pokes out of the ocean.
-            AddPlanetPatch(planet, radius, new Vector3(0.75f, 0.45f, 0.45f), 2.8f, new Color(0.25f, 0.55f, 0.28f));
-            AddPlanetPatch(planet, radius, new Vector3(0.55f, 0.15f, 0.75f), 2.4f, new Color(0.30f, 0.58f, 0.30f));
-            AddPlanetPatch(planet, radius, new Vector3(0.85f, 0.05f, 0.35f), 2.0f, new Color(0.50f, 0.40f, 0.25f));
-            AddPlanetPatch(planet, radius, new Vector3(0.45f, 0.65f, 0.55f), 2.2f, new Color(0.25f, 0.52f, 0.28f));
-
-            // Polar caps: white flattened spheres at the top and bottom.
-            AddPlanetCap(planet, radius, 1f);
-            AddPlanetCap(planet, radius, -1f);
-
-            // Cloud wisps: thin white flattened spheres just above the
-            // ocean on the camera-facing side.
-            AddPlanetCloud(planet, radius, new Vector3(0.65f, 0.30f, 0.65f), 3.0f);
-            AddPlanetCloud(planet, radius, new Vector3(0.80f, 0.55f, 0.20f), 2.4f);
-            AddPlanetCloud(planet, radius, new Vector3(0.40f, 0.20f, 0.85f), 2.6f);
-        }
-
-        // A landmass: a flattened sphere on the planet surface, facing the
-        // given direction from the planet centre (the planet itself is
-        // unrotated, so local and world directions match). Sunk so only a
-        // low cap shows above the ocean.
-        private void AddPlanetPatch(GameObject planet, float radius, Vector3 direction, float size, Color color)
-        {
-            var patch = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            patch.name = "PlanetLand";
-            patch.transform.SetParent(planet.transform, false);
-            var dir = direction.normalized;
-            patch.transform.localPosition = dir * (radius - 0.6f);
-            patch.transform.localRotation = Quaternion.FromToRotation(Vector3.up, dir);
-            patch.transform.localScale = new Vector3(size, 0.8f, size * 0.7f);
-            SetPrimitiveColor(patch.GetComponent<Renderer>(), color);
-            StripCollider(patch);
-        }
-
-        // A polar ice cap: a white flattened sphere at the planet's top
-        // (+1) or bottom (-1) pole, sunk so only a low dome shows.
-        private void AddPlanetCap(GameObject planet, float radius, float pole)
-        {
-            var cap = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            cap.name = "PlanetIceCap";
-            cap.transform.SetParent(planet.transform, false);
-            cap.transform.localPosition = new Vector3(0f, pole * (radius - 0.9f), 0f);
-            cap.transform.localScale = new Vector3(3.0f, 1.0f, 3.0f);
-            SetPrimitiveColor(cap.GetComponent<Renderer>(), new Color(0.95f, 0.97f, 1f));
-            StripCollider(cap);
-        }
-
-        // A cloud wisp: a thin white flattened sphere floating just above
-        // the ocean on the camera-facing side.
-        private void AddPlanetCloud(GameObject planet, float radius, Vector3 direction, float size)
-        {
-            var cloud = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            cloud.name = "PlanetCloud";
-            cloud.transform.SetParent(planet.transform, false);
-            var dir = direction.normalized;
-            cloud.transform.localPosition = dir * (radius + 0.15f);
-            cloud.transform.localRotation = Quaternion.FromToRotation(Vector3.up, dir);
-            cloud.transform.localScale = new Vector3(size, 0.25f, size * 0.4f);
-            SetPrimitiveColor(cloud.GetComponent<Renderer>(), new Color(0.95f, 0.95f, 0.98f));
-            StripCollider(cloud);
-        }
-
+        // 2026-11-06: planet-and-stars sky removed from the base view —
+        // it is reserved for a future exterior view. The code lives in
+        // git history (commits 69011168, 899f63a5).
 
         // A large flat tonal patch, to break up the single grey ground.
         private void AddGroundPatch(Vector3 pos, float diameter, Color color)
@@ -1316,7 +1117,6 @@ namespace LunarDominion.UI
         public void SetVisible(bool visible)
         {
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
-            foreach (var go in _skyObjects) go.SetActive(visible);
             if (_quickSelectRow != null) _quickSelectRow.SetActive(visible);
         }
 
