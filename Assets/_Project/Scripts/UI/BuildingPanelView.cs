@@ -24,10 +24,17 @@ namespace LunarDominion.UI
         {
             _controller = controller;
             var safe = SafeArea.Get(canvas);
+            // 2026-11-06 landscape: right-side panel instead of a bottom
+            // sheet, so it never covers the base. Anchored to the right
+            // third of the screen (left edge at 0.68 sits at NDC x 0.36,
+            // clear of the Nova building's on-screen right edge at
+            // 0.33), from above the quick-select row to just below the
+            // top bar. The name label stops at 0.53 so long names wrap
+            // instead of running under the Upgrade button.
             _root = UIHelpers.Panel(canvas.gameObject, "BuildingPanel", UIHelpers.Hex("#16202F"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310 + safe.Bottom), new Vector2(-20, 620 + safe.Bottom));
+                new Vector2(0.68f, 0), new Vector2(1, 0), new Vector2(20, 320 + safe.Bottom), new Vector2(-20 - safe.Right, 920 - safe.Top));
             _nameText = UIHelpers.LabelInRect(_root, "Name", "Select a building", 36, Color.white,
-                new Rect(0.04f, 0.72f, 0.96f, 0.98f));
+                new Rect(0.04f, 0.72f, 0.53f, 0.98f));
             _levelText = UIHelpers.LabelInRect(_root, "Level", "", 30, Color.white,
                 new Rect(0.04f, 0.50f, 0.96f, 0.72f));
             _infoText = UIHelpers.LabelInRect(_root, "Info", "", 26, UIHelpers.Hex("#C0C8D0"),

@@ -9,7 +9,7 @@ namespace LunarDominion.Bootstrap
     /// built at runtime — no prefabs or scene assets required.
     /// Unity UI (uGUI) was chosen over UI Toolkit: it is the proven choice
     /// for in-game mobile HUDs with dynamic, per-frame resource text, and
-    /// its Canvas Scaler handles 1080x1920 portrait scaling directly.</summary>
+    /// its Canvas Scaler handles 1920x1080 landscape scaling directly.</summary>
     public class LunarDominionBootstrap : MonoBehaviour
     {
         private GameController _controller;

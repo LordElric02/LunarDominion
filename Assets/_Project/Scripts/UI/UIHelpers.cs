@@ -22,7 +22,10 @@ namespace LunarDominion.UI
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = go.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
+            // 2026-11-06 landscape: 1920x1080 reference (was 1080x1920
+            // portrait). matchWidthOrHeight stays 0.5 — the same blend as
+            // before; panels are anchored, so wider screens just stretch.
+            scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.matchWidthOrHeight = 0.5f;
             go.AddComponent<GraphicRaycaster>();
             return canvas;

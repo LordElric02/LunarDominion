@@ -9,9 +9,10 @@ namespace LunarDominion.UI
 {
     /// <summary>Research screen. Display only: it asks ResearchService
     /// for status/cost/reason and shows the answer. Branch tabs keep
-    /// the list to four nodes at most, so it fits a portrait phone.
-    /// The active timer counts down once a second via OnStateChanged,
-    /// which GameController fires on its production tick.</summary>
+    /// the list to four nodes at most. In landscape the rows live in a
+    /// vertical ScrollRect inside the shorter panel, so the list fits
+    /// and scrolls. The active timer counts down once a second via
+    /// OnStateChanged, which GameController fires on its production tick.</summary>
     public class ResearchView : MonoBehaviour
     {
         private class Row
@@ -24,6 +25,7 @@ namespace LunarDominion.UI
         }
 
         private GameObject _root;
+        private GameObject _rowsContent;
         private Text _labText;
         private Text _activeText;
         private Button[] _branchButtons;
@@ -36,14 +38,18 @@ namespace LunarDominion.UI
         {
             _controller = controller;
             var safe = SafeArea.Get(canvas);
+            // 2026-11-06 landscape: shorter panel — top sits just below
+            // the top bar (920 ref px above the bottom, less the top safe
+            // inset), bottom stays above the quick-select row. Height is
+            // 610 minus the safe insets in the Editor, so the rows scroll.
             _root = UIHelpers.Panel(canvas.gameObject, "ResearchPanel", UIHelpers.Hex("#16202F"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310 + safe.Bottom), new Vector2(-20, 1200 + safe.Bottom));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310 + safe.Bottom), new Vector2(-20, 920 - safe.Top));
             UIHelpers.LabelInRect(_root, "Title", "RESEARCH", 36, Color.white,
-                new Rect(0.04f, 0.92f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
+                new Rect(0.04f, 0.90f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
             _labText = UIHelpers.LabelInRect(_root, "LabStatus", "", 24, Color.white,
-                new Rect(0.04f, 0.86f, 0.96f, 0.92f), TextAnchor.MiddleCenter);
+                new Rect(0.04f, 0.84f, 0.96f, 0.90f), TextAnchor.MiddleCenter);
             _activeText = UIHelpers.LabelInRect(_root, "Active", "", 24, UIHelpers.Hex("#FFD166"),
-                new Rect(0.04f, 0.80f, 0.96f, 0.86f), TextAnchor.MiddleCenter);
+                new Rect(0.04f, 0.78f, 0.96f, 0.84f), TextAnchor.MiddleCenter);
 
             string[] labels = { "Base", "Combat", "Expeditions" };
             _branchButtons = new Button[3];
@@ -53,16 +59,72 @@ namespace LunarDominion.UI
                 var btn = UIHelpers.Button(_root, labels[i] + "Tab", labels[i], 26,
                     UIHelpers.Hex("#1A2436"), Color.white);
                 var rt = btn.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(i * 0.333f + 0.01f, 0.71f);
-                rt.anchorMax = new Vector2((i + 1) * 0.333f - 0.01f, 0.79f);
+                rt.anchorMin = new Vector2(i * 0.333f + 0.01f, 0.69f);
+                rt.anchorMax = new Vector2((i + 1) * 0.333f - 0.01f, 0.77f);
                 rt.offsetMin = Vector2.zero;
                 rt.offsetMax = Vector2.zero;
                 btn.onClick.AddListener(() => SelectBranch(branch));
                 _branchButtons[i] = btn;
             }
 
+            BuildRowsScroll();
             BuildRows();
             _root.SetActive(false);
+        }
+
+        // 2026-11-06 landscape: the node rows live in a vertical
+        // ScrollRect (same pattern as ExpeditionsView's squad list), so
+        // the list fits the shorter panel and scrolls. Rows are
+        // fixed-height LayoutElements.
+        private void BuildRowsScroll()
+        {
+            var scrollGo = new GameObject("RowsScroll");
+            scrollGo.transform.SetParent(_root.transform, false);
+            var scrollRt = scrollGo.AddComponent<RectTransform>();
+            scrollRt.anchorMin = new Vector2(0.02f, 0.02f);
+            scrollRt.anchorMax = new Vector2(0.98f, 0.67f);
+            scrollRt.offsetMin = Vector2.zero;
+            scrollRt.offsetMax = Vector2.zero;
+            var scrollBg = scrollGo.AddComponent<Image>();
+            scrollBg.color = UIHelpers.Hex("#0F1724");
+            var scroll = scrollGo.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            var viewportGo = new GameObject("Viewport");
+            viewportGo.transform.SetParent(scrollGo.transform, false);
+            var viewportRt = viewportGo.AddComponent<RectTransform>();
+            viewportRt.anchorMin = Vector2.zero;
+            viewportRt.anchorMax = Vector2.one;
+            viewportRt.offsetMin = Vector2.zero;
+            viewportRt.offsetMax = Vector2.zero;
+            var viewportImg = viewportGo.AddComponent<Image>();
+            viewportImg.color = UIHelpers.Hex("#0F1724");
+            var mask = viewportGo.AddComponent<Mask>();
+            mask.showMaskGraphic = false;
+            scroll.viewport = viewportRt;
+
+            _rowsContent = new GameObject("Content");
+            _rowsContent.transform.SetParent(viewportGo.transform, false);
+            var contentRt = _rowsContent.AddComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(0, 1);
+            contentRt.anchorMax = new Vector2(1, 1);
+            contentRt.pivot = new Vector2(0.5f, 1);
+            contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = Vector2.zero;
+            var layout = _rowsContent.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 10;
+            layout.padding = new RectOffset(10, 10, 10, 10);
+            layout.childAlignment = TextAnchor.UpperCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            var fitter = _rowsContent.AddComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            scroll.content = contentRt;
         }
 
         public void Show()
@@ -148,7 +210,7 @@ namespace LunarDominion.UI
                 if (row.Root != null) Destroy(row.Root);
             }
             _rows.Clear();
-            if (_root == null) return;
+            if (_root == null || _rowsContent == null) return;
 
             var defs = new List<ResearchDefinition>();
             foreach (var def in _controller.ResearchDefinitions)
@@ -160,11 +222,15 @@ namespace LunarDominion.UI
             for (int i = 0; i < defs.Count; i++)
             {
                 var def = defs[i];
-                float top = 0.68f - i * 0.16f;
-                float bottom = top - 0.15f;
-                var rowGo = UIHelpers.Panel(_root, def.DisplayName + "Row", UIHelpers.Hex("#1A2436"),
-                    new Vector2(0.02f, bottom), new Vector2(0.98f, top),
-                    Vector2.zero, Vector2.zero);
+                var rowGo = new GameObject(def.DisplayName + "Row");
+                rowGo.transform.SetParent(_rowsContent.transform, false);
+                var rowImg = rowGo.AddComponent<Image>();
+                rowImg.color = UIHelpers.Hex("#1A2436");
+                var layout = rowGo.AddComponent<LayoutElement>();
+                layout.preferredHeight = 110;
+                var rowRt = rowGo.GetComponent<RectTransform>();
+                rowRt.anchorMin = Vector2.zero;
+                rowRt.anchorMax = Vector2.one;
                 var effect = UIHelpers.LabelInRect(rowGo, "Effect", "", 24, Color.white,
                     new Rect(0.03f, 0.35f, 0.72f, 0.97f));
                 var cost = UIHelpers.LabelInRect(rowGo, "Cost", "", 22, UIHelpers.Hex("#FFD166"),

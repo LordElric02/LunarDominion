@@ -28,7 +28,7 @@ namespace LunarDominion.UI
 
             // Five chips now, not four: PWR joins the resource row.
             // Each chip gets a fifth of the bar so the row still fits
-            // portrait widths, including the 360-wide test size.
+            // landscape widths.
             _biomassText = UIHelpers.LabelInRect(bar, "Biomass", "", 30,
                 UIHelpers.Hex("#7ED957"), new Rect(0.01f, 0.05f, 0.20f, 0.5f), TextAnchor.MiddleCenter);
             _alloyText = UIHelpers.LabelInRect(bar, "Alloy", "", 30,

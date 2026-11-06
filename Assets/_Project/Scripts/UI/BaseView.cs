@@ -50,7 +50,12 @@ namespace LunarDominion.UI
                 cam = camGo.AddComponent<Camera>();
                 camGo.tag = "MainCamera";
             }
-            cam.transform.position = new Vector3(9f, 11f, 9f);
+            // 2026-11-06 landscape: pulled back to (11,13,11) so the
+            // wider 26-unit base fits a 16:9 frame with margin (checked
+            // with real camera math: 60-degree FOV, buildings span
+            // NDC x -0.26..0.33 and y -0.15..0.42, far ground corner
+            // NDC x 0.83 — inside the frame, clear of the top bar).
+            cam.transform.position = new Vector3(11f, 13f, 11f);
             cam.transform.LookAt(Vector3.zero);
             cam.backgroundColor = new Color(0.02f, 0.03f, 0.06f);
             cam.clearFlags = CameraClearFlags.SolidColor;
@@ -74,9 +79,13 @@ namespace LunarDominion.UI
             fillGo.transform.position = new Vector3(-5f, 8f, -5f);
             fillGo.transform.LookAt(Vector3.zero);
 
+            // 2026-11-06 landscape: ground widened in X to 26 units
+            // (localScale 2.6 on the 10-unit plane) by 17 deep, so the
+            // spread base fits with margin — the Lab at x -8.3 (edge
+            // -9.4) leaves 3.6 units to the ground edge at -13.
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "LunarGround";
-            ground.transform.localScale = new Vector3(1.7f, 1f, 1.7f);
+            ground.transform.localScale = new Vector3(2.6f, 1f, 1.7f);
             SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
 
             // 2026-11-05: moon-like surface. The old flat dark discs read as
@@ -85,21 +94,28 @@ namespace LunarDominion.UI
             // boulders. All decor is low, fixed-position (no randomness at
             // runtime), clear of every building, and has its collider
             // stripped so a tap ray can never be swallowed by a rock in
-            // front of a building. Building positions are unchanged.
-            AddGroundPatch(new Vector3(-5f, 0.005f, 5.5f), 3.2f, new Color(0.22f, 0.24f, 0.28f));
-            AddGroundPatch(new Vector3(5.8f, 0.005f, -1.5f), 2.8f, new Color(0.32f, 0.34f, 0.38f));
-            AddGroundPatch(new Vector3(-2.5f, 0.005f, -6.8f), 3f, new Color(0.23f, 0.25f, 0.29f));
-            AddGroundPatch(new Vector3(7f, 0.005f, -5.5f), 2.6f, new Color(0.31f, 0.33f, 0.37f));
-            AddCrater(new Vector3(-6.3f, 0f, -3.2f), 1.6f);
-            AddCrater(new Vector3(6.2f, 0f, 3f), 1.3f);
-            AddRock(new Vector3(-7f, 0f, 4f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
+            // front of a building.
+            // 2026-11-06 landscape: decor re-spread onto the wider
+            // 26x17 ground, clear of every building (>= 0.6 edge gap,
+            // checked) and inside the ground edges. Positions are
+            // fixed (no randomness at runtime), colliders stripped so
+            // a tap ray can never be swallowed by a rock in front of
+            // a building. Building positions are spread, see
+            // BuildBuildings.
+            AddGroundPatch(new Vector3(-10.8f, 0.005f, 6f), 3.2f, new Color(0.22f, 0.24f, 0.28f));
+            AddGroundPatch(new Vector3(9.5f, 0.005f, -1.5f), 2.8f, new Color(0.32f, 0.34f, 0.38f));
+            AddGroundPatch(new Vector3(-4.5f, 0.005f, -6.8f), 3f, new Color(0.23f, 0.25f, 0.29f));
+            AddGroundPatch(new Vector3(10.5f, 0.005f, -5.5f), 2.6f, new Color(0.31f, 0.33f, 0.37f));
+            AddCrater(new Vector3(-10.5f, 0f, -3.5f), 1.6f);
+            AddCrater(new Vector3(9.8f, 0f, 3.2f), 1.3f);
+            AddRock(new Vector3(-12.2f, 0f, 4.2f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
             AddRock(new Vector3(-1f, 0f, 7f), 0.4f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(7.5f, 0f, 0.5f), 0.45f, new Color(0.38f, 0.4f, 0.44f));
+            AddRock(new Vector3(12f, 0f, 0.5f), 0.45f, new Color(0.38f, 0.4f, 0.44f));
             AddRock(new Vector3(2f, 0f, -7f), 0.55f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(-7.5f, 0f, -5.5f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(-12f, 0f, -6f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
             AddRock(new Vector3(4.5f, 0f, 6.5f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
             AddRock(new Vector3(-3.5f, 0f, 6.8f), 0.35f, new Color(0.38f, 0.4f, 0.44f));
-            AddRock(new Vector3(7f, 0f, -6.8f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(12f, 0f, -6.8f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
         }
 
         // 2026-11-05: planet and stars. The black background behind the
@@ -107,19 +123,19 @@ namespace LunarDominion.UI
         // hanging low over the far horizon. All runtime primitives plus a
         // runtime-generated star texture — no Blender model, no FBX.
         // Framing note (checked with real camera math, not eyeballed): the
-        // camera sits at (9,11,9) looking at the origin, so it pitches down
-        // about 41 degrees — the frame's top edge is still looking 11
+        // camera sits at (11,13,11) looking at the origin, so it pitches down
+        // about 40 degrees — the frame's top edge is still looking 10
         // degrees DOWN, and the first guess (-28,26,-38) would land at
-        // NDC y 2.47, far off-screen. Anything in the sky has to sit low
+        // NDC y 2.19, far off-screen. Anything in the sky has to sit low
         // over the far horizon: the planet centre (-17.3,-4,-10.7), radius
-        // 6, lands at NDC (-0.42, 0.50), top 0.79 (clear of the top bar),
-        // with its lower part hidden behind the ground's far edge — an
-        // Earth-rise, not a planet high in the sky. Same geometry for the
-        // dome: the only dome surface the camera can ever see is the band
-        // v 0.35..0.47 (just below the equator), so the stars are painted
-        // in a band straddling the equator (v 0.33..0.67) — that covers the
-        // visible band whichever way Unity's sphere UVs run, and the poles
-        // stay plain dark.
+        // 6, lands at NDC (-0.12, 0.44), top 0.71 (clear of the top bar,
+        // whose bottom edge is NDC 0.74 in the Editor), with its lower
+        // part hidden behind the ground's far edge — an Earth-rise, not a
+        // planet high in the sky. Same geometry for the dome: the only dome
+        // surface the camera can ever see is the band v 0.35..0.47 (just
+        // below the equator), so the stars are painted in a band straddling
+        // the equator (v 0.33..0.67) — that covers the visible band
+        // whichever way Unity's sphere UVs run, and the poles stay plain dark.
         private void BuildSky()
         {
             // Starfield dome: a big sphere centred on the origin with the
@@ -372,6 +388,13 @@ namespace LunarDominion.UI
             // the base fills the portrait frame better (was spread over 13
             // units wide with a lot of empty ground); ground plane and
             // craters shrunk to match. Building sizes unchanged.
+            // 2026-11-06 landscape: spread horizontally again — X positions
+            // x1.7 (Hydro/Alloy/Marine/Nova at +/-5.1, Lab at -8.3), Z
+            // unchanged — so the wider base fills a 16:9 frame the way
+            // high-quality games in the genre lay out. Worst
+            // building-to-building edge gap is 1.7 (Nexus-Aegis); Lab
+            // stays clear of Hydro/Marine (2.0). Ground widened to
+            // 26x17 and the camera pulled back to (11,13,11) to match.
             // Command Nexus (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old blue cylinder so the
             // base still builds when the model file is missing.
@@ -381,12 +404,12 @@ namespace LunarDominion.UI
             // it loads, otherwise fall back to the old green sphere so the
             // base still builds when the model file is missing.
             if (!TryAddModelHydroponicsDome())
-                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-3f, 0f, 2.6f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
+                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-5.1f, 0f, 2.6f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
             // Alloy Extractor (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelAlloyExtractor())
-                AddBuilding(BuildingId.AlloyExtractor, new Vector3(3f, 0f, 2.6f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
+                AddBuilding(BuildingId.AlloyExtractor, new Vector3(5.1f, 0f, 2.6f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
             // Helium-3 Harvester (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old cyan cylinder so the
             // base still builds when the model file is missing.
@@ -396,12 +419,12 @@ namespace LunarDominion.UI
             // it loads, otherwise fall back to the old green-grey cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelMarineFoundry())
-                AddBuilding(BuildingId.MarineFoundry, new Vector3(-3f, 0f, -2.6f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
+                AddBuilding(BuildingId.MarineFoundry, new Vector3(-5.1f, 0f, -2.6f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             // Nova Arsenal (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old red cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelNovaArsenal())
-                AddBuilding(BuildingId.NovaArsenal, new Vector3(3f, 0f, -2.6f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
+                AddBuilding(BuildingId.NovaArsenal, new Vector3(5.1f, 0f, -2.6f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             // Aegis Motor Pool (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the base
             // still builds when the model file is missing.
@@ -413,7 +436,7 @@ namespace LunarDominion.UI
             // (2026-11-01 note: west side, clear of the other buildings,
             // so it stays tappable at phone size.)
             if (!TryAddModelResearchLab())
-                AddBuilding(BuildingId.ResearchLab, new Vector3(-4.9f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
+                AddBuilding(BuildingId.ResearchLab, new Vector3(-8.3f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
         }
 
         private void AddBuilding(BuildingId id, Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, string shortName)
@@ -528,7 +551,7 @@ namespace LunarDominion.UI
         }
 
         /// <summary>Instantiate the Blender Hydroponics Dome FBX at
-        /// (-3,0,2.6) if it can be loaded. Returns false (caller falls back
+        /// (-5.1,0,2.6) if it can be loaded. Returns false (caller falls back
         /// to the primitive) when the model is missing, has no meshes, or
         /// fails to instantiate. The model is built at ground level, ~2
         /// units wide and ~1.24 tall, so it drops into the exact spot and
@@ -545,7 +568,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "HydroBuilding";
-                go.transform.position = new Vector3(-3f, 0f, 2.6f);
+                go.transform.position = new Vector3(-5.1f, 0f, 2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -621,7 +644,7 @@ namespace LunarDominion.UI
         }
 
         /// <summary>Instantiate the Blender Alloy Extractor FBX at
-        /// (3,0,2.6) if it can be loaded. Returns false (caller falls back
+        /// (5.1,0,2.6) if it can be loaded. Returns false (caller falls back
         /// to the primitive) when the model is missing, has no meshes, or
         /// fails to instantiate. The model is built at ground level, ~1.8
         /// units wide and ~1.6 tall, so it drops into the exact spot and
@@ -638,7 +661,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AlloyBuilding";
-                go.transform.position = new Vector3(3f, 0f, 2.6f);
+                go.transform.position = new Vector3(5.1f, 0f, 2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -806,7 +829,7 @@ namespace LunarDominion.UI
 #endif
         }
 
-        /// <summary>Instantiate the Blender Marine Foundry FBX at (-3,0,-2.6)
+        /// <summary>Instantiate the Blender Marine Foundry FBX at (-5.1,0,-2.6)
         /// if it can be loaded. Returns false (caller falls back to the
         /// primitive) when the model is missing, has no meshes, or fails to
         /// instantiate. The model is built at ground level, ~2 units wide
@@ -824,7 +847,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "MarineBuilding";
-                go.transform.position = new Vector3(-3f, 0f, -2.6f);
+                go.transform.position = new Vector3(-5.1f, 0f, -2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -899,7 +922,7 @@ namespace LunarDominion.UI
 #endif
         }
 
-        /// <summary>Instantiate the Blender Nova Arsenal FBX at (3,0,-2.6)
+        /// <summary>Instantiate the Blender Nova Arsenal FBX at (5.1,0,-2.6)
         /// if it can be loaded. Returns false (caller falls back to the
         /// primitive) when the model is missing, has no meshes, or fails to
         /// instantiate. The model is built at ground level, ~2 units wide
@@ -917,7 +940,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "NovaBuilding";
-                go.transform.position = new Vector3(3f, 0f, -2.6f);
+                go.transform.position = new Vector3(5.1f, 0f, -2.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1090,7 +1113,7 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "LabBuilding";
-                go.transform.position = new Vector3(-4.9f, 0f, 0f);
+                go.transform.position = new Vector3(-8.3f, 0f, 0f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
