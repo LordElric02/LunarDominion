@@ -139,37 +139,30 @@ namespace LunarDominion.UI
                 groundRenderer.material.color = Color.white;
             }
 
-            // 2026-11-05: moon-like surface. The old flat dark discs read as
-            // stains, so the ground now has tonal patches, two proper 3D
+            // 2026-11-05: moon-like surface. The ground now has proper 3D
             // craters (dark bowl + raised rim of small rocks) and scattered
             // boulders. All decor is low, fixed-position (no randomness at
             // runtime), clear of every building, and has its collider
             // stripped so a tap ray can never be swallowed by a rock in
             // front of a building.
             // 2026-11-06 full-bleed: decor re-spread onto the 56x48
-            // ground — four patches, two craters and two rocks inside
-            // the compound, four more patches, three more craters and
-            // eight more rocks in the outer band between the wall and
-            // the ground edge, so the wider ground does not read
-            // empty. Every item is clear of every building (>= 0.6
-            // edge gap, checked), clear of the wall, and inside the
-            // ground edges. Positions are fixed (no randomness at
+            // ground — two craters and two rocks inside the compound,
+            // three more craters and eight more rocks in the outer band
+            // between the wall and the ground edge, so the wider ground
+            // does not read empty. Every item is clear of every building
+            // (>= 0.6 edge gap, checked), clear of the wall, and inside
+            // the ground edges. Positions are fixed (no randomness at
             // runtime), colliders stripped so a tap ray can never be
             // swallowed by a rock in front of a building.
             // 2026-11-06 rotation: the decor turns 45 degrees with the
-            // layout root, so six outer items were moved — three rocks
-            // and two patches that would have landed outside the ground
-            // or inside a mountain after the rotation now sit in the
-            // +X/+Z outer band, clear of the wall, buildings and
-            // mountains.
-            AddGroundPatch(new Vector3(-8.5f, 0.005f, 4f), 2.8f, new Color(0.22f, 0.24f, 0.28f));
-            AddGroundPatch(new Vector3(8.8f, 0.005f, -1f), 2.8f, new Color(0.32f, 0.34f, 0.38f));
-            AddGroundPatch(new Vector3(-3.2f, 0.005f, -5f), 2.4f, new Color(0.23f, 0.25f, 0.29f));
-            AddGroundPatch(new Vector3(2.5f, 0.005f, 5f), 2.4f, new Color(0.31f, 0.33f, 0.37f));
-            AddGroundPatch(new Vector3(-13f, 0.005f, 10f), 3.4f, new Color(0.22f, 0.24f, 0.28f));
-            AddGroundPatch(new Vector3(14f, 0.005f, 18f), 3.2f, new Color(0.32f, 0.34f, 0.38f));
-            AddGroundPatch(new Vector3(16f, 0.005f, 10f), 3f, new Color(0.23f, 0.25f, 0.29f));
-            AddGroundPatch(new Vector3(-14f, 0.005f, 14f), 3f, new Color(0.31f, 0.33f, 0.37f));
+            // layout root, so three outer rocks that would have landed
+            // outside the ground or inside a mountain after the rotation
+            // now sit in the +X/+Z outer band, clear of the wall,
+            // buildings and mountains.
+            // 2026-11-07: the flat tonal patch discs are removed — the
+            // regolith texture now gives the ground its tonal variation,
+            // and the flat circles read as stains on top of it. The
+            // craters and rocks stay.
             AddCrater(new Vector3(-7.5f, 0f, -4.5f), 1f);
             AddCrater(new Vector3(8.5f, 0f, 2.5f), 1f);
             AddCrater(new Vector3(-13.5f, 0f, -4.5f), 1.3f);
@@ -206,18 +199,6 @@ namespace LunarDominion.UI
         private void ParentToLayout(GameObject go)
         {
             go.transform.SetParent(_layoutRoot.transform, false);
-        }
-
-        // A large flat tonal patch, to break up the single grey ground.
-        private void AddGroundPatch(Vector3 pos, float diameter, Color color)
-        {
-            var patch = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            patch.name = "GroundPatch";
-            ParentToLayout(patch);
-            patch.transform.localPosition = pos;
-            patch.transform.localScale = new Vector3(diameter, 0.02f, diameter);
-            SetPrimitiveColor(patch.GetComponent<Renderer>(), color);
-            StripCollider(patch);
         }
 
         // A lunar crater: dark bowl sunk into the ground, a raised rim of
