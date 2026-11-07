@@ -111,33 +111,15 @@ namespace LunarDominion.UI
             fillGo.transform.position = new Vector3(-5f, 8f, -5f);
             fillGo.transform.LookAt(Vector3.zero);
 
-            // 2026-11-06 full-bleed: ground 56 wide by 48 deep
-            // (localScale 5.6 x 4.8 on the 10-unit plane), so it runs
-            // past all four frame edges from the (10,16,10) camera —
-            // the whole screen is terrain, with no black bars around
-            // it. The wall sits at x +/-10.5, z +/-6.5 and the
+            // 2026-11-06 full-bleed: ground 56 wide by 48 deep, so it
+            // runs past all four frame edges from the (10,16,10)
+            // camera — the whole screen is terrain, with no black bars
+            // around it. The wall sits at x +/-10.5, z +/-6.5 and the
             // mountains at the far edges, all on this ground.
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "LunarGround";
-            ground.transform.localScale = new Vector3(5.6f, 1f, 4.8f);
-            SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
-
-            // 2026-11-07: regolith texture (GroundRegolith.png in
-            // Resources/Textures/). If it loads, it replaces the flat
-            // colour: the PNG is authored in sRGB at the ground's
-            // colour, so the material colour goes to white — colour x
-            // texture would double-darken it. Tiled (8,7) across the
-            // 56x48 ground, Wrap Mode Repeat. If the PNG is missing,
-            // the flat colour above stays.
-            var regolith = Resources.Load<Texture2D>("Textures/GroundRegolith");
-            if (regolith != null)
-            {
-                regolith.wrapMode = TextureWrapMode.Repeat;
-                var groundRenderer = ground.GetComponent<Renderer>();
-                groundRenderer.material.mainTexture = regolith;
-                groundRenderer.material.mainTextureScale = new Vector2(8f, 7f);
-                groundRenderer.material.color = Color.white;
-            }
+            // 2026-11-07: the ground is the sculpted terrain mesh
+            // (TerrainMesh.fbx), flat plane as fallback — see
+            // BuildGround() below.
+            BuildGround();
 
             // 2026-11-05: moon-like surface. The ground now has scattered
             // boulders. All decor is low, fixed-position (no randomness at
@@ -330,6 +312,68 @@ namespace LunarDominion.UI
             {
                 Debug.LogWarning("[BaseView] Scenery model failed to place (" + resourcePath + "): " + e.Message);
                 if (go != null) Destroy(go);
+            }
+        }
+
+        // 2026-11-07: sculpted terrain — a Blender heightfield mesh
+        // (TerrainMesh.fbx in Resources/Models/) that replaces the
+        // flat ground plane. Flat (height 0) inside the wall, gentle
+        // dunes outside, rising toward the mountains. Its planar UVs
+        // span 0-1 across the 56x48, so the regolith texture tiles
+        // exactly as on the flat plane (8,7) — but the FBX material's
+        // own tiling is (1,1), so the code must set (8,7) here or the
+        // texture would stretch across the whole ground instead of
+        // tiling. If the FBX is missing, the flat plane below is the
+        // fallback, so the game still works. The mesh has no collider
+        // (like the debris and roads) — taps on it hit nothing, which
+        // the tap logic already treats as an empty tap.
+        private void BuildGround()
+        {
+            GameObject terrainPrefab = null;
+            try
+            {
+                terrainPrefab = Resources.Load<GameObject>("Models/TerrainMesh");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Terrain mesh failed to load (Models/TerrainMesh): " + e.Message);
+            }
+
+            Renderer groundRenderer;
+            if (terrainPrefab != null)
+            {
+                var terrain = Instantiate(terrainPrefab);
+                terrain.name = "LunarGround";
+                terrain.transform.position = Vector3.zero;
+                terrain.transform.rotation = Quaternion.identity;
+                terrain.transform.localScale = Vector3.one;
+                groundRenderer = terrain.GetComponentInChildren<Renderer>();
+            }
+            else
+            {
+                // Flat-plane fallback (the pre-terrain ground).
+                var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                ground.name = "LunarGround";
+                ground.transform.localScale = new Vector3(5.6f, 1f, 4.8f);
+                SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
+                groundRenderer = ground.GetComponent<Renderer>();
+            }
+
+            // Regolith texture (GroundRegolith.png in
+            // Resources/Textures/). If it loads, it replaces the flat
+            // colour: the PNG is authored in sRGB at the ground's
+            // colour, so the material colour goes to white — colour x
+            // texture would double-darken it. Tiled (8,7) across the
+            // 56x48 ground, Wrap Mode Repeat. If the PNG is missing,
+            // the flat colour above stays (plane) or the FBX material
+            // keeps its own texture reference (terrain).
+            var regolith = Resources.Load<Texture2D>("Textures/GroundRegolith");
+            if (regolith != null && groundRenderer != null)
+            {
+                regolith.wrapMode = TextureWrapMode.Repeat;
+                groundRenderer.material.mainTexture = regolith;
+                groundRenderer.material.mainTextureScale = new Vector2(8f, 7f);
+                groundRenderer.material.color = Color.white;
             }
         }
 
