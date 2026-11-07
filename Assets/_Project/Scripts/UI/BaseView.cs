@@ -139,21 +139,19 @@ namespace LunarDominion.UI
                 groundRenderer.material.color = Color.white;
             }
 
-            // 2026-11-05: moon-like surface. The ground now has proper 3D
-            // craters (dark bowl + raised rim of small rocks) and scattered
+            // 2026-11-05: moon-like surface. The ground now has scattered
             // boulders. All decor is low, fixed-position (no randomness at
             // runtime), clear of every building, and has its collider
             // stripped so a tap ray can never be swallowed by a rock in
             // front of a building.
             // 2026-11-06 full-bleed: decor re-spread onto the 56x48
-            // ground — two craters and two rocks inside the compound,
-            // three more craters and eight more rocks in the outer band
-            // between the wall and the ground edge, so the wider ground
-            // does not read empty. Every item is clear of every building
-            // (>= 0.6 edge gap, checked), clear of the wall, and inside
-            // the ground edges. Positions are fixed (no randomness at
-            // runtime), colliders stripped so a tap ray can never be
-            // swallowed by a rock in front of a building.
+            // ground — two rocks inside the compound, eight more rocks
+            // in the outer band between the wall and the ground edge, so
+            // the wider ground does not read empty. Every item is clear
+            // of every building (>= 0.6 edge gap, checked), clear of the
+            // wall, and inside the ground edges. Positions are fixed (no
+            // randomness at runtime), colliders stripped so a tap ray can
+            // never be swallowed by a rock in front of a building.
             // 2026-11-06 rotation: the decor turns 45 degrees with the
             // layout root, so three outer rocks that would have landed
             // outside the ground or inside a mountain after the rotation
@@ -162,12 +160,9 @@ namespace LunarDominion.UI
             // 2026-11-07: the flat tonal patch discs are removed — the
             // regolith texture now gives the ground its tonal variation,
             // and the flat circles read as stains on top of it. The
-            // craters and rocks stay.
-            AddCrater(new Vector3(-7.5f, 0f, -4.5f), 1f);
-            AddCrater(new Vector3(8.5f, 0f, 2.5f), 1f);
-            AddCrater(new Vector3(-13.5f, 0f, -4.5f), 1.3f);
-            AddCrater(new Vector3(15f, 0f, 5f), 1.4f);
-            AddCrater(new Vector3(0f, 0f, -12.5f), 1.4f);
+            // darker crater discs are removed too — the regolith texture
+            // and the debris carry the ground detail now, and the flat
+            // dark circles read the same way. The rocks stay.
             AddRock(new Vector3(-2f, 0f, 5.5f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
             AddRock(new Vector3(2.5f, 0f, -5.5f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
             AddRock(new Vector3(-16f, 0f, 16f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
@@ -199,43 +194,6 @@ namespace LunarDominion.UI
         private void ParentToLayout(GameObject go)
         {
             go.transform.SetParent(_layoutRoot.transform, false);
-        }
-
-        // A lunar crater: dark bowl sunk into the ground, a raised rim of
-        // small rocks around the edge, and a low mound in the middle.
-        private void AddCrater(Vector3 pos, float radius)
-        {
-            var bowl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            bowl.name = "CraterBowl";
-            ParentToLayout(bowl);
-            bowl.transform.localPosition = new Vector3(pos.x, 0.01f, pos.z);
-            bowl.transform.localScale = new Vector3(radius * 2f, 0.05f, radius * 2f);
-            SetPrimitiveColor(bowl.GetComponent<Renderer>(), new Color(0.13f, 0.14f, 0.17f));
-            StripCollider(bowl);
-
-            int rimStones = 9;
-            for (int i = 0; i < rimStones; i++)
-            {
-                float angle = i * Mathf.PI * 2f / rimStones;
-                var stone = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                stone.name = "CraterRim";
-                ParentToLayout(stone);
-                stone.transform.localPosition = new Vector3(
-                    pos.x + Mathf.Cos(angle) * radius,
-                    0.06f,
-                    pos.z + Mathf.Sin(angle) * radius);
-                stone.transform.localScale = new Vector3(0.32f, 0.18f, 0.32f);
-                SetPrimitiveColor(stone.GetComponent<Renderer>(), new Color(0.38f, 0.4f, 0.44f));
-                StripCollider(stone);
-            }
-
-            var mound = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            mound.name = "CraterMound";
-            ParentToLayout(mound);
-            mound.transform.localPosition = new Vector3(pos.x, 0.04f, pos.z);
-            mound.transform.localScale = new Vector3(radius * 0.5f, 0.12f, radius * 0.5f);
-            SetPrimitiveColor(mound.GetComponent<Renderer>(), new Color(0.2f, 0.21f, 0.24f));
-            StripCollider(mound);
         }
 
         // A single boulder, squashed slightly so it reads as a rock.
