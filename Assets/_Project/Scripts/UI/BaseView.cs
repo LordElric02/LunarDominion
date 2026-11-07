@@ -122,6 +122,23 @@ namespace LunarDominion.UI
             ground.transform.localScale = new Vector3(5.6f, 1f, 4.8f);
             SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
 
+            // 2026-11-07: regolith texture (GroundRegolith.png in
+            // Resources/Textures/). If it loads, it replaces the flat
+            // colour: the PNG is authored in sRGB at the ground's
+            // colour, so the material colour goes to white — colour x
+            // texture would double-darken it. Tiled (8,7) across the
+            // 56x48 ground, Wrap Mode Repeat. If the PNG is missing,
+            // the flat colour above stays.
+            var regolith = Resources.Load<Texture2D>("Textures/GroundRegolith");
+            if (regolith != null)
+            {
+                regolith.wrapMode = TextureWrapMode.Repeat;
+                var groundRenderer = ground.GetComponent<Renderer>();
+                groundRenderer.material.mainTexture = regolith;
+                groundRenderer.material.mainTextureScale = new Vector2(8f, 7f);
+                groundRenderer.material.color = Color.white;
+            }
+
             // 2026-11-05: moon-like surface. The old flat dark discs read as
             // stains, so the ground now has tonal patches, two proper 3D
             // craters (dark bowl + raised rim of small rocks) and scattered
@@ -168,6 +185,10 @@ namespace LunarDominion.UI
             AddRock(new Vector3(16f, 0f, 14f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
             AddRock(new Vector3(22f, 0f, 12f), 0.45f, new Color(0.35f, 0.37f, 0.41f));
             AddRock(new Vector3(20f, 0f, 16f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
+
+            // 2026-11-07: Blender debris models (rubble / rocks /
+            // shards), placed in world space like the ground plane.
+            AddDebris();
 
             BuildWall();
             BuildMountains();
@@ -246,6 +267,58 @@ namespace LunarDominion.UI
             rock.transform.localScale = new Vector3(size, size * 0.6f, size * 0.85f);
             SetPrimitiveColor(rock.GetComponent<Renderer>(), color);
             StripCollider(rock);
+        }
+
+        // 2026-11-07: ground debris — Blender rubble/rock/shard models
+        // (DebrisRubble / DebrisRocks / DebrisShards in Resources/Models/).
+        // Placed in world space (like the ground plane, not under the
+        // rotated layout root) at fixed positions checked against the
+        // rotated building/wall/decor layout. No colliders and no tap
+        // registration: debris is scenery, like the rocks. If an FBX
+        // is missing, that spot stays empty — the ground texture and
+        // the existing decor still show.
+        private void AddDebris()
+        {
+            AddDebrisAt("Models/DebrisRubble", new Vector3(0f, 0f, -7.5f), 0f);
+            AddDebrisAt("Models/DebrisRocks", new Vector3(-7.5f, 0f, 0f), 40f);
+            AddDebrisAt("Models/DebrisShards", new Vector3(7.5f, 0f, 0f), 80f);
+            AddDebrisAt("Models/DebrisRubble", new Vector3(-0.5f, 0f, 7.5f), 130f);
+            AddDebrisAt("Models/DebrisRocks", new Vector3(14f, 0f, -10f), 200f);
+            AddDebrisAt("Models/DebrisShards", new Vector3(-14f, 0f, 18f), 260f);
+            AddDebrisAt("Models/DebrisRubble", new Vector3(20f, 0f, 8f), 310f);
+            AddDebrisAt("Models/DebrisRubble", new Vector3(16f, 0f, -12f), 25f);
+        }
+
+        private void AddDebrisAt(string resourcePath, Vector3 position, float rotationY)
+        {
+            GameObject prefab = null;
+            try
+            {
+                prefab = Resources.Load<GameObject>(resourcePath);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Debris model failed to load (" + resourcePath + "): " + e.Message);
+                return;
+            }
+            if (prefab == null) return;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "Debris";
+                go.transform.position = position;
+                go.transform.rotation = Quaternion.Euler(0f, rotationY, 0f);
+                go.transform.localScale = Vector3.one;
+                foreach (var collider in go.GetComponentsInChildren<Collider>())
+                    Destroy(collider);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Debris model failed to place (" + resourcePath + "): " + e.Message);
+                if (go != null) Destroy(go);
+            }
         }
 
         // 2026-11-06 full-bleed: perimeter wall around the building
