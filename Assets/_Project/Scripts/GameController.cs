@@ -30,6 +30,7 @@ namespace LunarDominion
         public EnergyService Energy { get; private set; }
         public ProgressionService Progression { get; private set; }
         public PowerService Power { get; private set; }
+        public PlayerLevelService PlayerLevel { get; private set; }
         public RecruitmentService Recruitment { get; private set; }
         public ExpeditionService Expeditions { get; private set; }
         public ResearchService Research { get; private set; }
@@ -69,6 +70,7 @@ namespace LunarDominion
             Energy = new EnergyService(State, Balance);
             Progression = new ProgressionService(State, Economy, Balance);
             Power = new PowerService(State, UnitDefinitions);
+            PlayerLevel = new PlayerLevelService(State);
             Recruitment = new RecruitmentService(State, Economy, BuildingDefinitions);
             Expeditions = new ExpeditionService(State, Economy, Energy, Balance, UnitDefinitions, Research);
 
@@ -152,6 +154,7 @@ namespace LunarDominion
             Energy = new EnergyService(State, Balance);
             Progression = new ProgressionService(State, Economy, Balance);
             Power = new PowerService(State, UnitDefinitions);
+            PlayerLevel = new PlayerLevelService(State);
             Recruitment = new RecruitmentService(State, Economy, BuildingDefinitions);
             Expeditions = new ExpeditionService(State, Economy, Energy, Balance, UnitDefinitions, Research);
             NotifyChanged();
