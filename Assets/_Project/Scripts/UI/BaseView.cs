@@ -178,6 +178,10 @@ namespace LunarDominion.UI
             // shards), placed in world space like the ground plane.
             AddDebris();
 
+            // 2026-11-07: Blender roads + props, placed in world space
+            // like the debris. The gate needs the wall gap (BuildWall).
+            AddRoadsAndProps();
+
             BuildWall();
             BuildMountains();
         }
@@ -260,6 +264,69 @@ namespace LunarDominion.UI
             }
         }
 
+        // 2026-11-07: roads + props — Blender road pieces (RoadStraight /
+        // RoadJunction / RoadTee) and prop models (PropSolarPanel /
+        // PropCrates / PropStorageTank / PropRover / PropGate) in
+        // Resources/Models/. Placed in world space (like the debris, not
+        // under the rotated layout root) at fixed positions from the
+        // layout plan. Roads sit at y 0.015 so the slab base clears the
+        // ground plane. No colliders and no tap registration: roads and
+        // props are scenery. If an FBX is missing, that spot stays empty.
+        // The spine (E1/S1/J1/S2) and the NW street (N1/N2) are two
+        // separate systems — the link between them would run through the
+        // Nexus footprint. The tee is built but unused.
+        private void AddRoadsAndProps()
+        {
+            AddSceneryAt("Models/RoadStraight", new Vector3(5.45f, 0.015f, 3.75f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(4.46f, 0.015f, 1.07f), -45f, "Road");
+            AddSceneryAt("Models/RoadJunction", new Vector3(2.20f, 0.015f, -1.19f), -45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-0.06f, 0.015f, -3.45f), -45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-1.42f, 0.015f, 2.58f), -45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-4.24f, 0.015f, -0.24f), -45f, "Road");
+
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(1.5f, 0f, 6.5f), 30f, "Prop");
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.0f, 0f, 8.0f), -20f, "Prop");
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(8.5f, 0f, -2.0f), -30f, "Prop");
+            AddSceneryAt("Models/PropCrates", new Vector3(-6.8f, 0f, 3.8f), 15f, "Prop");
+            AddSceneryAt("Models/PropCrates", new Vector3(3.5f, 0f, -4.0f), 70f, "Prop");
+            AddSceneryAt("Models/PropStorageTank", new Vector3(-3.5f, 0f, 6.5f), 0f, "Prop");
+            AddSceneryAt("Models/PropStorageTank", new Vector3(3.5f, 0f, -6.5f), 0f, "Prop");
+            AddSceneryAt("Models/PropRover", new Vector3(-1.5f, 0f, -1.5f), -45f, "Prop");
+            AddSceneryAt("Models/PropGate", new Vector3(4.6f, 0f, 4.6f), 45f, "Prop");
+        }
+
+        private void AddSceneryAt(string resourcePath, Vector3 position, float rotationY, string name)
+        {
+            GameObject prefab = null;
+            try
+            {
+                prefab = Resources.Load<GameObject>(resourcePath);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Scenery model failed to load (" + resourcePath + "): " + e.Message);
+                return;
+            }
+            if (prefab == null) return;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = name;
+                go.transform.position = position;
+                go.transform.rotation = Quaternion.Euler(0f, rotationY, 0f);
+                go.transform.localScale = Vector3.one;
+                foreach (var collider in go.GetComponentsInChildren<Collider>())
+                    Destroy(collider);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Scenery model failed to place (" + resourcePath + "): " + e.Message);
+                if (go != null) Destroy(go);
+            }
+        }
+
         // 2026-11-06 full-bleed: perimeter wall around the building
         // area, like the walled compound in the reference layout.
         // Rectangle x +/-10.5, z +/-6.5 — every building sits inside
@@ -282,14 +349,22 @@ namespace LunarDominion.UI
             var stripColor = new Color(0.38f, 0.85f, 1.0f);
 
             // North (+Z) and south (-Z) segments, corner to corner.
-            AddWallBox(new Vector3(0f, 0.4f, 6.5f), new Vector3(21.35f, 0.8f, 0.35f), wallColor);
+            // 2026-11-07: the north segment is split for the gate — a
+            // 2.4-wide gap centred at local x 0 (world (4.6, 4.6), the
+            // near wall edge's midpoint), where the gate model sits and
+            // the E1 road passes through. The gate posts overlap the
+            // wall ends by 0.13 on each side.
+            AddWallBox(new Vector3(-5.9375f, 0.4f, 6.5f), new Vector3(9.475f, 0.8f, 0.35f), wallColor);
+            AddWallBox(new Vector3(5.9375f, 0.4f, 6.5f), new Vector3(9.475f, 0.8f, 0.35f), wallColor);
             AddWallBox(new Vector3(0f, 0.4f, -6.5f), new Vector3(21.35f, 0.8f, 0.35f), wallColor);
             // East (+X) and west (-X) segments, corner to corner.
             AddWallBox(new Vector3(10.5f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 13.35f), wallColor);
             AddWallBox(new Vector3(-10.5f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 13.35f), wallColor);
 
-            // Cyan strip lights along the top of each segment.
-            AddWallBox(new Vector3(0f, 0.83f, 6.5f), new Vector3(21f, 0.06f, 0.12f), stripColor);
+            // Cyan strip lights along the top of each segment. The north
+            // strip is split for the gate gap, like the wall below it.
+            AddWallBox(new Vector3(-5.85f, 0.83f, 6.5f), new Vector3(9.3f, 0.06f, 0.12f), stripColor);
+            AddWallBox(new Vector3(5.85f, 0.83f, 6.5f), new Vector3(9.3f, 0.06f, 0.12f), stripColor);
             AddWallBox(new Vector3(0f, 0.83f, -6.5f), new Vector3(21f, 0.06f, 0.12f), stripColor);
             AddWallBox(new Vector3(10.5f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 13f), stripColor);
             AddWallBox(new Vector3(-10.5f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 13f), stripColor);
