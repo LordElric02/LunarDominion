@@ -264,15 +264,20 @@ namespace LunarDominion.UI
             // Hydroponics — butts E1's NW end, enabled by moving the
             // solar panel (below) out of its path.
             AddSceneryAt("Models/RoadStraight", new Vector3(2.63f, 0.015f, 6.57f), 45f, "Road");
+            // 2026-11-07: extended one more piece NW along the near wall
+            // toward the Hydroponics corner — butts the previous piece's
+            // NW end, enabled by moving the solar panel (below) right.
+            AddSceneryAt("Models/RoadStraight", new Vector3(-0.19f, 0.015f, 9.39f), 45f, "Road");
             AddSceneryAt("Models/RoadStraight", new Vector3(4.46f, 0.015f, 1.07f), -45f, "Road");
             AddSceneryAt("Models/RoadJunction", new Vector3(2.20f, 0.015f, -1.19f), -45f, "Road");
             AddSceneryAt("Models/RoadStraight", new Vector3(-0.06f, 0.015f, -3.45f), -45f, "Road");
             AddSceneryAt("Models/RoadStraight", new Vector3(-1.42f, 0.015f, 2.58f), -45f, "Road");
             AddSceneryAt("Models/RoadStraight", new Vector3(-4.24f, 0.015f, -0.24f), -45f, "Road");
 
-            // 2026-11-07: moved right (toward Hydroponics) from (1.5, 6.5)
-            // so the wall road can extend past it.
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(0.5f, 0f, 6.2f), 30f, "Prop");
+            // 2026-11-07: moved right (toward Hydroponics) from (1.5, 6.5),
+            // then again to (0.1, 6.2) so the wall road can extend past it
+            // toward the Hydroponics corner.
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(0.1f, 0f, 6.2f), 30f, "Prop");
             AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.0f, 0f, 8.0f), -20f, "Prop");
             AddSceneryAt("Models/PropSolarPanel", new Vector3(8.5f, 0f, -2.0f), -30f, "Prop");
             AddSceneryAt("Models/PropCrates", new Vector3(-6.8f, 0f, 3.8f), 15f, "Prop");
