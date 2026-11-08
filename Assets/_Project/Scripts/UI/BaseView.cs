@@ -575,6 +575,23 @@ namespace LunarDominion.UI
                 // top limb just below the top bar as a broad banded arc.
                 go.transform.position = new Vector3(-47f, -80f, -47f);
                 go.transform.localScale = Vector3.one * 2.25f;
+                // 2026-11-07: assign the texture at runtime. The FBX
+                // import never linked AlienPlanet.png to the material's
+                // Base Map (the slot stays empty, and the embedded
+                // material reads as read-only in the Inspector, so the
+                // texture cannot be assigned by hand). Resources.Load
+                // finds the PNG under Resources/Models/, and setting
+                // _BaseMap on the instance material bypasses the
+                // import entirely.
+                var planetRenderer = go.GetComponentInChildren<MeshRenderer>();
+                if (planetRenderer != null)
+                {
+                    Texture2D planetTex = Resources.Load<Texture2D>("Models/AlienPlanet");
+                    if (planetTex != null)
+                        planetRenderer.material.SetTexture("_BaseMap", planetTex);
+                    else
+                        Debug.LogWarning("[BaseView] Alien planet texture not found (Models/AlienPlanet).");
+                }
                 foreach (var collider in go.GetComponentsInChildren<Collider>())
                     Destroy(collider);
             }
