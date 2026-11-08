@@ -56,6 +56,11 @@ ehthumbs.db
 
 # Unity crash recovery / temp / Burst debug — generated, rebuildable
 # (these show up as untracked noise in git status)
+# Note: Burst and backup folders carry the project name as a prefix
+# (e.g. "Lunar Dominion_BurstDebugInformation_DoNotShip"), so match with *.
+# _Recovery.meta is the .meta file for the _Recovery folder itself.
 _Recovery/
+_Recovery.meta
 .utmp/
-BurstDebugInformation_DoNotShip/
+*_BurstDebugInformation_DoNotShip/
+*_BackUpThisFolder_ButDontShipItWithYourGame/
