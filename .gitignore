@@ -53,3 +53,9 @@ ehthumbs.db
 
 # Local crash / profiling dumps
 *.dmp
+
+# Unity crash recovery / temp / Burst debug — generated, rebuildable
+# (these show up as untracked noise in git status)
+_Recovery/
+.utmp/
+BurstDebugInformation_DoNotShip/
