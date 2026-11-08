@@ -567,14 +567,19 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AlienPlanet";
-                // 2026-11-07 placement fix: the old centre (-47,-20,-47)
-                // at scale 1 put the arc in the top ~17% of the frame,
-                // almost entirely behind the opaque UI top bar. Scaling
-                // up AND lowering the centre together (verified in
-                // Blender, 18 candidates, PLACEMENT-FIX.md) lands the
-                // top limb just below the top bar as a broad banded arc.
-                go.transform.position = new Vector3(-47f, -80f, -47f);
-                go.transform.localScale = Vector3.one * 2.25f;
+                // 2026-11-08 placement fix v2 (PLACEMENT-FIX-V2.md):
+                // the v1 placement (-47,-80,-47, scale 2.25) put the
+                // arc's top limb at y = -21.5, below the detailed
+                // mountain tops, so the mountains blocked it completely
+                // (the v1 Blender check used cone stand-ins, which are
+                // narrower than the real mountains). V2J, verified in
+                // Blender with the ACTUAL MountainA/B/C FBX models at
+                // the 13 real spots (13 candidates, 2 rounds), lifts
+                // the top limb to y = -7 — above the mountain tops,
+                // comfortably below the UI top bar — as a broad banded
+                // arc spanning ~52% of the frame.
+                go.transform.position = new Vector3(-47f, -72f, -47f);
+                go.transform.localScale = Vector3.one * 2.5f;
                 // 2026-11-07: assign the texture at runtime. The FBX
                 // import never linked AlienPlanet.png to the material's
                 // Base Map (the slot stays empty, and the embedded
