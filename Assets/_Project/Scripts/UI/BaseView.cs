@@ -350,7 +350,15 @@ namespace LunarDominion.UI
                 var terrain = Instantiate(terrainPrefab);
                 terrain.name = "LunarGround";
                 terrain.transform.position = Vector3.zero;
-                terrain.transform.rotation = Quaternion.identity;
+                // Do NOT set the rotation here. The FBX carries a -90 deg X
+                // axis conversion (Blender Z-up to Unity Y-up). When the
+                // import's "Bake Axis Conversion" is off, that conversion
+                // lives on this object's transform; forcing identity here
+                // strips it and the flat heightfield renders as a 48-tall
+                // vertical slab that blocks the camera's view of the base.
+                // Leaving the imported rotation alone is correct whether
+                // Bake is on (rotation already baked into the vertices,
+                // transform is identity) or off (transform carries -90 X).
                 terrain.transform.localScale = Vector3.one;
                 groundRenderer = terrain.GetComponentInChildren<Renderer>();
             }
