@@ -3,7 +3,12 @@ guid: 285e65827ccbab44c84a9a39f52aa5a6
 ModelImporter:
   serializedVersion: 24300
   internalIDToNameTable: []
-  externalObjects: {}
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: AlienPlanetMat
+    second: {fileID: 2100000, guid: f6d88e6e1bfbe514388f5f8b49f25f0a, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0
