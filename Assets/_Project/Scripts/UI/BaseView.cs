@@ -166,6 +166,7 @@ namespace LunarDominion.UI
 
             BuildWall();
             BuildMountains();
+            BuildAlienPlanet();
         }
 
         // 2026-11-06: planet-and-stars sky removed from the base view —
@@ -466,54 +467,116 @@ namespace LunarDominion.UI
         // 2026-11-06 full-bleed: low-poly mountain ridge around the
         // far (-X and -Z) edges of the ground, outside the wall — the
         // lunar horizon that fills the top and side edges of the
-        // frame. Each mountain is three stacked cylinders, narrower
-        // and lighter toward the peak. No colliders. The +X and +Z
-        // edges need no mountains: the ground plane itself covers
-        // those frame edges from this camera (checked: 0 uncovered
-        // boundary samples). Mountain tops project to NDC y 0.85..1.18,
-        // so they rise behind the top bar, as in the reference.
+        // frame. No colliders. The +X and +Z edges need no mountains:
+        // the ground plane itself covers those frame edges from this
+        // camera (checked: 0 uncovered boundary samples). Mountain
+        // tops project to NDC y 0.85..1.18, so they rise behind the
+        // top bar, as in the reference.
+        // 2026-11-07: the stacked-cylinder primitives are replaced by
+        // three detailed Blender mountains (MountainA "Broad Twin",
+        // MountainB "Sharp Spire", MountainC "Craggy Dome" in
+        // Resources/Models/), cycled A/B/C so no two adjacent spots
+        // share a variant, each with its own Y rotation and a scale
+        // that maps the nominal r3.5 / h7.0 model to the spot's
+        // radius/height. Same 13 spots as before. If an FBX is
+        // missing, that spot stays empty.
         private void BuildMountains()
         {
-            AddMountain(new Vector3(-22f, 0f, 11f), 4f, 8f);
-            AddMountain(new Vector3(-19f, 0f, 6f), 4f, 7.5f);
-            AddMountain(new Vector3(-18f, 0f, 0f), 3.5f, 6.5f);
-            AddMountain(new Vector3(-19f, 0f, -6f), 3.5f, 6f);
-            AddMountain(new Vector3(-18f, 0f, -12f), 4f, 7f);
-            AddMountain(new Vector3(-23f, 0f, 2f), 4f, 7f);
-            AddMountain(new Vector3(-12f, 0f, -18f), 3.5f, 6.5f);
-            AddMountain(new Vector3(-8f, 0f, -19f), 3f, 5.5f);
-            AddMountain(new Vector3(-4f, 0f, -18f), 4f, 7.5f);
-            AddMountain(new Vector3(0f, 0f, -18.5f), 3.5f, 7f);
-            AddMountain(new Vector3(4f, 0f, -18f), 3.5f, 6.5f);
-            AddMountain(new Vector3(7.5f, 0f, -18.5f), 3.5f, 7f);
-            AddMountain(new Vector3(11f, 0f, -19f), 4f, 8f);
+            AddMountain("Models/MountainA", new Vector3(-22f, 0f, 11f), 20f, new Vector3(1.143f, 1.143f, 1.143f));
+            AddMountain("Models/MountainB", new Vector3(-19f, 0f, 6f), 140f, new Vector3(1.143f, 1.071f, 1.143f));
+            AddMountain("Models/MountainC", new Vector3(-18f, 0f, 0f), 260f, new Vector3(1f, 0.929f, 1f));
+            AddMountain("Models/MountainA", new Vector3(-19f, 0f, -6f), 90f, new Vector3(1f, 0.857f, 1f));
+            AddMountain("Models/MountainB", new Vector3(-18f, 0f, -12f), 310f, new Vector3(1.143f, 1f, 1.143f));
+            AddMountain("Models/MountainC", new Vector3(-23f, 0f, 2f), 45f, new Vector3(1.143f, 1f, 1.143f));
+            AddMountain("Models/MountainA", new Vector3(-12f, 0f, -18f), 200f, new Vector3(1f, 0.929f, 1f));
+            AddMountain("Models/MountainB", new Vector3(-8f, 0f, -19f), 70f, new Vector3(0.857f, 0.786f, 0.857f));
+            AddMountain("Models/MountainC", new Vector3(-4f, 0f, -18f), 170f, new Vector3(1.143f, 1.071f, 1.143f));
+            AddMountain("Models/MountainA", new Vector3(0f, 0f, -18.5f), 280f, new Vector3(1f, 1f, 1f));
+            AddMountain("Models/MountainB", new Vector3(4f, 0f, -18f), 15f, new Vector3(1f, 0.929f, 1f));
+            AddMountain("Models/MountainC", new Vector3(7.5f, 0f, -18.5f), 230f, new Vector3(1f, 1f, 1f));
+            AddMountain("Models/MountainA", new Vector3(11f, 0f, -19f), 120f, new Vector3(1.143f, 1.143f, 1.143f));
         }
 
-        // A stepped mountain: three cylinders, each narrower and
-        // lighter than the one below. The cylinder primitive is 2
-        // units high and 1 in diameter, so localScale is
-        // (2 x radius, height / 2, 2 x radius) and the tier sits at
-        // y = base + height / 2.
-        private void AddMountain(Vector3 pos, float radius, float height)
+        private void AddMountain(string resourcePath, Vector3 position, float rotationY, Vector3 scale)
         {
-            AddMountainTier(pos, radius, height, 0f, 0.40f, new Color(0.32f, 0.30f, 0.27f));
-            AddMountainTier(pos, radius * 0.65f, height, 0.40f, 0.75f, new Color(0.38f, 0.36f, 0.33f));
-            AddMountainTier(pos, radius * 0.35f, height, 0.75f, 1f, new Color(0.46f, 0.44f, 0.40f));
+            GameObject prefab = null;
+            try
+            {
+                prefab = Resources.Load<GameObject>(resourcePath);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Mountain model failed to load (" + resourcePath + "): " + e.Message);
+                return;
+            }
+            if (prefab == null) return;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "Mountain";
+                go.transform.position = position;
+                // Y rotation only, like the buildings/debris/roads: the
+                // FBX import has Bake Axis Conversion on, so the -90 deg
+                // X axis conversion is baked into the vertices and a Y
+                // rotation here is safe. Do not force the rotation to
+                // identity (terrain lesson, commit 4186124e).
+                go.transform.rotation = Quaternion.Euler(0f, rotationY, 0f);
+                go.transform.localScale = scale;
+                foreach (var collider in go.GetComponentsInChildren<Collider>())
+                    Destroy(collider);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Mountain model failed to place (" + resourcePath + "): " + e.Message);
+                if (go != null) Destroy(go);
+            }
         }
 
-        private void AddMountainTier(Vector3 pos, float tierRadius, float totalHeight,
-            float fromFraction, float toFraction, Color color)
+        // 2026-11-07: alien planet on the horizon — a large banded
+        // world (AlienPlanet.fbx in Resources/Models/), low on the
+        // -X/-Z horizon so only its top arc shows above the mountains.
+        // Centre (-47, -20, -47), radius 26: the centre sits below
+        // ground level on purpose — the camera looks down 48.5 deg,
+        // so a planet centred on the true horizon would be out of
+        // frame. No collider, untappable, no animation. If the FBX is
+        // missing, no planet shows.
+        // Do NOT set the rotation here: the FBX carries a -90 deg X
+        // axis conversion, and the texture's poles are not rotation-
+        // invariant — forcing identity while Bake Axis Conversion is
+        // off would turn the bands vertical. Leaving the imported
+        // rotation alone keeps the bands horizontal (terrain lesson,
+        // commit 4186124e).
+        private void BuildAlienPlanet()
         {
-            float tierHeight = totalHeight * (toFraction - fromFraction);
-            var tier = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            tier.name = "Mountain";
-            tier.transform.position = new Vector3(
-                pos.x,
-                totalHeight * fromFraction + tierHeight / 2f,
-                pos.z);
-            tier.transform.localScale = new Vector3(tierRadius * 2f, tierHeight / 2f, tierRadius * 2f);
-            SetPrimitiveColor(tier.GetComponent<Renderer>(), color);
-            StripCollider(tier);
+            GameObject prefab = null;
+            try
+            {
+                prefab = Resources.Load<GameObject>("Models/AlienPlanet");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Alien planet failed to load (Models/AlienPlanet): " + e.Message);
+                return;
+            }
+            if (prefab == null) return;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "AlienPlanet";
+                go.transform.position = new Vector3(-47f, -20f, -47f);
+                go.transform.localScale = Vector3.one;
+                foreach (var collider in go.GetComponentsInChildren<Collider>())
+                    Destroy(collider);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Alien planet failed to place (Models/AlienPlanet): " + e.Message);
+                if (go != null) Destroy(go);
+            }
         }
 
         // Ground decor must never block a building tap: the tap raycast
