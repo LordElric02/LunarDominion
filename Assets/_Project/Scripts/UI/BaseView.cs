@@ -268,6 +268,13 @@ namespace LunarDominion.UI
             // toward the Hydroponics corner — butts the previous piece's
             // NW end, enabled by moving the solar panel (below) right.
             AddSceneryAt("Models/RoadStraight", new Vector3(-0.19f, 0.015f, 9.39f), 45f, "Road");
+            // 2026-11-07: E1 extended SE along the near wall from the gate
+            // to the right corner — butts E1's SE end, then butts the
+            // previous piece. The solar panel at (8.5, -2.0) is NOT in
+            // the way: it sits 1.90 units off this road line, ~0.55 clear
+            // of the road edge, so it stays put.
+            AddSceneryAt("Models/RoadStraight", new Vector3(8.27f, 0.015f, 0.93f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(11.10f, 0.015f, -1.90f), 45f, "Road");
             AddSceneryAt("Models/RoadStraight", new Vector3(4.46f, 0.015f, 1.07f), -45f, "Road");
             AddSceneryAt("Models/RoadJunction", new Vector3(2.20f, 0.015f, -1.19f), -45f, "Road");
             AddSceneryAt("Models/RoadStraight", new Vector3(-0.06f, 0.015f, -3.45f), -45f, "Road");
