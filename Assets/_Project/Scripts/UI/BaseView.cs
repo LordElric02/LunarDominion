@@ -482,19 +482,29 @@ namespace LunarDominion.UI
         // missing, that spot stays empty.
         private void BuildMountains()
         {
-            AddMountain("Models/MountainA", new Vector3(-22f, 0f, 11f), 20f, new Vector3(1.143f, 1.143f, 1.143f));
-            AddMountain("Models/MountainB", new Vector3(-19f, 0f, 6f), 140f, new Vector3(1.143f, 1.071f, 1.143f));
-            AddMountain("Models/MountainC", new Vector3(-18f, 0f, 0f), 260f, new Vector3(1f, 0.929f, 1f));
-            AddMountain("Models/MountainA", new Vector3(-19f, 0f, -6f), 90f, new Vector3(1f, 0.857f, 1f));
-            AddMountain("Models/MountainB", new Vector3(-18f, 0f, -12f), 310f, new Vector3(1.143f, 1f, 1.143f));
-            AddMountain("Models/MountainC", new Vector3(-23f, 0f, 2f), 45f, new Vector3(1.143f, 1f, 1.143f));
-            AddMountain("Models/MountainA", new Vector3(-12f, 0f, -18f), 200f, new Vector3(1f, 0.929f, 1f));
-            AddMountain("Models/MountainB", new Vector3(-8f, 0f, -19f), 70f, new Vector3(0.857f, 0.786f, 0.857f));
-            AddMountain("Models/MountainC", new Vector3(-4f, 0f, -18f), 170f, new Vector3(1.143f, 1.071f, 1.143f));
-            AddMountain("Models/MountainA", new Vector3(0f, 0f, -18.5f), 280f, new Vector3(1f, 1f, 1f));
-            AddMountain("Models/MountainB", new Vector3(4f, 0f, -18f), 15f, new Vector3(1f, 0.929f, 1f));
-            AddMountain("Models/MountainC", new Vector3(7.5f, 0f, -18.5f), 230f, new Vector3(1f, 1f, 1f));
-            AddMountain("Models/MountainA", new Vector3(11f, 0f, -19f), 120f, new Vector3(1.143f, 1.143f, 1.143f));
+            // 2026-11-08 redesign (MOUNTAINS-PLANET-REDESIGN.md):
+            // the old 13 spots were all on the far -X/-Z edges, a tall
+            // ridgeline (h 5.5-8.0) that filled the top of the frame
+            // and blocked the sky (and the planet arc). The new layout
+            // is a 13-spot ring/bowl around the base — left, top, and
+            // right edges, radius ~22-24, heights tapering from ~6.0
+            // (top-left) down to ~3.15 (right edge, under the planet),
+            // centre-back peaks spread 9-10 units apart so they read
+            // as individual crags with sky gaps. Same MountainA/B/C
+            // models, 4,400 tris total. Foreground (+X/+Z) stays clear.
+            AddMountain("Models/MountainB", new Vector3(-23f, 0f, 10f), 20f, new Vector3(1f, 0.85f, 1f));
+            AddMountain("Models/MountainC", new Vector3(-21f, 0f, 15f), 310f, new Vector3(0.95f, 0.75f, 0.95f));
+            AddMountain("Models/MountainA", new Vector3(-20f, 0f, 5f), 140f, new Vector3(1f, 0.8f, 1f));
+            AddMountain("Models/MountainB", new Vector3(-21f, 0f, -4f), 260f, new Vector3(1f, 0.75f, 1f));
+            AddMountain("Models/MountainC", new Vector3(-19f, 0f, -13f), 90f, new Vector3(1f, 0.75f, 1f));
+            AddMountain("Models/MountainA", new Vector3(-14f, 0f, -20f), 200f, new Vector3(0.95f, 0.65f, 0.95f));
+            AddMountain("Models/MountainB", new Vector3(-5f, 0f, -23f), 170f, new Vector3(0.95f, 0.6f, 0.95f));
+            AddMountain("Models/MountainC", new Vector3(5f, 0f, -23f), 15f, new Vector3(0.95f, 0.6f, 0.95f));
+            AddMountain("Models/MountainA", new Vector3(13f, 0f, -20f), 230f, new Vector3(0.9f, 0.55f, 0.9f));
+            AddMountain("Models/MountainB", new Vector3(19f, 0f, -16f), 120f, new Vector3(0.9f, 0.5f, 0.9f));
+            AddMountain("Models/MountainC", new Vector3(23f, 0f, -8f), 45f, new Vector3(0.85f, 0.5f, 0.85f));
+            AddMountain("Models/MountainA", new Vector3(24f, 0f, 1f), 280f, new Vector3(0.85f, 0.45f, 0.85f));
+            AddMountain("Models/MountainB", new Vector3(-17f, 0f, 16f), 180f, new Vector3(0.9f, 0.6f, 0.9f));
         }
 
         private void AddMountain(string resourcePath, Vector3 position, float rotationY, Vector3 scale)
@@ -567,19 +577,18 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AlienPlanet";
-                // 2026-11-08 placement fix v2 (PLACEMENT-FIX-V2.md):
-                // the v1 placement (-47,-80,-47, scale 2.25) put the
-                // arc's top limb at y = -21.5, below the detailed
-                // mountain tops, so the mountains blocked it completely
-                // (the v1 Blender check used cone stand-ins, which are
-                // narrower than the real mountains). V2J, verified in
-                // Blender with the ACTUAL MountainA/B/C FBX models at
-                // the 13 real spots (13 candidates, 2 rounds), lifts
-                // the top limb to y = -7 — above the mountain tops,
-                // comfortably below the UI top bar — as a broad banded
-                // arc spanning ~52% of the frame.
-                go.transform.position = new Vector3(-47f, -72f, -47f);
-                go.transform.localScale = Vector3.one * 2.5f;
+                // 2026-11-08 redesign (MOUNTAINS-PLANET-REDESIGN.md):
+                // the top-centre arc approach is abandoned — v1 C16
+                // and v2 V2J both verified in Blender but invisible in
+                // Unity. The planet now sits in the UPPER RIGHT as a
+                // large clearly banded disc, like Earth in reference
+                // image-103 — R3, verified in Blender with the real
+                // mountain ring: disc bbox x 67.6-92.0%, y 18.4-61.7%
+                // from top, fully below the UI top bar, fully in frame,
+                // ~24% of frame width. Same FBX + texture; rotation
+                // untouched.
+                go.transform.position = new Vector3(0f, -54f, -90f);
+                go.transform.localScale = Vector3.one * 1.0f;
                 // 2026-11-07: assign the texture at runtime. The FBX
                 // import never linked AlienPlanet.png to the material's
                 // Base Map (the slot stays empty, and the embedded
