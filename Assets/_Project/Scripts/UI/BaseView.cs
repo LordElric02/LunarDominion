@@ -567,8 +567,14 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AlienPlanet";
-                go.transform.position = new Vector3(-47f, -20f, -47f);
-                go.transform.localScale = Vector3.one;
+                // 2026-11-07 placement fix: the old centre (-47,-20,-47)
+                // at scale 1 put the arc in the top ~17% of the frame,
+                // almost entirely behind the opaque UI top bar. Scaling
+                // up AND lowering the centre together (verified in
+                // Blender, 18 candidates, PLACEMENT-FIX.md) lands the
+                // top limb just below the top bar as a broad banded arc.
+                go.transform.position = new Vector3(-47f, -80f, -47f);
+                go.transform.localScale = Vector3.one * 2.25f;
                 foreach (var collider in go.GetComponentsInChildren<Collider>())
                     Destroy(collider);
             }
