@@ -155,6 +155,19 @@ namespace LunarDominion.UI
             new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(120f, 0f, -80f) },
         };
 
+        // Camp respawn spots (2026-11-09): when a camp is defeated it
+        // vanishes, and another of the same tier respawns at a different
+        // spot. CampSpots[tier-1][spot] — spot 0 is the original
+        // position from NodeDefs; the alternates are spread across the
+        // map, clear of the base, the nodes, and each other, so a
+        // respawned camp never lands on top of another point.
+        public static readonly Vector3[][] CampSpots =
+        {
+            new Vector3[] { new Vector3(55f, 0f, 15f), new Vector3(-40f, 0f, 80f), new Vector3(100f, 0f, 40f) },
+            new Vector3[] { new Vector3(-85f, 0f, 60f), new Vector3(20f, 0f, -90f), new Vector3(-120f, 0f, -10f) },
+            new Vector3[] { new Vector3(120f, 0f, -80f), new Vector3(0f, 0f, 100f), new Vector3(60f, 0f, -100f) },
+        };
+
         public void Build()
         {
             GameObject terrainPrefab = null;
@@ -644,17 +657,32 @@ namespace LunarDominion.UI
         // Structured data for a node/camp by index (0-11), for restoring
         // an occupation from the save (the service rebuilds its active
         // point) and for the Bootstrap's panel. Null when out of range.
+        // For a camp, the Position is the CURRENT one (a respawned camp
+        // has moved from its NodeDefs spot), taken from its live
+        // MapPoint data.
         public MapPointData NodeData(int index)
         {
             if (index < 0 || index >= NodeDefs.Length) return null;
-            return DataForNodeDef(index);
+            var data = DataForNodeDef(index);
+            if (data.Kind == MapPointKind.Camp)
+            {
+                Vector3 pos;
+                if (CampCurrentPosition(index, out pos)) data.Position = pos;
+            }
+            return data;
         }
 
         // World position of a node/camp by index, for the marker.
+        // For a camp, the CURRENT position (it may have respawned
+        // elsewhere), not the original NodeDefs spot.
         public bool NodePosition(int index, out Vector3 position)
         {
             position = Vector3.zero;
             if (index < 0 || index >= NodeDefs.Length) return false;
+            if (NodeDefs[index].Kind == MapPointKind.Camp)
+            {
+                return CampCurrentPosition(index, out position);
+            }
             position = NodeDefs[index].Position;
             return true;
         }
@@ -702,6 +730,63 @@ namespace LunarDominion.UI
                 if (point.Data.Kind == MapPointKind.Camp) continue;
                 if (point.Go != null) point.Go.SetActive(visible);
             }
+        }
+
+        // Show or hide an enemy camp (2026-11-09): a defeated camp
+        // vanishes with its creatures until another of the same tier
+        // respawns elsewhere. Hiding also hides it from taps — a
+        // vanished camp cannot be selected. campIndex is the NodeDefs
+        // index (9-11). The camp marker and its creatures all carry
+        // Data.Index == campIndex, so one pass hides the whole camp.
+        public void SetCampVisible(int campIndex, bool visible)
+        {
+            foreach (var point in _mapPoints)
+            {
+                if (point.Data == null || point.Data.Index != campIndex) continue;
+                if (point.Data.Kind != MapPointKind.Camp) continue;
+                if (point.Go != null) point.Go.SetActive(visible);
+            }
+        }
+
+        // Move an enemy camp to one of its respawn spots (2026-11-09).
+        // campIndex is the NodeDefs index (9-11); spotIndex is 0-2 into
+        // CampSpots[tier-1]. The camp marker and its creatures move by
+        // the same delta, so their relative layout is preserved, and
+        // every MapPoint's Data.Position is updated so taps, the panel,
+        // and the march target all use the new location.
+        public void MoveCampToSpot(int campIndex, int spotIndex)
+        {
+            int tier = campIndex - 8;
+            if (tier < 1 || tier > 3) return;
+            if (spotIndex < 0 || spotIndex >= CampSpots[tier - 1].Length) return;
+            Vector3 target = CampSpots[tier - 1][spotIndex];
+            Vector3 current;
+            if (!CampCurrentPosition(campIndex, out current)) return;
+            Vector3 delta = target - current;
+            if (delta == Vector3.zero) return;
+            foreach (var point in _mapPoints)
+            {
+                if (point.Data == null || point.Data.Index != campIndex) continue;
+                if (point.Data.Kind != MapPointKind.Camp) continue;
+                if (point.Go != null) point.Go.transform.position += delta;
+                point.Data.Position += delta;
+            }
+        }
+
+        // Current world position of a camp, from its live MapPoint data
+        // (which MoveCampToSpot keeps up to date). False when the camp
+        // has no points (e.g. its models failed to load).
+        private bool CampCurrentPosition(int campIndex, out Vector3 position)
+        {
+            position = Vector3.zero;
+            foreach (var point in _mapPoints)
+            {
+                if (point.Data == null || point.Data.Index != campIndex) continue;
+                if (point.Data.Kind != MapPointKind.Camp) continue;
+                position = point.Data.Position;
+                return true;
+            }
+            return false;
         }
 
         public void SetVisible(bool visible)

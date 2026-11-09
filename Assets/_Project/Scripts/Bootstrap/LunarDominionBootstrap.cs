@@ -261,10 +261,14 @@ namespace LunarDominion.Bootstrap
         // marker at an occupied node (the army farming there). Called on
         // Map open, on excursion results, and on state changes while the
         // Map is visible (so a node regenerating or an occupation ending
-        // is noticed).
+        // is noticed). Also re-applies camp positions/visibility
+        // (2026-11-09): the view's SetVisible re-shows every point, so
+        // a defeated camp must be re-hidden and a respawned camp
+        // re-placed at its saved spot.
         private void RefreshMapNodeStates()
         {
             if (_exteriorView == null || _excursions == null) return;
+            _excursions.SyncCamps();
             for (int i = 0; i < 9; i++)
             {
                 if (_excursions.IsNodeOccupied(i))
@@ -340,8 +344,10 @@ namespace LunarDominion.Bootstrap
             // An occupation may have ended (its timer is real-time, and
             // it can end while the app was closed — the harvest is
             // granted on the next refresh). A node may also have
-            // regenerated while the Map is open.
+            // regenerated while the Map is open. A defeated camp may
+            // also have respawned (its timer is real-time too).
             _excursions?.CheckOccupationDue();
+            _excursions?.CheckCampRespawns();
             if (_exteriorView != null && _exteriorView.IsVisible) RefreshMapNodeStates();
         }
     }

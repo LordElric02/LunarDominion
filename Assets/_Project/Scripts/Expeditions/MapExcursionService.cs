@@ -26,8 +26,10 @@ namespace LunarDominion.Expeditions
     /// ExpeditionService.TryStart exactly — same tier gate (bypassed on
     /// the map with a warning), energy cost, no-refund-on-defeat rule,
     /// rewards, XP, and permanent casualties — so a map fight and a menu
-    /// fight are the same fight. Energy is spent and combat runs at
-    /// ARRIVAL, not at send, so cancelling an outbound march (leaving
+    /// fight are the same fight. A defeated camp vanishes (2026-11-09)
+    /// with its creatures, and another of the same tier respawns at a
+    /// different spot after CampRespawnHours; losing leaves the camp in
+    /// place. Energy is spent and combat runs at ARRIVAL, not at send, so cancelling an outbound march (leaving
     /// the Map tab) before arrival costs nothing; an active occupation
     /// is never cancelled by leaving the tab — the army keeps farming.
     /// This service owns the rules; the march itself is visual and lives
@@ -38,6 +40,9 @@ namespace LunarDominion.Expeditions
         public const float NodeRegenHours = 8f;
         // Occupation: 120 min / troops sent (8 troops = 15 min).
         public const float OccupationMinutesPerTroop = 120f;
+        // Camp respawn: a defeated camp vanishes, and another of the
+        // same tier respawns elsewhere after this many real-time hours.
+        public const float CampRespawnHours = 4f;
 
         // Raised when an excursion resolves (arrival outcome) or cannot
         // start — title + multi-line body for the info panel.
@@ -89,6 +94,11 @@ namespace LunarDominion.Expeditions
                 _occupying = true;
                 _activePoint = view != null ? view.NodeData(state.OccupiedNodeIndex) : null;
             }
+            // Restore camp positions/visibility from the save: a camp
+            // defeated in a previous session is still vanished (until
+            // its respawn time), and a respawned camp sits at its saved
+            // spot, not the original one.
+            SyncCamps();
         }
 
         /// <summary>Can an excursion be sent to this point right now?
@@ -131,6 +141,11 @@ namespace LunarDominion.Expeditions
             if (encounter == null)
             {
                 reason = "No encounter for this camp.";
+                return false;
+            }
+            if (IsCampDefeated(point.Tier))
+            {
+                reason = "This camp was defeated — a new one will appear elsewhere.";
                 return false;
             }
             if (_state.Energy < encounter.EnergyCost)
@@ -342,6 +357,104 @@ namespace LunarDominion.Expeditions
             _state.OccupationTroops = 0;
         }
 
+        // Enemy camps (2026-11-09): a camp defeated in battle vanishes,
+        // and another of the same tier respawns elsewhere after
+        // CampRespawnHours. The camp and its creatures disappear
+        // immediately; the respawn is a real-time timestamp in the save,
+        // so it survives an app restart and can complete while closed.
+
+        /// <summary>NodeDefs index for a camp tier (tier 1 → 9, 2 → 10,
+        /// 3 → 11). Camps are indices 9-11 in ExteriorView.NodeDefs.</summary>
+        private static int CampIndexForTier(int tier)
+        {
+            return 8 + tier;
+        }
+
+        /// <summary>True while this tier's camp is defeated and waiting
+        /// to respawn (its CampRespawnUtc is set).</summary>
+        public bool IsCampDefeated(int tier)
+        {
+            if (tier < 1 || tier > 3) return false;
+            if (_state.CampRespawnUtc == null || _state.CampRespawnUtc.Length != 3) return false;
+            return !string.IsNullOrEmpty(_state.CampRespawnUtc[tier - 1]);
+        }
+
+        // Vanish a defeated camp: record its respawn time, hide the
+        // camp and its creatures, and save. The camp reappears at a
+        // different spot when CheckCampRespawns runs after the time.
+        private void VanishCamp(int tier)
+        {
+            if (tier < 1 || tier > 3) return;
+            if (_state.CampRespawnUtc == null || _state.CampRespawnUtc.Length != 3)
+                _state.CampRespawnUtc = new string[3];
+            _state.CampRespawnUtc[tier - 1] = DateTime.UtcNow.AddHours(CampRespawnHours).ToString("o");
+            _view.SetCampVisible(CampIndexForTier(tier), false);
+            _saveGame?.Invoke();
+            _notifyChanged?.Invoke();
+            OnExcursionStateChanged?.Invoke();
+        }
+
+        /// <summary>Called regularly (Bootstrap RefreshAll, ~once a
+        /// second) and on load: if a defeated camp's respawn time has
+        /// passed, bring another of the same tier back at a different
+        /// spot. Also completes a respawn whose time passed while the
+        /// app was closed — the new camp is there on the next load.</summary>
+        public void CheckCampRespawns()
+        {
+            if (_state.CampRespawnUtc == null || _state.CampRespawnUtc.Length != 3) return;
+            bool changed = false;
+            for (int tier = 1; tier <= 3; tier++)
+            {
+                string s = _state.CampRespawnUtc[tier - 1];
+                if (string.IsNullOrEmpty(s)) continue;
+                if (!DateTime.TryParse(s, null, DateTimeStyles.RoundtripKind, out var respawnUtc)) continue;
+                if (DateTime.UtcNow < respawnUtc) continue;
+                // Pick a different spot than the one the camp just left.
+                if (_state.CampSpotIndex == null || _state.CampSpotIndex.Length != 3)
+                    _state.CampSpotIndex = new int[3];
+                int current = _state.CampSpotIndex[tier - 1];
+                int next = current;
+                while (next == current) next = UnityEngine.Random.Range(0, 3);
+                _state.CampSpotIndex[tier - 1] = next;
+                _state.CampRespawnUtc[tier - 1] = "";
+                _view.MoveCampToSpot(CampIndexForTier(tier), next);
+                _view.SetCampVisible(CampIndexForTier(tier), true);
+                changed = true;
+            }
+            if (changed)
+            {
+                _saveGame?.Invoke();
+                _notifyChanged?.Invoke();
+                OnExcursionStateChanged?.Invoke();
+            }
+        }
+
+        /// <summary>Position active camps at their saved spots and hide
+        /// defeated ones, from the save. Called on load (constructor)
+        /// and whenever the Map is shown (the view's SetVisible re-shows
+        /// every point, so a defeated camp must be re-hidden and a
+        /// respawned camp re-placed). No-op for old saves (all active
+        /// at spot 0, the original positions).</summary>
+        public void SyncCamps()
+        {
+            if (_view == null) return;
+            if (_state.CampSpotIndex == null || _state.CampSpotIndex.Length != 3)
+                _state.CampSpotIndex = new int[3];
+            for (int tier = 1; tier <= 3; tier++)
+            {
+                int campIndex = CampIndexForTier(tier);
+                if (IsCampDefeated(tier))
+                {
+                    _view.SetCampVisible(campIndex, false);
+                }
+                else
+                {
+                    _view.MoveCampToSpot(campIndex, _state.CampSpotIndex[tier - 1]);
+                    _view.SetCampVisible(campIndex, true);
+                }
+            }
+        }
+
         /// <summary>True while this node is being farmed (occupation
         /// active, in this session or restored from the save).</summary>
         public bool IsNodeOccupied(int nodeIndex)
@@ -419,6 +532,11 @@ namespace LunarDominion.Expeditions
                 OnExcursionResult?.Invoke(
                     result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
                     FormatBattleResult(result));
+                // A defeated camp vanishes (2026-11-09): the camp and
+                // its creatures disappear, and another of the same tier
+                // respawns elsewhere after CampRespawnHours. Losing
+                // leaves the camp in place, so the player can retry.
+                if (result.Victory) VanishCamp(point.Tier);
             }
             else
             {

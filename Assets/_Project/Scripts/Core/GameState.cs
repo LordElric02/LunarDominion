@@ -39,6 +39,16 @@ namespace LunarDominion.Core
         // ActiveResearchFinishUtc. Old saves load with all "" (available).
         public string[] NodeRegenUtc = new string[9];
 
+        // Enemy camps (2026-11-09): a camp defeated in battle vanishes,
+        // and another of the same tier respawns elsewhere after
+        // CampRespawnHours. One respawn timestamp per tier (index
+        // tier-1); "" = the camp is active. One spot index per tier
+        // (index tier-1) into ExteriorView.CampSpots; 0 = the original
+        // position. Old saves load with all "" / 0 (active at the
+        // original spots).
+        public string[] CampRespawnUtc = new string[3];
+        public int[] CampSpotIndex = new int[3];
+
         // Node occupation (2026-11-09): the army farms a node for a
         // real-time duration (120 min / troops sent) instead of
         // collecting instantly. -1 = no occupation in progress.
