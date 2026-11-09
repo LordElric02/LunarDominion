@@ -150,6 +150,14 @@ namespace LunarDominion.Bootstrap
             {
                 info = $"{point.Info}\n{reason}";
             }
+            // A camp above the player's Nexus is sendable (the fight
+            // proceeds and likely fails) — show the too-strong warning
+            // under the info instead of the old tier-lock message.
+            string warning = _excursions.WarningFor(point);
+            if (!string.IsNullOrEmpty(warning))
+            {
+                info = $"{info}\n{warning}";
+            }
             _mapInfoView.Show(point.Title, info, showSend);
             _mapInfoView.SetSendEnabled(!_excursions.IsMarching);
         }

@@ -67,7 +67,10 @@ namespace LunarDominion.Expeditions
 
         /// <summary>Can an excursion be sent to this point right now?
         /// Nodes need a non-empty army and must not be depleted; camps
-        /// add the Expedition tier gate and energy check.</summary>
+        /// need a non-empty army and enough energy. The tier gate does
+        /// NOT block a map excursion (2026-11-09): the player may attack
+        /// a camp above their Nexus and the fight proceeds (and likely
+        /// fails) — WarningFor carries the too-strong warning instead.</summary>
         public bool CanSend(MapPointData point, out string reason)
         {
             reason = "";
@@ -102,11 +105,6 @@ namespace LunarDominion.Expeditions
                 reason = "No encounter for this camp.";
                 return false;
             }
-            if (_state.NexusLevel < encounter.RequiredNexusLevel)
-            {
-                reason = $"Unlocks at Command Nexus level {encounter.RequiredNexusLevel} (currently {_state.NexusLevel}).";
-                return false;
-            }
             if (_state.Energy < encounter.EnergyCost)
             {
                 reason = $"Not enough energy ({_state.Energy} / {encounter.EnergyCost}).";
@@ -114,6 +112,19 @@ namespace LunarDominion.Expeditions
             }
             reason = "Ready to send.";
             return true;
+        }
+
+        /// <summary>Warning shown in the panel for a camp above the
+        /// player's Nexus (2026-11-09): the fight is allowed, but the
+        /// enemy is far stronger. Null when there is nothing to warn
+        /// about (nodes, or a camp at/below the player's Nexus).</summary>
+        public string WarningFor(MapPointData point)
+        {
+            if (point == null || point.Kind != MapPointKind.Camp) return null;
+            var encounter = EncounterForTier(point.Tier);
+            if (encounter == null) return null;
+            if (_state.NexusLevel >= encounter.RequiredNexusLevel) return null;
+            return $"Warning: this enemy is far stronger than your army — Tier {point.Tier} unlocks at Nexus {encounter.RequiredNexusLevel} (you are Nexus {_state.NexusLevel}). Your squad is likely to be wiped out.";
         }
 
         public void StartExcursion(MapPointData point)
@@ -202,8 +213,10 @@ namespace LunarDominion.Expeditions
             }
             // Same fight as the Expeditions menu: energy spent at start,
             // no refund on defeat, rewards only on victory, casualties
-            // permanent. TryStart applies all of it.
-            if (_expeditions.TryStart(encounter, squad, out var result, out var reason))
+            // permanent. TryStart applies all of it. allowLockedTier:
+            // map excursions let the player attack above their Nexus —
+            // the fight proceeds and (almost certainly) fails.
+            if (_expeditions.TryStart(encounter, squad, out var result, out var reason, allowLockedTier: true))
             {
                 _saveGame?.Invoke();
                 _notifyChanged?.Invoke();

@@ -64,10 +64,15 @@ namespace LunarDominion.Expeditions
             _research = research;
         }
 
-        public ExpeditionStatus CheckExpedition(EncounterDefinition encounter, int squadSize, out string reason)
+        /// <summary>allowLockedTier (2026-11-09): map excursions let the
+        /// player attack a camp above their Nexus — the fight proceeds
+        /// and (almost certainly) fails, with a warning shown first.
+        /// The Expeditions menu keeps the gate (false). Enemy scaling
+        /// clamps to 1.0 below the gate, so the fight is at base stats.</summary>
+        public ExpeditionStatus CheckExpedition(EncounterDefinition encounter, int squadSize, out string reason, bool allowLockedTier = false)
         {
             reason = "";
-            if (_state.NexusLevel < encounter.RequiredNexusLevel)
+            if (!allowLockedTier && _state.NexusLevel < encounter.RequiredNexusLevel)
             {
                 reason = $"Unlocks at Command Nexus level {encounter.RequiredNexusLevel} (currently {_state.NexusLevel}).";
                 return ExpeditionStatus.TierLocked;
@@ -93,12 +98,13 @@ namespace LunarDominion.Expeditions
 
         /// <summary>squadArmyIndices are positions in State.Army, in the
         /// order the player chose them. Returns false without spending
-        /// energy or changing the army if the expedition cannot start.</summary>
+        /// energy or changing the army if the expedition cannot start.
+        /// allowLockedTier: map excursions only — see CheckExpedition.</summary>
         public bool TryStart(EncounterDefinition encounter, List<int> squadArmyIndices,
-            out BattleResult result, out string reason)
+            out BattleResult result, out string reason, bool allowLockedTier = false)
         {
             result = null;
-            var status = CheckExpedition(encounter, squadArmyIndices.Count, out reason);
+            var status = CheckExpedition(encounter, squadArmyIndices.Count, out reason, allowLockedTier);
             if (status != ExpeditionStatus.CanStart) return false;
 
             var squad = new List<SquadCombatant>();
