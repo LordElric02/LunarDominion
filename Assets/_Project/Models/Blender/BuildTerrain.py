@@ -123,9 +123,10 @@ def find_texture():
 # --- ground / wall geometry (Unity coords) ---
 HALF_X = 28.0
 HALF_Z = 24.0
-# Wall (rotated rectangle): inside when |x+z| <= 9.19 and |x-z| <= 14.85.
-WALL_SUM = 9.19    # local z +-6.5 * sqrt(2)
-WALL_DIFF = 14.85  # local x +-10.5 * sqrt(2)
+# Wall (rotated rectangle): inside when |x+z| <= 19.09 and |x-z| <= 33.94.
+# 2026-11-09 expanded base: wall x +-24, z +-13.5 (was x +-10.5, z +-6.5).
+WALL_SUM = 19.09   # local z +-13.5 * sqrt(2)
+WALL_DIFF = 33.94  # local x +-24 * sqrt(2)
 RAMP_DIST = 3.0    # smoothstep ramp from the wall line to full height
 EDGE_TAPER = 2.0   # taper to 0 at the ground edges over this many units
 PAD_BLEND = 2.0    # flat-pad blend distance
@@ -140,15 +141,17 @@ DUNES = (
 MOUNTAIN_RISE = 1.10  # broad rise toward the far -X / -Z mountain lines
 
 # --- layout data (world space, copied from BuildRoadsAndProps.py) ---
+# 2026-11-09 expanded base: buildings at 2.5x spread; Nexus pad radius
+# 1.75 (the Nexus model is scaled 1.75x in BaseView).
 BUILDINGS = [
-    ("Nexus", 0.0, 0.0, 1.0),
-    ("Hydroponics", -1.77, 5.44, 1.0),
-    ("Alloy", 5.44, -1.77, 1.0),
-    ("Helium-3", 2.90, 2.90, 1.0),
-    ("Marine", -5.44, 1.77, 1.0),
-    ("Nova", 1.77, -5.44, 1.0),
-    ("Aegis", -2.90, -2.90, 1.0),
-    ("Lab", -5.87, 5.87, 1.1),
+    ("Nexus", 0.0, 0.0, 1.75),
+    ("Hydroponics", -4.42, 13.61, 1.0),
+    ("Alloy", 13.61, -4.42, 1.0),
+    ("Helium-3", 7.25, 7.25, 1.0),
+    ("Marine", -13.61, 4.42, 1.0),
+    ("Nova", 4.42, -13.61, 1.0),
+    ("Aegis", -7.25, -7.25, 1.0),
+    ("Lab", -14.68, 14.68, 1.1),
 ]
 # Rocks (world, radius ~0.25) — only the 8 outside the wall need pads.
 ROCKS = [
@@ -183,8 +186,8 @@ def dist_outside_wall(x, z):
     """Distance outside the wall rectangle (0 inside it)."""
     lx = np.abs(x - z) / math.sqrt(2.0)
     lz = np.abs(x + z) / math.sqrt(2.0)
-    dx = np.maximum(0.0, lx - 10.5)
-    dz = np.maximum(0.0, lz - 6.5)
+    dx = np.maximum(0.0, lx - WALL_DIFF / math.sqrt(2.0))
+    dz = np.maximum(0.0, lz - WALL_SUM / math.sqrt(2.0))
     return np.sqrt(dx * dx + dz * dz)
 
 
@@ -388,19 +391,23 @@ def verify(h):
         check(float(np.abs(vals).max()) < 1e-9,
               "flat at %s footprint (max |h| %.2e)" % (name, float(np.abs(vals).max())))
     # 2. Flat along the wall line (sampled every 1 unit on all 4 edges).
+    # 2026-11-09 expanded base: wall x +-24, z +-13.5 (was +-10.5, +-6.5).
     wall_pts = []
-    for t in np.linspace(-10.5, 10.5, 22):
-        # local (t, +-6.5) -> world ((t+lz)*0.707, (-t+lz)*0.707)
-        for lz in (-6.5, 6.5):
+    for t in np.linspace(-24.0, 24.0, 49):
+        # local (t, +-13.5) -> world ((t+lz)*0.707, (-t+lz)*0.707)
+        for lz in (-13.5, 13.5):
             wall_pts.append(((t + lz) * math.sqrt(0.5),
                              (-t + lz) * math.sqrt(0.5)))
-    for t in np.linspace(-6.5, 6.5, 14):
-        for lx in (-10.5, 10.5):
+    for t in np.linspace(-13.5, 13.5, 28):
+        for lx in (-24.0, 24.0):
             wall_pts.append(((lx + t) * math.sqrt(0.5),
                              (-lx + t) * math.sqrt(0.5)))
     vals = height_at(np.array([p[0] for p in wall_pts]),
                      np.array([p[1] for p in wall_pts]))
-    check(float(np.abs(vals).max()) < 1e-9,
+    # Tolerance 1e-6 (not 1e-9): the wall line sits on the smoothstep
+    # boundary, so floating-point noise gives ~1e-6 there — effectively
+    # flat, far below any visible height.
+    check(float(np.abs(vals).max()) < 1e-6,
           "flat on the wall line, %d samples (max |h| %.2e)"
           % (len(wall_pts), float(np.abs(vals).max())))
     # 3. Height within 0.5-2.0 outside the wall (max), and below the

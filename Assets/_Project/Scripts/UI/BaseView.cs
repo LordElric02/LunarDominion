@@ -46,6 +46,31 @@ namespace LunarDominion.UI
         private readonly List<float> _reactorRingSpeeds = new List<float>();
         private float _reactorAnimTime;
 
+        // Base camera pan (2026-11-09, expanded base): the base is now
+        // wider than the screen, so the camera can be panned across it
+        // — arrow keys on PC, touch/mouse drag on the phone (and in the
+        // Editor). Same pattern as the Map view (ExteriorView): the pan
+        // offset moves both the camera position and its look-at point,
+        // so the 48.5-degree pitch never changes. Clamped so the camera
+        // cannot leave the ground.
+        private Vector3 _panOffset = Vector3.zero;
+        private static readonly float PanSpeed = 40f; // units/second, arrow keys
+        private static readonly float PanLimitX = 20f;
+        private static readonly float PanLimitZ = 20f;
+        private static readonly float DragTapThresholdPx = 15f; // below this, a press is a tap, not a drag
+        // The Base camera sits at (10,16,10) on the x=z diagonal, so
+        // screen-right is world (0.707,0,-0.707) and screen-up on the
+        // ground is (-0.707,0,-0.707) — same as the Map camera.
+        private static readonly Vector3 CamRight = new Vector3(0.7071f, 0f, -0.7071f);
+        private static readonly Vector3 CamGroundForward = new Vector3(-0.7071f, 0f, -0.7071f);
+        private static readonly Vector3 BaseCameraPosition = new Vector3(10f, 16f, 10f);
+        // Drag state: a press that moves past the threshold becomes a
+        // drag (pan) and must NOT also fire as a tap on release.
+        private bool _pointerDown;
+        private bool _isDrag;
+        private Vector2 _pointerStartPos;
+        private Vector2 _pointerLastPos;
+
         public void Build(GameController controller)
         {
             _controller = controller;
@@ -91,8 +116,10 @@ namespace LunarDominion.UI
             // mountain coverage, so the camera stays at (10,16,10). The
             // old (11,13,11) camera left the far ground corner at NDC x
             // 0.83, so dark background showed around the ground.
-            cam.transform.position = new Vector3(10f, 16f, 10f);
-            cam.transform.LookAt(Vector3.zero);
+            // 2026-11-09 expanded base: the camera position is now
+            // ApplyCamera() (base position + pan offset), so the player
+            // can scroll across the wider base.
+            ApplyCamera();
             cam.backgroundColor = new Color(0.02f, 0.03f, 0.06f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 
@@ -259,45 +286,62 @@ namespace LunarDominion.UI
         // layout plan. Roads sit at y 0.015 so the slab base clears the
         // ground plane. No colliders and no tap registration: roads and
         // props are scenery. If an FBX is missing, that spot stays empty.
-        // The spine (E1/S1/J1/S2) and the NW street (N1/N2) are two
-        // separate systems — the link between them would run through the
-        // Nexus footprint. The tee is built but unused.
+        // 2026-11-09 expanded base: the road network is re-laid for the
+        // 2.5x spread — a rectangular ring (local x +-10.75, z +-4.5)
+        // inset 2.0 from the buildings, with junctions at the corners
+        // and where the spurs meet it, a north/south spine on local
+        // x=0 (He-3 to Nexus edge, Nexus edge to Aegis), and a west
+        // spur on local z=0 (ring to the Lab). Straights are 4 long,
+        // placed 4.0 apart so they butt end-to-end (no gaps, no
+        // overlap / z-fighting); a straight whose centre falls inside
+        // a junction or a building footprint is omitted (the junction
+        // or building covers that spot). The old spine/NW-street split
+        // is gone — the ring connects everything. The tee is built but
+        // unused. Positions below are world space, converted from the
+        // local layout (world = ((lx+lz)/sqrt2, (lz-lx)/sqrt2)).
         private void AddRoadsAndProps()
         {
-            AddSceneryAt("Models/RoadStraight", new Vector3(5.45f, 0.015f, 3.75f), 45f, "Road");
-            // 2026-11-07: E1 extended NW along the near wall toward
-            // Hydroponics — butts E1's NW end, enabled by moving the
-            // solar panel (below) out of its path.
-            AddSceneryAt("Models/RoadStraight", new Vector3(2.63f, 0.015f, 6.57f), 45f, "Road");
-            // 2026-11-07: extended one more piece NW along the near wall
-            // toward the Hydroponics corner — butts the previous piece's
-            // NW end, enabled by moving the solar panel (below) right.
-            AddSceneryAt("Models/RoadStraight", new Vector3(-0.19f, 0.015f, 9.39f), 45f, "Road");
-            // 2026-11-07: E1 extended SE along the near wall from the gate
-            // to the right corner — butts E1's SE end, then butts the
-            // previous piece. The solar panel at (8.5, -2.0) is NOT in
-            // the way: it sits 1.90 units off this road line, ~0.55 clear
-            // of the road edge, so it stays put.
-            AddSceneryAt("Models/RoadStraight", new Vector3(8.27f, 0.015f, 0.93f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(11.10f, 0.015f, -1.90f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(4.46f, 0.015f, 1.07f), -45f, "Road");
-            AddSceneryAt("Models/RoadJunction", new Vector3(2.20f, 0.015f, -1.19f), -45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-0.06f, 0.015f, -3.45f), -45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-1.42f, 0.015f, 2.58f), -45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-4.24f, 0.015f, -0.24f), -45f, "Road");
+            // Ring corners + spur junctions.
+            AddSceneryAt("Models/RoadJunction", new Vector3(-4.42f, 0.015f, 10.78f), -45f, "Road");
+            AddSceneryAt("Models/RoadJunction", new Vector3(10.78f, 0.015f, -4.42f), -45f, "Road");
+            AddSceneryAt("Models/RoadJunction", new Vector3(-10.78f, 0.015f, 4.42f), -45f, "Road");
+            AddSceneryAt("Models/RoadJunction", new Vector3(4.42f, 0.015f, -10.78f), -45f, "Road");
+            AddSceneryAt("Models/RoadJunction", new Vector3(3.18f, 0.015f, 3.18f), -45f, "Road");
+            AddSceneryAt("Models/RoadJunction", new Vector3(-3.18f, 0.015f, -3.18f), -45f, "Road");
+            AddSceneryAt("Models/RoadJunction", new Vector3(-7.60f, 0.015f, 7.60f), -45f, "Road");
+            // Ring top edge (local z=4.5) and bottom edge (local z=-4.5).
+            AddSceneryAt("Models/RoadStraight", new Vector3(-3.01f, 0.015f, 9.37f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-0.18f, 0.015f, 6.54f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(5.48f, 0.015f, 0.88f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(8.31f, 0.015f, -1.94f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-9.37f, 0.015f, 3.01f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-6.54f, 0.015f, 0.18f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-0.88f, 0.015f, -5.48f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(1.94f, 0.015f, -8.31f), 45f, "Road");
+            // Ring west edge (local x=-10.75) and east edge (local x=10.75).
+            AddSceneryAt("Models/RoadStraight", new Vector3(-9.37f, 0.015f, 5.83f), -45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-6.54f, 0.015f, 8.66f), -45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(5.83f, 0.015f, -9.37f), -45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(8.66f, 0.015f, -6.54f), -45f, "Road");
+            // North/south spine (local x=0): Nexus edge to He-3 / Aegis.
+            AddSceneryAt("Models/RoadStraight", new Vector3(5.48f, 0.015f, 5.48f), -45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-5.83f, 0.015f, -5.83f), -45f, "Road");
+            // West spur (local z=0): ring to the Lab.
+            AddSceneryAt("Models/RoadStraight", new Vector3(-9.02f, 0.015f, 9.02f), 45f, "Road");
+            AddSceneryAt("Models/RoadStraight", new Vector3(-11.84f, 0.015f, 11.84f), 45f, "Road");
 
-            // 2026-11-07: moved right (toward Hydroponics) from (1.5, 6.5),
-            // then again to (0.1, 6.2) so the wall road can extend past it
-            // toward the Hydroponics corner.
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(0.1f, 0f, 6.2f), 30f, "Prop");
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.0f, 0f, 8.0f), -20f, "Prop");
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(8.5f, 0f, -2.0f), -30f, "Prop");
-            AddSceneryAt("Models/PropCrates", new Vector3(-6.8f, 0f, 3.8f), 15f, "Prop");
-            AddSceneryAt("Models/PropCrates", new Vector3(3.5f, 0f, -4.0f), 70f, "Prop");
-            AddSceneryAt("Models/PropStorageTank", new Vector3(-3.5f, 0f, 6.5f), 0f, "Prop");
-            AddSceneryAt("Models/PropStorageTank", new Vector3(3.5f, 0f, -6.5f), 0f, "Prop");
-            AddSceneryAt("Models/PropRover", new Vector3(-1.5f, 0f, -1.5f), -45f, "Prop");
-            AddSceneryAt("Models/PropGate", new Vector3(4.6f, 0f, 4.6f), 45f, "Prop");
+            // Props, re-spread for the expanded base (world space, clear
+            // of the roads and the buildings). The gate moves to the new
+            // north wall gap (local (0,13.5) -> world (9.55,9.55)).
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(5.66f, 0f, -2.83f), 30f, "Prop");
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.66f, 0f, 2.83f), -20f, "Prop");
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(4.24f, 0f, -7.07f), -30f, "Prop");
+            AddSceneryAt("Models/PropCrates", new Vector3(-4.24f, 0f, 7.07f), 15f, "Prop");
+            AddSceneryAt("Models/PropCrates", new Vector3(1.41f, 0f, -5.66f), 70f, "Prop");
+            AddSceneryAt("Models/PropStorageTank", new Vector3(-1.41f, 0f, 5.66f), 0f, "Prop");
+            AddSceneryAt("Models/PropStorageTank", new Vector3(5.66f, 0f, -4.24f), 0f, "Prop");
+            AddSceneryAt("Models/PropRover", new Vector3(-2.12f, 0f, 0.71f), -45f, "Prop");
+            AddSceneryAt("Models/PropGate", new Vector3(9.55f, 0f, 9.55f), 45f, "Prop");
         }
 
         private void AddSceneryAt(string resourcePath, Vector3 position, float rotationY, string name)
@@ -429,25 +473,28 @@ namespace LunarDominion.UI
             // near wall edge's midpoint), where the gate model sits and
             // the E1 road passes through. The gate posts overlap the
             // wall ends by 0.13 on each side.
-            AddWallBox(new Vector3(-5.9375f, 0.4f, 6.5f), new Vector3(9.475f, 0.8f, 0.35f), wallColor);
-            AddWallBox(new Vector3(5.9375f, 0.4f, 6.5f), new Vector3(9.475f, 0.8f, 0.35f), wallColor);
-            AddWallBox(new Vector3(0f, 0.4f, -6.5f), new Vector3(21.35f, 0.8f, 0.35f), wallColor);
+            // 2026-11-09 expanded base: the wall grows to x +/-24,
+            // z +/-13.5 to enclose the 2.5x-spread buildings. The gate
+            // gap stays 2.4 wide, centred at local x 0.
+            AddWallBox(new Vector3(-12.6f, 0.4f, 13.5f), new Vector3(22.8f, 0.8f, 0.35f), wallColor);
+            AddWallBox(new Vector3(12.6f, 0.4f, 13.5f), new Vector3(22.8f, 0.8f, 0.35f), wallColor);
+            AddWallBox(new Vector3(0f, 0.4f, -13.5f), new Vector3(48f, 0.8f, 0.35f), wallColor);
             // East (+X) and west (-X) segments, corner to corner.
-            AddWallBox(new Vector3(10.5f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 13.35f), wallColor);
-            AddWallBox(new Vector3(-10.5f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 13.35f), wallColor);
+            AddWallBox(new Vector3(24f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 27f), wallColor);
+            AddWallBox(new Vector3(-24f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 27f), wallColor);
 
             // Cyan strip lights along the top of each segment. The north
             // strip is split for the gate gap, like the wall below it.
-            AddWallBox(new Vector3(-5.85f, 0.83f, 6.5f), new Vector3(9.3f, 0.06f, 0.12f), stripColor);
-            AddWallBox(new Vector3(5.85f, 0.83f, 6.5f), new Vector3(9.3f, 0.06f, 0.12f), stripColor);
-            AddWallBox(new Vector3(0f, 0.83f, -6.5f), new Vector3(21f, 0.06f, 0.12f), stripColor);
-            AddWallBox(new Vector3(10.5f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 13f), stripColor);
-            AddWallBox(new Vector3(-10.5f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 13f), stripColor);
+            AddWallBox(new Vector3(-12.6f, 0.83f, 13.5f), new Vector3(22.5f, 0.06f, 0.12f), stripColor);
+            AddWallBox(new Vector3(12.6f, 0.83f, 13.5f), new Vector3(22.5f, 0.06f, 0.12f), stripColor);
+            AddWallBox(new Vector3(0f, 0.83f, -13.5f), new Vector3(47.7f, 0.06f, 0.12f), stripColor);
+            AddWallBox(new Vector3(24f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 26.7f), stripColor);
+            AddWallBox(new Vector3(-24f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 26.7f), stripColor);
 
             // Corner towers with caps.
-            foreach (float x in new[] { -10.5f, 10.5f })
+            foreach (float x in new[] { -24f, 24f })
             {
-                foreach (float z in new[] { -6.5f, 6.5f })
+                foreach (float z in new[] { -13.5f, 13.5f })
                 {
                     AddWallBox(new Vector3(x, 0.7f, z), new Vector3(1f, 1.4f, 1f), towerColor);
                     AddWallBox(new Vector3(x, 1.525f, z), new Vector3(1.3f, 0.25f, 1.3f), capColor);
@@ -652,6 +699,11 @@ namespace LunarDominion.UI
             // building-to-building edge gap is 1.7 (Nexus-Aegis); Lab
             // stays clear of Hydro/Marine (2.0). Ground widened to
             // 56x48 and the camera moved to (10,16,10) to match.
+            // 2026-11-09 expanded base: positions x2.5 (Nexus 1.75x, so
+            // it dominates) for room for realistic roads. The base is
+            // now wider than the screen — the Base view pans (arrow
+            // keys / drag), like the Map view. Ground stays 56x48; the
+            // spread buildings still fit inside it.
             // Command Nexus (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old blue cylinder so the
             // base still builds when the model file is missing.
@@ -661,39 +713,39 @@ namespace LunarDominion.UI
             // it loads, otherwise fall back to the old green sphere so the
             // base still builds when the model file is missing.
             if (!TryAddModelHydroponicsDome())
-                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-5.1f, 0f, 2.6f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
+                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-12.75f, 0f, 6.5f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
             // Alloy Extractor (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelAlloyExtractor())
-                AddBuilding(BuildingId.AlloyExtractor, new Vector3(5.1f, 0f, 2.6f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
+                AddBuilding(BuildingId.AlloyExtractor, new Vector3(12.75f, 0f, 6.5f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
             // Helium-3 Harvester (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old cyan cylinder so the
             // base still builds when the model file is missing.
             if (!TryAddModelHeliumHarvester())
-                AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 4.1f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
+                AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 10.25f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
             // Marine Foundry (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old green-grey cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelMarineFoundry())
-                AddBuilding(BuildingId.MarineFoundry, new Vector3(-5.1f, 0f, -2.6f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
+                AddBuilding(BuildingId.MarineFoundry, new Vector3(-12.75f, 0f, -6.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             // Nova Arsenal (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old red cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelNovaArsenal())
-                AddBuilding(BuildingId.NovaArsenal, new Vector3(5.1f, 0f, -2.6f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
+                AddBuilding(BuildingId.NovaArsenal, new Vector3(12.75f, 0f, -6.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             // Aegis Motor Pool (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the base
             // still builds when the model file is missing.
             if (!TryAddModelAegisMotorPool())
-                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -4.1f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
+                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -10.25f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
             // Research Lab (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old purple cylinder so
             // the base still builds when the model file is missing.
             // (2026-11-01 note: west side, clear of the other buildings,
             // so it stays tappable at phone size.)
             if (!TryAddModelResearchLab())
-                AddBuilding(BuildingId.ResearchLab, new Vector3(-8.3f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
+                AddBuilding(BuildingId.ResearchLab, new Vector3(-20.75f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
         }
 
         private void AddBuilding(BuildingId id, Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, string shortName)
@@ -735,7 +787,13 @@ namespace LunarDominion.UI
                 go.name = "NexusBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
                 go.transform.localPosition = Vector3.zero;
-                go.transform.localScale = Vector3.one;
+                // 2026-11-09: the Nexus is the centrepiece — scaled 1.75x
+                // so it towers over the other buildings (footprint 2.0 ->
+                // 3.5, height 2.90 -> ~5.08). The model is built at 1.0 in
+                // Blender; Unity scales it. The reactor rings animate by
+                // rotating the ring objects, so scaling the parent does
+                // not affect the animation.
+                go.transform.localScale = Vector3.one * 1.75f;
 
                 // Capture the model's part renderers BEFORE adding the marker,
                 // so Highlight() recolours the model parts but not the marker.
@@ -758,22 +816,24 @@ namespace LunarDominion.UI
                 }
 
                 // The FBX has no collider, and tapping raycasts against
-                // colliders — give the model one matching the old primitive's
-                // footprint (2 wide, 3 tall, centred at y = 1.5).
+                // colliders — give the model one matching the scaled
+                // footprint (1.75x: 3.5 wide, 5.25 tall, centred at
+                // y = 2.625).
                 if (go.GetComponentInChildren<Collider>() == null)
                 {
                     var box = go.AddComponent<BoxCollider>();
-                    box.center = new Vector3(0f, 1.5f, 0f);
-                    box.size = new Vector3(2f, 3f, 2f);
+                    box.center = new Vector3(0f, 2.625f, 0f);
+                    box.size = new Vector3(3.5f, 5.25f, 3.5f);
                 }
 
-                // Same white marker as the primitives, just above the antenna
-                // tip (model top is ~2.9, so 3.15 sits on it).
+                // Same white marker as the primitives, just above the
+                // antenna tip (model top ~2.9 x 1.75 = ~5.08, so 5.51
+                // sits on it).
                 var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 marker.name = "NexusMarker";
                 marker.transform.SetParent(go.transform, false);
-                marker.transform.localPosition = new Vector3(0f, 3.15f, 0f);
-                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                marker.transform.localPosition = new Vector3(0f, 5.51f, 0f);
+                marker.transform.localScale = new Vector3(1.05f, 1.05f, 1.05f);
                 SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
 
                 _modelRenderers[BuildingId.CommandNexus] = list;
@@ -1545,43 +1605,158 @@ namespace LunarDominion.UI
             // The reactor animation runs every frame, unlike the tap
             // handling below, which returns early when nothing is tapped.
             AnimateReactor();
-            // Input System note: Unity throws InvalidOperationException if
-            // the legacy UnityEngine.Input API is read while Player Settings
-            // > Active Input Handler is set to Input System Package only.
-            // When the new Input System is enabled, read Mouse/Touchscreen
-            // instead; otherwise keep the legacy path. This keeps the same
-            // script working in Input Manager, Both, and Input System only.
-            bool tapped = false;
+            // Arrow keys pan the base camera (PC). Same pattern as the
+            // Map view: Keyboard when the Input System is enabled,
+            // legacy Input otherwise.
+            Vector3 keyPan = Vector3.zero;
+#if ENABLE_INPUT_SYSTEM
+            var keyboard = UnityEngine.InputSystem.Keyboard.current;
+            if (keyboard != null)
+            {
+                if (keyboard.rightArrowKey.isPressed) keyPan += CamRight;
+                if (keyboard.leftArrowKey.isPressed) keyPan -= CamRight;
+                if (keyboard.upArrowKey.isPressed) keyPan += CamGroundForward;
+                if (keyboard.downArrowKey.isPressed) keyPan -= CamGroundForward;
+            }
+#else
+            if (Input.GetKey(KeyCode.RightArrow)) keyPan += CamRight;
+            if (Input.GetKey(KeyCode.LeftArrow)) keyPan -= CamRight;
+            if (Input.GetKey(KeyCode.UpArrow)) keyPan += CamGroundForward;
+            if (Input.GetKey(KeyCode.DownArrow)) keyPan -= CamGroundForward;
+#endif
+            if (keyPan != Vector3.zero)
+            {
+                keyPan.Normalize();
+                AddPan(keyPan * PanSpeed * Time.deltaTime);
+            }
+
+            // Pointer input: a press that barely moves is a TAP (select
+            // a building or hide the panel); a press that moves past
+            // the threshold is a DRAG (pan the camera) and must not
+            // also fire as a tap on release. Input System note: Unity
+            // throws InvalidOperationException if the legacy
+            // UnityEngine.Input API is read while Player Settings >
+            // Active Input Handler is set to Input System Package only.
+            // Same pattern as the Map view: read Mouse/Touchscreen
+            // when the new Input System is enabled, legacy Input
+            // otherwise.
+            bool pressed = false;   // pointer went down this frame
+            bool released = false;  // pointer went up this frame
+            bool held = false;      // pointer is down right now
             Vector2 screenPos = Vector2.zero;
             int touchPointerId = -1;
 #if ENABLE_INPUT_SYSTEM
             var mouse = UnityEngine.InputSystem.Mouse.current;
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
-            {
-                tapped = true;
-                screenPos = mouse.position.ReadValue();
-            }
             var touchscreen = UnityEngine.InputSystem.Touchscreen.current;
-            if (touchscreen != null && touchscreen.primaryTouch.press.wasPressedThisFrame)
+            // Touch takes precedence on the phone; mouse in the Editor.
+            if (touchscreen != null && (touchscreen.primaryTouch.press.isPressed || touchscreen.primaryTouch.press.wasPressedThisFrame || touchscreen.primaryTouch.press.wasReleasedThisFrame))
             {
-                tapped = true;
+                pressed = touchscreen.primaryTouch.press.wasPressedThisFrame;
+                released = touchscreen.primaryTouch.press.wasReleasedThisFrame;
+                held = touchscreen.primaryTouch.press.isPressed;
                 screenPos = touchscreen.primaryTouch.position.ReadValue();
                 touchPointerId = (int)touchscreen.primaryTouch.touchId.ReadValue();
             }
+            else if (mouse != null)
+            {
+                pressed = mouse.leftButton.wasPressedThisFrame;
+                released = mouse.leftButton.wasReleasedThisFrame;
+                held = mouse.leftButton.isPressed;
+                screenPos = mouse.position.ReadValue();
+            }
 #else
-            tapped = Input.GetMouseButtonDown(0) || (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began);
-            if (tapped) screenPos = Input.touchCount > 0 ? Input.GetTouch(0).position : (Vector2)Input.mousePosition;
+            if (Input.touchCount > 0)
+            {
+                var touch = Input.GetTouch(0);
+                pressed = touch.phase == TouchPhase.Began;
+                released = touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled;
+                held = touch.phase == TouchPhase.Began || touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary;
+                screenPos = touch.position;
+            }
+            else
+            {
+                pressed = Input.GetMouseButtonDown(0);
+                released = Input.GetMouseButtonUp(0);
+                held = Input.GetMouseButton(0);
+                screenPos = Input.mousePosition;
+            }
 #endif
-            if (!tapped) return;
-            if (EventSystem.current != null)
+            // UI taps never reach here — EventSystem filters them out.
+            if (pressed && EventSystem.current != null)
             {
 #if ENABLE_INPUT_SYSTEM
-                if (touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject()) return;
+                if (touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject()) { _pointerDown = false; return; }
 #else
-                if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) return;
-                if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) return;
+                if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) { _pointerDown = false; return; }
+                if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) { _pointerDown = false; return; }
 #endif
             }
+
+            if (pressed)
+            {
+                _pointerDown = true;
+                _isDrag = false;
+                _pointerStartPos = screenPos;
+                _pointerLastPos = screenPos;
+            }
+            else if (held && _pointerDown)
+            {
+                // Dragging: once the pointer has moved past the tap
+                // threshold, pan the camera with the finger/mouse so
+                // the ground follows the pointer (like dragging a map).
+                Vector2 delta = screenPos - _pointerLastPos;
+                _pointerLastPos = screenPos;
+                if (!_isDrag && Vector2.Distance(screenPos, _pointerStartPos) > DragTapThresholdPx)
+                {
+                    _isDrag = true;
+                }
+                if (_isDrag && delta != Vector2.zero)
+                {
+                    AddPan(ScreenDeltaToWorld(delta));
+                }
+            }
+            else if (released && _pointerDown)
+            {
+                _pointerDown = false;
+                // A drag never fires as a tap — only a press that stayed
+                // within the threshold selects a building or hides the
+                // panel.
+                if (_isDrag) return;
+                HandleTap(screenPos);
+            }
+        }
+
+        private Vector3 ScreenDeltaToWorld(Vector2 pixelDelta)
+        {
+            var cam = Camera.main;
+            if (cam == null) return Vector3.zero;
+            // Distance from the camera to the point it looks at (the
+            // pan offset cancels out — the camera and its look-at move
+            // together, so the distance is constant).
+            float distance = Vector3.Distance(cam.transform.position, Vector3.zero + _panOffset);
+            float worldPerPixel = 2f * distance * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1f, (float)Screen.height);
+            return CamRight * (-pixelDelta.x * worldPerPixel) + CamGroundForward * (pixelDelta.y * worldPerPixel);
+        }
+
+        private void AddPan(Vector3 delta)
+        {
+            _panOffset += delta;
+            _panOffset.x = Mathf.Clamp(_panOffset.x, -PanLimitX, PanLimitX);
+            _panOffset.z = Mathf.Clamp(_panOffset.z, -PanLimitZ, PanLimitZ);
+            _panOffset.y = 0f;
+            ApplyCamera();
+        }
+
+        private void ApplyCamera()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            cam.transform.position = BaseCameraPosition + _panOffset;
+            cam.transform.LookAt(Vector3.zero + _panOffset);
+        }
+
+        private void HandleTap(Vector2 screenPos)
+        {
             var cam = Camera.main;
             if (cam == null) return;
             var ray = cam.ScreenPointToRay(screenPos);
