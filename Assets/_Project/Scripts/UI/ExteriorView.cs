@@ -91,7 +91,9 @@ namespace LunarDominion.UI
         private bool _marching;
         private Vector3 _marchTarget;
         private Action _marchCallback;
-        private static readonly float MarchSpeed = 25f; // units/second
+        // Slow, deliberate march (2026-11-09, Patrick): 10 u/s, so a
+        // far node takes ~13s to reach instead of ~5s at the old 25.
+        private static readonly float MarchSpeed = 10f; // units/second
 
         // Map camera pan (Patrick 2026-11-09): the Map view is 5x the
         // base, so the camera can be panned across it — arrow keys on
@@ -639,11 +641,39 @@ namespace LunarDominion.UI
             if (_marchMarker != null) _marchMarker.SetActive(false);
         }
 
-        // Dim (or restore) a resource node. Depleted nodes read as
-        // dark grey; restored nodes get their original colours back.
-        // Camps never deplete, and creature points carry camp data
-        // (index 9-11), so the index check alone keeps them out.
-        public void SetNodeDepleted(int nodeIndex, bool depleted)
+        // Structured data for a node/camp by index (0-11), for restoring
+        // an occupation from the save (the service rebuilds its active
+        // point) and for the Bootstrap's panel. Null when out of range.
+        public MapPointData NodeData(int index)
+        {
+            if (index < 0 || index >= NodeDefs.Length) return null;
+            return DataForNodeDef(index);
+        }
+
+        // World position of a node/camp by index, for the marker.
+        public bool NodePosition(int index, out Vector3 position)
+        {
+            position = Vector3.zero;
+            if (index < 0 || index >= NodeDefs.Length) return false;
+            position = NodeDefs[index].Position;
+            return true;
+        }
+
+        // Park the marker at a position without marching (2026-11-09):
+        // restores it at an occupied node when the Map reopens, so the
+        // army is visibly farming there. Never overrides an active march.
+        public void ShowMarkerAt(Vector3 position)
+        {
+            if (_marchMarker == null || _marching) return;
+            _marchMarker.transform.position = position;
+            _marchMarker.SetActive(true);
+        }
+
+        // Mark a resource node as occupied (being farmed): its renderers
+        // turn amber. Restoring clears the amber back to the original
+        // colours. Camps never occupy, and creature points carry camp
+        // data (index 9-11), so the index check alone keeps them out.
+        public void SetNodeOccupied(int nodeIndex, bool occupied)
         {
             foreach (var point in _mapPoints)
             {
@@ -653,10 +683,24 @@ namespace LunarDominion.UI
                 for (int i = 0; i < point.Renderers.Length; i++)
                 {
                     if (point.Renderers[i] == null) continue;
-                    point.Renderers[i].material.color = depleted
-                        ? new Color(0.35f, 0.35f, 0.35f)
+                    point.Renderers[i].material.color = occupied
+                        ? new Color(1.0f, 0.65f, 0.15f)
                         : point.OriginalColors[i];
                 }
+            }
+        }
+
+        // Show or hide a resource node. A depleted node vanishes
+        // (2026-11-09, Patrick) until it regenerates, when it reappears.
+        // Hiding also hides it from taps — a vanished node cannot be
+        // selected, which is the point: it is gone until it comes back.
+        public void SetNodeVisible(int nodeIndex, bool visible)
+        {
+            foreach (var point in _mapPoints)
+            {
+                if (point.Data == null || point.Data.Index != nodeIndex) continue;
+                if (point.Data.Kind == MapPointKind.Camp) continue;
+                if (point.Go != null) point.Go.SetActive(visible);
             }
         }
 

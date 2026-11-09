@@ -38,6 +38,20 @@ namespace LunarDominion.Core
         // "" = available. UTC round-trip format, same as
         // ActiveResearchFinishUtc. Old saves load with all "" (available).
         public string[] NodeRegenUtc = new string[9];
+
+        // Node occupation (2026-11-09): the army farms a node for a
+        // real-time duration (120 min / troops sent) instead of
+        // collecting instantly. -1 = no occupation in progress.
+        // Kind is the resource (0 Biomass, 1 Alloy, 2 Helium-3 — the
+        // MapPointKind order without Camp). End is UTC round-trip.
+        // Persisted so an occupation survives an app restart; if the
+        // end time passes while the app is closed, the harvest is
+        // granted on the next load.
+        public int OccupiedNodeIndex = -1;
+        public string OccupationEndUtc = "";
+        public int OccupationAmount;
+        public int OccupationKind;
+        public int OccupationTroops;
         public float ProductionCarryBiomass;
         public float ProductionCarryAlloy;
         public float ProductionCarryHelium3;

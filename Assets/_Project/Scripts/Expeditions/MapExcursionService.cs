@@ -12,21 +12,31 @@ namespace LunarDominion.Expeditions
 {
     /// <summary>Map excursions (2026-11-09, Patrick's plan): tap a resource
     /// node or enemy camp on the exterior map, send the army, and resolve
-    /// the outcome on arrival. The whole army goes (strongest first,
-    /// capped at the squad size), the marker marches visibly from the
-    /// castle, and the army marches back. Nodes pay their amount on
-    /// arrival (storage cap applies) and then deplete for 8 hours.
-    /// Camps reuse ExpeditionService.TryStart exactly — same tier gate,
-    /// energy cost, no-refund-on-defeat rule, rewards, XP, and permanent
-    /// casualties — so a map fight and a menu fight are the same fight.
-    /// Energy is spent and combat runs at ARRIVAL, not at send, so
-    /// cancelling (leaving the Map tab) before arrival costs nothing.
-    /// This service owns the rules; the march itself is visual and lives
-    /// in ExteriorView. It owns no UI — results go out as events.</summary>
+    /// the outcome. The whole army goes (strongest first, capped at the
+    /// squad size) and the marker marches visibly from the castle.
+    /// Nodes are OCCUPIED, not collected instantly (2026-11-09): on
+    /// arrival the army stays and farms the node for 120 min / troops
+    /// sent (8 troops = 15 min), the node turns amber while it is being
+    /// worked, and when the time is up the harvest lands, the army
+    /// marches back, and the node vanishes until it regenerates in 8h.
+    /// The occupation is saved, so it survives an app restart — if the
+    /// time ends while the app is closed, the harvest is granted on the
+    /// next load. Camps reuse ExpeditionService.TryStart exactly — same
+    /// tier gate (bypassed on the map with a warning), energy cost,
+    /// no-refund-on-defeat rule, rewards, XP, and permanent casualties —
+    /// so a map fight and a menu fight are the same fight. Energy is
+    /// spent and combat runs at ARRIVAL, not at send, so cancelling an
+    /// outbound march (leaving the Map tab) before arrival costs
+    /// nothing; an active occupation is never cancelled by leaving the
+    /// tab — the army keeps farming. This service owns the rules; the
+    /// march itself is visual and lives in ExteriorView. It owns no UI —
+    /// results go out as events.</summary>
     public class MapExcursionService
     {
         // Node regen time after collection (Patrick-approved default).
         public const float NodeRegenHours = 8f;
+        // Occupation: 120 min / troops sent (8 troops = 15 min).
+        public const float OccupationMinutesPerTroop = 120f;
 
         // Raised when an excursion resolves (arrival outcome) or cannot
         // start — title + multi-line body for the info panel.
@@ -36,6 +46,9 @@ namespace LunarDominion.Expeditions
         public event Action OnExcursionStateChanged;
 
         public bool IsMarching => _marching;
+        // True while the army is out — marching or farming a node.
+        // CanSend refuses while busy; the Expeditions menu is untouched.
+        public bool IsBusy => _marching || _occupying;
 
         private readonly GameState _state;
         private readonly EconomyService _economy;
@@ -49,6 +62,7 @@ namespace LunarDominion.Expeditions
 
         private MapPointData _activePoint;
         private bool _marching;
+        private bool _occupying;
 
         public MapExcursionService(GameState state, EconomyService economy, ExpeditionService expeditions,
             BalanceData balance, List<UnitDefinition> units, List<EncounterDefinition> encounters,
@@ -63,6 +77,16 @@ namespace LunarDominion.Expeditions
             _view = view;
             _saveGame = saveGame;
             _notifyChanged = notifyChanged;
+            // Restore an occupation from the save (previous session):
+            // the army is still farming, so the service is busy until
+            // it completes (CheckOccupationDue runs on the next refresh).
+            if (state.OccupiedNodeIndex >= 0 && state.OccupiedNodeIndex <= 8
+                && !string.IsNullOrEmpty(state.OccupationEndUtc)
+                && DateTime.TryParse(state.OccupationEndUtc, null, DateTimeStyles.RoundtripKind, out _))
+            {
+                _occupying = true;
+                _activePoint = view != null ? view.NodeData(state.OccupiedNodeIndex) : null;
+            }
         }
 
         /// <summary>Can an excursion be sent to this point right now?
@@ -79,9 +103,11 @@ namespace LunarDominion.Expeditions
                 reason = "No target selected.";
                 return false;
             }
-            if (_marching)
+            if (_marching || _occupying)
             {
-                reason = "An excursion is already underway.";
+                reason = _occupying
+                    ? "Your army is busy farming a node."
+                    : "An excursion is already underway.";
                 return false;
             }
             if (_state.Army == null || _state.Army.Count == 0)
@@ -142,10 +168,20 @@ namespace LunarDominion.Expeditions
         }
 
         /// <summary>Cancel an in-flight excursion (leaving the Map tab).
-        /// No outcome is applied — energy is only spent and combat only
-        /// runs at arrival, so cancelling before then costs nothing.</summary>
+        /// An outbound march (before arrival) is cancelled with no
+        /// outcome — energy is only spent and combat only runs at
+        /// arrival, so cancelling before then costs nothing. An active
+        /// OCCUPATION is never cancelled: the army keeps farming in
+        /// real time, and only the marker hides (it reappears at the
+        /// node when the Map reopens). A return march is cosmetic (the
+        /// outcome already landed), so it just stops.</summary>
         public void Cancel()
         {
+            if (_occupying)
+            {
+                _view.CancelMarch();
+                return;
+            }
             if (!_marching) return;
             _view.CancelMarch();
             _marching = false;
@@ -161,8 +197,15 @@ namespace LunarDominion.Expeditions
                 FinishMarch();
                 return;
             }
-            if (point.Kind != MapPointKind.Camp) CollectNode(point);
-            else FightCamp(point);
+            if (point.Kind != MapPointKind.Camp)
+            {
+                // Node: the army stays and farms it (occupation) instead
+                // of collecting instantly. The return march starts when
+                // the occupation completes.
+                BeginOccupation(point);
+                return;
+            }
+            FightCamp(point);
             // Return march: back to the castle, then the excursion ends.
             _view.StartMarch(point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), FinishMarch);
         }
@@ -175,31 +218,150 @@ namespace LunarDominion.Expeditions
             OnExcursionStateChanged?.Invoke();
         }
 
-        private void CollectNode(MapPointData point)
+        // Node occupation (2026-11-09): on arrival the army stays and
+        // farms the node for 120 min / troops sent (8 troops = 15 min).
+        // The marker stays at the node, the node turns amber, and the
+        // harvest lands when the time is up (CompleteOccupation). The
+        // occupation is saved immediately, so it survives an app restart.
+        private void BeginOccupation(MapPointData point)
         {
-            var amount = new ResourceCost(
-                point.Kind == MapPointKind.Biomass ? point.Amount : 0,
-                point.Kind == MapPointKind.Alloy ? point.Amount : 0,
-                point.Kind == MapPointKind.Helium3 ? point.Amount : 0);
-            string resourceName = point.Kind == MapPointKind.Biomass ? "Biomass"
-                : point.Kind == MapPointKind.Alloy ? "Alloy" : "Helium-3";
+            var squad = BuildSquadIndices();
+            int troops = Math.Max(1, squad.Count);
+            float minutes = OccupationMinutesPerTroop / troops;
+            _state.OccupiedNodeIndex = point.Index;
+            _state.OccupationEndUtc = DateTime.UtcNow.AddMinutes(minutes).ToString("o");
+            _state.OccupationAmount = point.Amount;
+            _state.OccupationKind = (int)point.Kind;
+            _state.OccupationTroops = troops;
+            _saveGame?.Invoke();
+            _marching = false;
+            _occupying = true;
+            _notifyChanged?.Invoke();
+            OnExcursionStateChanged?.Invoke();
+            string resourceName = ResourceName(point.Kind);
+            OnExcursionResult?.Invoke(point.Title,
+                $"Farming {resourceName} — {troops} troop{(troops == 1 ? "" : "s")}, about {FormatMinutes(minutes)}.\nThe army returns with the harvest when done.");
+        }
+
+        /// <summary>Called regularly (Bootstrap RefreshAll, ~once a
+        /// second) and on load: if an occupation's end time has passed,
+        /// complete it. Also completes an occupation that ended while
+        /// the app was closed — the harvest is granted on the next load.</summary>
+        public void CheckOccupationDue()
+        {
+            if (!_occupying && _state.OccupiedNodeIndex < 0) return;
+            if (_state.OccupiedNodeIndex < 0 || _state.OccupiedNodeIndex > 8) return;
+            if (string.IsNullOrEmpty(_state.OccupationEndUtc)) return;
+            if (!DateTime.TryParse(_state.OccupationEndUtc, null, DateTimeStyles.RoundtripKind, out var endUtc)) return;
+            if (DateTime.UtcNow < endUtc) return;
+            CompleteOccupation();
+        }
+
+        private void CompleteOccupation()
+        {
+            int nodeIndex = _state.OccupiedNodeIndex;
+            int amount = _state.OccupationAmount;
+            var kind = (MapPointKind)Math.Max(0, Math.Min(_state.OccupationKind, 2));
+            string resourceName = ResourceName(kind);
+            var grant = new ResourceCost(
+                kind == MapPointKind.Biomass ? amount : 0,
+                kind == MapPointKind.Alloy ? amount : 0,
+                kind == MapPointKind.Helium3 ? amount : 0);
             int beforeB = _state.Biomass, beforeA = _state.Alloy, beforeH = _state.Helium3;
             // Earn clamps to the storage cap; report what actually landed.
-            _economy.Earn(amount);
+            _economy.Earn(grant);
             int gained = (_state.Biomass - beforeB) + (_state.Alloy - beforeA) + (_state.Helium3 - beforeH);
-            // Deplete the node (UTC now + regen) and save immediately so
-            // the depletion survives an app restart mid-excursion.
+            // Deplete the node (UTC now + regen) and clear the occupation.
             if (_state.NodeRegenUtc == null || _state.NodeRegenUtc.Length != 9)
                 _state.NodeRegenUtc = new string[9];
-            _state.NodeRegenUtc[point.Index] = DateTime.UtcNow.AddHours(NodeRegenHours).ToString("o");
+            _state.NodeRegenUtc[nodeIndex] = DateTime.UtcNow.AddHours(NodeRegenHours).ToString("o");
+            ClearOccupation();
             _saveGame?.Invoke();
             _notifyChanged?.Invoke();
             var body = new StringBuilder();
             body.AppendLine(gained > 0
                 ? $"Collected +{gained} {resourceName}."
                 : $"Storage full — no {resourceName} collected.");
-            body.Append($"Node depleted — regenerates in {NodeRegenHours}h.");
-            OnExcursionResult?.Invoke(point.Title, body.ToString());
+            body.Append("Node depleted — it vanished and regenerates in 8h.");
+            OnExcursionResult?.Invoke("Harvest complete", body.ToString());
+            // Return march if the Map is open; otherwise the marker just
+            // hides (the harvest already landed).
+            _occupying = false;
+            if (_view.IsVisible && _activePoint != null)
+            {
+                _view.StartMarch(_activePoint.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), FinishMarch);
+            }
+            else
+            {
+                _activePoint = null;
+                _view.CancelMarch();
+                OnExcursionStateChanged?.Invoke();
+            }
+        }
+
+        private void ClearOccupation()
+        {
+            _state.OccupiedNodeIndex = -1;
+            _state.OccupationEndUtc = "";
+            _state.OccupationAmount = 0;
+            _state.OccupationKind = 0;
+            _state.OccupationTroops = 0;
+        }
+
+        /// <summary>True while this node is being farmed (occupation
+        /// active, in this session or restored from the save).</summary>
+        public bool IsNodeOccupied(int nodeIndex)
+        {
+            return _state.OccupiedNodeIndex == nodeIndex && !string.IsNullOrEmpty(_state.OccupationEndUtc);
+        }
+
+        /// <summary>Occupation detail for the panel: troops farming and
+        /// time left. False when the node is not occupied.</summary>
+        public bool OccupationInfo(int nodeIndex, out int troops, out TimeSpan remaining)
+        {
+            troops = 0;
+            remaining = TimeSpan.Zero;
+            if (!IsNodeOccupied(nodeIndex)) return false;
+            if (!DateTime.TryParse(_state.OccupationEndUtc, null, DateTimeStyles.RoundtripKind, out var endUtc)) return false;
+            troops = _state.OccupationTroops;
+            remaining = endUtc - DateTime.UtcNow;
+            return true;
+        }
+
+        /// <summary>Restore the marker at the occupied node when the Map
+        /// reopens (or on a refresh) so the army is visibly farming
+        /// there. No-op when nothing is occupied or the Map is hidden.</summary>
+        public void RefreshMarkerVisual()
+        {
+            if (!_occupying && _state.OccupiedNodeIndex < 0) return;
+            if (_state.OccupiedNodeIndex < 0 || _state.OccupiedNodeIndex > 8) return;
+            if (!_view.IsVisible || _marching) return;
+            // The occupied node is found by index; its position comes
+            // from the active point when this session started it, or
+            // from the saved index via the view's node positions.
+            Vector3 pos;
+            if (_activePoint != null && _activePoint.Index == _state.OccupiedNodeIndex)
+            {
+                pos = _activePoint.Position;
+            }
+            else if (!_view.NodePosition(_state.OccupiedNodeIndex, out pos))
+            {
+                return;
+            }
+            _view.ShowMarkerAt(pos + new Vector3(0f, 1f, 0f));
+        }
+
+        private static string ResourceName(MapPointKind kind)
+        {
+            return kind == MapPointKind.Biomass ? "Biomass"
+                : kind == MapPointKind.Alloy ? "Alloy" : "Helium-3";
+        }
+
+        private static string FormatMinutes(float minutes)
+        {
+            int m = (int)Math.Round(minutes);
+            if (m >= 60) return $"{m / 60}h {m % 60}m";
+            return $"{Math.Max(1, m)} min";
         }
 
         private void FightCamp(MapPointData point)

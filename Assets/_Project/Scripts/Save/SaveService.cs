@@ -36,6 +36,13 @@ namespace LunarDominion.Save
         // Map excursions (2026-11-09): node regen timestamps, one per
         // resource node. Old saves without this field load as all "".
         public string[] NodeRegenUtc = new string[9];
+        // Node occupation (2026-11-09): the army farming a node.
+        // Old saves load with no occupation (-1).
+        public int OccupiedNodeIndex = -1;
+        public string OccupationEndUtc = "";
+        public int OccupationAmount;
+        public int OccupationKind;
+        public int OccupationTroops;
     }
 
     public class SaveService
@@ -83,7 +90,12 @@ namespace LunarDominion.Save
                 ProductionCarryBiomass = state.ProductionCarryBiomass,
                 ProductionCarryAlloy = state.ProductionCarryAlloy,
                 ProductionCarryHelium3 = state.ProductionCarryHelium3,
-                NodeRegenUtc = state.NodeRegenUtc != null ? (string[])state.NodeRegenUtc.Clone() : new string[9]
+                NodeRegenUtc = state.NodeRegenUtc != null ? (string[])state.NodeRegenUtc.Clone() : new string[9],
+                OccupiedNodeIndex = state.OccupiedNodeIndex,
+                OccupationEndUtc = state.OccupationEndUtc ?? "",
+                OccupationAmount = state.OccupationAmount,
+                OccupationKind = state.OccupationKind,
+                OccupationTroops = state.OccupationTroops
             };
             string json = JsonUtility.ToJson(data, true);
             string temp = SavePath + ".tmp";
@@ -121,7 +133,12 @@ namespace LunarDominion.Save
                     ProductionCarryBiomass = Math.Max(0f, data.ProductionCarryBiomass),
                     ProductionCarryAlloy = Math.Max(0f, data.ProductionCarryAlloy),
                     ProductionCarryHelium3 = Math.Max(0f, data.ProductionCarryHelium3),
-                    NodeRegenUtc = ValidateNodeRegenUtc(data.NodeRegenUtc)
+                    NodeRegenUtc = ValidateNodeRegenUtc(data.NodeRegenUtc),
+                    OccupiedNodeIndex = ValidateOccupiedNode(data),
+                    OccupationEndUtc = data.OccupationEndUtc ?? "",
+                    OccupationAmount = Math.Max(0, data.OccupationAmount),
+                    OccupationKind = Math.Max(0, Math.Min(data.OccupationKind, 2)),
+                    OccupationTroops = Math.Max(0, Math.Min(data.OccupationTroops, 8))
                 };
                 if (state.ActiveResearchId < 0)
                 {
@@ -192,6 +209,18 @@ namespace LunarDominion.Save
                     : "";
             }
             return result;
+        }
+
+        // Node occupation (2026-11-09): -1 means no occupation. A
+        // claimed node needs a parseable UTC end time, otherwise the
+        // occupation is dropped (the node reads as available).
+        private int ValidateOccupiedNode(SaveData data)
+        {
+            int index = data.OccupiedNodeIndex;
+            if (index < 0 || index > 8) return -1;
+            if (string.IsNullOrEmpty(data.OccupationEndUtc)) return -1;
+            if (!DateTime.TryParse(data.OccupationEndUtc, null, DateTimeStyles.RoundtripKind, out _)) return -1;
+            return index;
         }
 
         private int ValidateActiveResearch(SaveData data)

@@ -129,16 +129,28 @@ namespace LunarDominion.Bootstrap
             ShowMapPoint(point);
         }
 
-        // Show the selected point's info + Send button state. A depleted
-        // node shows its regen countdown and no button; a point that
-        // cannot be sent (no army, tier locked, no energy, or a march
+        // Show the selected point's info + Send button state. An occupied
+        // node shows who is farming it and the time left, with no button;
+        // a depleted node shows its regen countdown and no button; a point
+        // that cannot be sent (no army, no energy, or a march/occupation
         // already underway) shows the reason instead of the button.
         private void ShowMapPoint(MapPointData point)
         {
             if (point == null) return;
             string info = point.Info;
             bool showSend = false;
-            if (point.Kind != MapPointKind.Camp && _excursions.IsNodeDepleted(point.Index, out var remaining))
+            if (point.Kind != MapPointKind.Camp && _excursions.IsNodeOccupied(point.Index))
+            {
+                if (_excursions.OccupationInfo(point.Index, out int troops, out var remaining))
+                {
+                    info = $"{point.Info}\nBeing farmed by {troops} troop{(troops == 1 ? "" : "s")} — {MapExcursionService.FormatRemaining(remaining)} left.";
+                }
+                else
+                {
+                    info = $"{point.Info}\nBeing farmed.";
+                }
+            }
+            else if (point.Kind != MapPointKind.Camp && _excursions.IsNodeDepleted(point.Index, out var remaining))
             {
                 info = $"{point.Info}\nDepleted — regenerates in {MapExcursionService.FormatRemaining(remaining)}.";
             }
@@ -176,10 +188,17 @@ namespace LunarDominion.Bootstrap
         }
 
         // An excursion resolved (collection / battle) or could not start:
-        // show the outcome in the info panel.
+        // show the outcome in the info panel — but only while the Map is
+        // open. An occupation can complete while the player is on another
+        // tab; the harvest still lands (top bar updates) and the node is
+        // gone when they next open the Map, without the panel popping up
+        // over the Base view.
         private void OnExcursionResult(string title, string body)
         {
-            _mapInfoView.ShowResult(title, body);
+            if (_exteriorView != null && _exteriorView.IsVisible)
+            {
+                _mapInfoView.ShowResult(title, body);
+            }
             RefreshMapNodeStates();
         }
 
@@ -192,14 +211,35 @@ namespace LunarDominion.Bootstrap
             if (_selectedPoint != null) ShowMapPoint(_selectedPoint);
         }
 
-        // Dim depleted nodes, restore regenerated ones. Called on Map
-        // open, on excursion results, and on state changes while the
-        // Map is visible (so a node regenerating is noticed).
+        // Node visuals, three states (2026-11-09): occupied nodes are
+        // amber and visible; depleted nodes vanish until they regenerate;
+        // available nodes are normal and visible. Also restores the
+        // marker at an occupied node (the army farming there). Called on
+        // Map open, on excursion results, and on state changes while the
+        // Map is visible (so a node regenerating or an occupation ending
+        // is noticed).
         private void RefreshMapNodeStates()
         {
             if (_exteriorView == null || _excursions == null) return;
             for (int i = 0; i < 9; i++)
-                _exteriorView.SetNodeDepleted(i, _excursions.IsNodeDepleted(i));
+            {
+                if (_excursions.IsNodeOccupied(i))
+                {
+                    _exteriorView.SetNodeVisible(i, true);
+                    _exteriorView.SetNodeOccupied(i, true);
+                }
+                else if (_excursions.IsNodeDepleted(i))
+                {
+                    _exteriorView.SetNodeOccupied(i, false);
+                    _exteriorView.SetNodeVisible(i, false);
+                }
+                else
+                {
+                    _exteriorView.SetNodeVisible(i, true);
+                    _exteriorView.SetNodeOccupied(i, false);
+                }
+            }
+            _excursions.RefreshMarkerVisual();
         }
 
         private void OnTabSelected(NavTab tab)
@@ -260,7 +300,11 @@ namespace LunarDominion.Bootstrap
             _armyView?.Refresh();
             _expeditionsView?.Refresh();
             _researchView?.Refresh();
-            // A node may have regenerated while the Map is open.
+            // An occupation may have ended (its timer is real-time, and
+            // it can end while the app was closed — the harvest is
+            // granted on the next refresh). A node may also have
+            // regenerated while the Map is open.
+            _excursions?.CheckOccupationDue();
             if (_exteriorView != null && _exteriorView.IsVisible) RefreshMapNodeStates();
         }
     }
