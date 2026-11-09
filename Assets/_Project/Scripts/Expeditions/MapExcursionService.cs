@@ -42,7 +42,9 @@ namespace LunarDominion.Expeditions
         public const float OccupationMinutesPerTroop = 120f;
         // Camp respawn: a defeated camp vanishes, and another of the
         // same tier respawns elsewhere after this many real-time hours.
-        public const float CampRespawnHours = 4f;
+        // Shortened to 1h (2026-11-09, Patrick) so it is quick to see
+        // in testing; raise it again for a slower live pace.
+        public const float CampRespawnHours = 1f;
 
         // Raised when an excursion resolves (arrival outcome) or cannot
         // start — title + multi-line body for the info panel.
