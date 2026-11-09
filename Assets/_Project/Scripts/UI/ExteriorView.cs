@@ -193,6 +193,80 @@ namespace LunarDominion.UI
             }
 
             BuildMapPoints();
+            BuildCreatures();
+        }
+
+        // Enemy creatures on the map (Patrick 2026-11-09): the actual
+        // Expedition enemies, not just the camp markers — 4 Spore
+        // Crawlers around the Tier 1 camp, 5 Void Stalkers around the
+        // Tier 2 camp, and the Brood Tyrant + 3 brood (mini-Tyrants)
+        // around the Tier 3 camp. Each creature is tappable and shows
+        // its camp's info (same Title/Info as the camp). Scale is
+        // 2x like the nodes/camps, except the brood at 1x so they read
+        // clearly smaller than the boss.
+        private struct CreatureDef
+        {
+            public string ResourcePath; // Resources/Models/<name>
+            public string Title;
+            public string Info;
+            public Vector3 Position;
+            public float Scale;
+        }
+        private static readonly CreatureDef[] CreatureDefs =
+        {
+            // Tier 1 — Spore Crawlers around (55, 15).
+            new CreatureDef { ResourcePath = "Models/SporeCrawler", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(61f, 0f, 19f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/SporeCrawler", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(49f, 0f, 20f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/SporeCrawler", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(60f, 0f, 9f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/SporeCrawler", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(50f, 0f, 10f), Scale = 2f },
+            // Tier 2 — Void Stalkers around (-85, 60).
+            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-78f, 0f, 65f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-92f, 0f, 64f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-79f, 0f, 54f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-91f, 0f, 55f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-85f, 0f, 68f), Scale = 2f },
+            // Tier 3 — Brood Tyrant + 3 brood around (120, -80).
+            new CreatureDef { ResourcePath = "Models/BroodTyrant", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(128f, 0f, -80f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/BroodTyrant", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(113f, 0f, -74f), Scale = 1f },
+            new CreatureDef { ResourcePath = "Models/BroodTyrant", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(113f, 0f, -86f), Scale = 1f },
+            new CreatureDef { ResourcePath = "Models/BroodTyrant", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(122f, 0f, -71f), Scale = 1f },
+        };
+
+        private void BuildCreatures()
+        {
+            foreach (var def in CreatureDefs)
+            {
+                GameObject prefab = null;
+                try
+                {
+                    prefab = Resources.Load<GameObject>(def.ResourcePath);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[ExteriorView] Creature failed to load (" + def.ResourcePath + "): " + e.Message);
+                }
+                if (prefab == null)
+                {
+                    Debug.LogWarning("[ExteriorView] " + def.ResourcePath + " is missing — that creature will be an empty spot. Copy the FBX into Assets/_Project/Resources/Models/ (do not rename it).");
+                    continue;
+                }
+                var go = Instantiate(prefab);
+                go.name = def.Title + " Creature";
+                go.transform.position = def.Position;
+                // Same rotation rule as the terrain: leave the imported
+                // rotation alone (Bake Axis Conversion).
+                go.transform.localScale = Vector3.one * def.Scale;
+                // Tappable like the nodes/camps: a generous BoxCollider
+                // so the creature shows its camp's info when tapped.
+                if (go.GetComponentInChildren<Collider>() == null)
+                {
+                    var box = go.AddComponent<BoxCollider>();
+                    box.center = new Vector3(0f, 2f, 0f);
+                    box.size = new Vector3(4f, 4f, 4f);
+                }
+                go.SetActive(false);
+                _mapPoints.Add(new MapPoint { Go = go, Title = def.Title, Info = def.Info });
+            }
         }
 
         private void BuildMapPoints()
