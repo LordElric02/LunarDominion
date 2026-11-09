@@ -111,8 +111,11 @@ namespace LunarDominion.UI
 
             // Regolith texture, same density as the base ground: the
             // base tiles (8,7) across 56x48 (1 tile per 7 units), so
-            // the 280x240 map tiles (40,34). Wrap Mode Repeat, colour
-            // white so the texture reads as-authored.
+            // the 280x240 map tiles (40,34). Wrap Mode Repeat. The
+            // colour is darkened to 0.7 (Patrick 2026-11-09: the map
+            // terrain read almost white/snowy at (40,34) from the far
+            // camera — the fine texture averages out to light grey, so
+            // the material colour pulls it back toward lunar grey).
             var renderer = _terrain.GetComponentInChildren<Renderer>();
             var regolith = Resources.Load<Texture2D>("Textures/GroundRegolith");
             if (regolith != null && renderer != null)
@@ -120,7 +123,7 @@ namespace LunarDominion.UI
                 regolith.wrapMode = TextureWrapMode.Repeat;
                 renderer.material.mainTexture = regolith;
                 renderer.material.mainTextureScale = new Vector2(40f, 34f);
-                renderer.material.color = Color.white;
+                renderer.material.color = new Color(0.7f, 0.7f, 0.7f);
             }
 
             // Start hidden — the Base tab is the default view.
@@ -150,8 +153,12 @@ namespace LunarDominion.UI
                 _baseCastle.name = "BaseCastle";
                 _baseCastle.transform.position = Vector3.zero;
                 // Same rotation rule as the terrain: leave the imported
-                // rotation alone (Bake Axis Conversion).
-                _baseCastle.transform.localScale = Vector3.one;
+                // rotation alone (Bake Axis Conversion). Scaled 2x
+                // (Patrick 2026-11-09): at 1x the castle read as a tiny
+                // white blob from the far camera; 2x makes it ~14 wide
+                // and 15 high, a clear landmark that still fits well
+                // inside the 56x48 base ground.
+                _baseCastle.transform.localScale = Vector3.one * 2f;
                 _baseCastle.SetActive(false);
             }
             else
@@ -184,8 +191,13 @@ namespace LunarDominion.UI
                 go.name = def.Title;
                 go.transform.position = def.Position;
                 // Same rotation rule as the terrain: leave the imported
-                // rotation alone (Bake Axis Conversion).
-                go.transform.localScale = Vector3.one;
+                // rotation alone (Bake Axis Conversion). Scaled 2x
+                // (Patrick 2026-11-09): at 1x the nodes/camps read as
+                // tiny dots from the far camera; 2x makes them ~4-8
+                // units across, visible and tappable. The BoxCollider
+                // below scales with the object, so the tap target grows
+                // too.
+                go.transform.localScale = Vector3.one * 2f;
                 // The FBX has no collider, and tapping raycasts against
                 // colliders — give each point a generous one (4x4x4,
                 // centred at y 2) so it is easy to tap from the far
