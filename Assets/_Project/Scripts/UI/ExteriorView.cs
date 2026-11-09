@@ -204,25 +204,38 @@ namespace LunarDominion.UI
         private void Update()
         {
             if (!_visible) return;
+            // Input System note: Unity throws InvalidOperationException if
+            // the legacy UnityEngine.Input API is read while Player Settings
+            // > Active Input Handler is set to Input System Package only.
+            // Same pattern as BaseView.Update: read Mouse/Touchscreen when
+            // the new Input System is enabled, legacy Input otherwise.
             bool tapped = false;
             Vector2 screenPos = Vector2.zero;
-            if (Input.GetMouseButtonDown(0))
+            int touchPointerId = -1;
+#if ENABLE_INPUT_SYSTEM
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
             {
                 tapped = true;
-                screenPos = Input.mousePosition;
+                screenPos = mouse.position.ReadValue();
             }
-            else if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+            var touchscreen = UnityEngine.InputSystem.Touchscreen.current;
+            if (touchscreen != null && touchscreen.primaryTouch.press.wasPressedThisFrame)
             {
                 tapped = true;
-                screenPos = Input.GetTouch(0).position;
+                screenPos = touchscreen.primaryTouch.position.ReadValue();
+                touchPointerId = (int)touchscreen.primaryTouch.touchId.ReadValue();
             }
+#else
+            tapped = Input.GetMouseButtonDown(0) || (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began);
+            if (tapped) screenPos = Input.touchCount > 0 ? Input.GetTouch(0).position : (Vector2)Input.mousePosition;
+#endif
             if (!tapped) return;
             // UI taps never reach here — EventSystem filters them out.
             if (EventSystem.current != null)
             {
 #if ENABLE_INPUT_SYSTEM
-                if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) return;
-                if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) return;
+                if (touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject()) return;
 #else
                 if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) return;
                 if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) return;
