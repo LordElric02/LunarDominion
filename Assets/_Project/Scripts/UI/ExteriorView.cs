@@ -47,6 +47,32 @@ namespace LunarDominion.UI
         }
         private readonly List<MapPoint> _mapPoints = new List<MapPoint>();
 
+        // Map camera pan (Patrick 2026-11-09): the Map view is 5x the
+        // base, so the camera can be panned across it — arrow keys on
+        // PC, touch/mouse drag on the phone (and in the Editor). The
+        // pan offset moves both the camera position and its look-at
+        // point, so the 48.5-degree pitch never changes. Clamped so the
+        // view stays on the 280x240 map.
+        private Vector3 _panOffset = Vector3.zero;
+        private static readonly float PanSpeed = 40f; // units/second, arrow keys
+        private static readonly float PanLimitX = 100f;
+        private static readonly float PanLimitZ = 90f;
+        private static readonly float DragTapThresholdPx = 15f; // below this, a press is a tap, not a drag
+
+        // Drag state: a press that moves past the threshold becomes a
+        // drag (pan) and must NOT also fire as a tap on release.
+        private bool _pointerDown;
+        private bool _isDrag;
+        private Vector2 _pointerStartPos;
+        private Vector2 _pointerLastPos;
+
+        // Camera ground-plane axes, derived from the exterior camera
+        // (50,80,50) looking at the origin: screen-right is
+        // (0.707,0,-0.707) and screen-up (toward the far edge) is
+        // (-0.707,0,-0.707). Arrow keys and drags pan along these.
+        private static readonly Vector3 CamRight = new Vector3(0.7071f, 0f, -0.7071f);
+        private static readonly Vector3 CamGroundForward = new Vector3(-0.7071f, 0f, -0.7071f);
+
         // First-iteration layout (Patrick 2026-11-09): 3 nodes per
         // resource (one 500, one 1000, one 2000 — farther nodes hold
         // more), and 1 enemy camp per Expedition tier (Tier 1 near the
@@ -216,43 +242,163 @@ namespace LunarDominion.UI
         private void Update()
         {
             if (!_visible) return;
-            // Input System note: Unity throws InvalidOperationException if
-            // the legacy UnityEngine.Input API is read while Player Settings
-            // > Active Input Handler is set to Input System Package only.
-            // Same pattern as BaseView.Update: read Mouse/Touchscreen when
-            // the new Input System is enabled, legacy Input otherwise.
-            bool tapped = false;
+            // Arrow keys pan the map camera (PC). Same pattern as the
+            // tap input below: Keyboard when the Input System is
+            // enabled, legacy Input otherwise.
+            Vector3 keyPan = Vector3.zero;
+#if ENABLE_INPUT_SYSTEM
+            var keyboard = UnityEngine.InputSystem.Keyboard.current;
+            if (keyboard != null)
+            {
+                if (keyboard.rightArrowKey.isPressed) keyPan += CamRight;
+                if (keyboard.leftArrowKey.isPressed) keyPan -= CamRight;
+                if (keyboard.upArrowKey.isPressed) keyPan += CamGroundForward;
+                if (keyboard.downArrowKey.isPressed) keyPan -= CamGroundForward;
+            }
+#else
+            if (Input.GetKey(KeyCode.RightArrow)) keyPan += CamRight;
+            if (Input.GetKey(KeyCode.LeftArrow)) keyPan -= CamRight;
+            if (Input.GetKey(KeyCode.UpArrow)) keyPan += CamGroundForward;
+            if (Input.GetKey(KeyCode.DownArrow)) keyPan -= CamGroundForward;
+#endif
+            if (keyPan != Vector3.zero)
+            {
+                keyPan.Normalize();
+                AddPan(keyPan * PanSpeed * Time.deltaTime);
+            }
+
+            // Pointer input: a press that barely moves is a TAP (select
+            // a node/camp or hide the panel); a press that moves past
+            // the threshold is a DRAG (pan the camera) and must not
+            // also fire as a tap on release. Input System note: Unity
+            // throws InvalidOperationException if the legacy
+            // UnityEngine.Input API is read while Player Settings >
+            // Active Input Handler is set to Input System Package only.
+            // Same pattern as BaseView.Update: read Mouse/Touchscreen
+            // when the new Input System is enabled, legacy Input
+            // otherwise.
+            bool pressed = false;   // pointer went down this frame
+            bool released = false;  // pointer went up this frame
+            bool held = false;      // pointer is down right now
             Vector2 screenPos = Vector2.zero;
             int touchPointerId = -1;
 #if ENABLE_INPUT_SYSTEM
             var mouse = UnityEngine.InputSystem.Mouse.current;
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame)
-            {
-                tapped = true;
-                screenPos = mouse.position.ReadValue();
-            }
             var touchscreen = UnityEngine.InputSystem.Touchscreen.current;
-            if (touchscreen != null && touchscreen.primaryTouch.press.wasPressedThisFrame)
+            // Touch takes precedence on the phone; mouse in the Editor.
+            if (touchscreen != null && (touchscreen.primaryTouch.press.isPressed || touchscreen.primaryTouch.press.wasPressedThisFrame || touchscreen.primaryTouch.press.wasReleasedThisFrame))
             {
-                tapped = true;
+                pressed = touchscreen.primaryTouch.press.wasPressedThisFrame;
+                released = touchscreen.primaryTouch.press.wasReleasedThisFrame;
+                held = touchscreen.primaryTouch.press.isPressed;
                 screenPos = touchscreen.primaryTouch.position.ReadValue();
                 touchPointerId = (int)touchscreen.primaryTouch.touchId.ReadValue();
             }
+            else if (mouse != null)
+            {
+                pressed = mouse.leftButton.wasPressedThisFrame;
+                released = mouse.leftButton.wasReleasedThisFrame;
+                held = mouse.leftButton.isPressed;
+                screenPos = mouse.position.ReadValue();
+            }
 #else
-            tapped = Input.GetMouseButtonDown(0) || (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began);
-            if (tapped) screenPos = Input.touchCount > 0 ? Input.GetTouch(0).position : (Vector2)Input.mousePosition;
+            if (Input.touchCount > 0)
+            {
+                var touch = Input.GetTouch(0);
+                pressed = touch.phase == TouchPhase.Began;
+                released = touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled;
+                held = touch.phase == TouchPhase.Began || touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary;
+                screenPos = touch.position;
+            }
+            else
+            {
+                pressed = Input.GetMouseButtonDown(0);
+                released = Input.GetMouseButtonUp(0);
+                held = Input.GetMouseButton(0);
+                screenPos = Input.mousePosition;
+            }
 #endif
-            if (!tapped) return;
             // UI taps never reach here — EventSystem filters them out.
-            if (EventSystem.current != null)
+            if (pressed && EventSystem.current != null)
             {
 #if ENABLE_INPUT_SYSTEM
-                if (touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject()) return;
+                if (touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject()) { _pointerDown = false; return; }
 #else
-                if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) return;
-                if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) return;
+                if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) { _pointerDown = false; return; }
+                if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) { _pointerDown = false; return; }
 #endif
             }
+
+            if (pressed)
+            {
+                _pointerDown = true;
+                _isDrag = false;
+                _pointerStartPos = screenPos;
+                _pointerLastPos = screenPos;
+            }
+            else if (held && _pointerDown)
+            {
+                // Dragging: once the pointer has moved past the tap
+                // threshold, pan the camera with the finger/mouse so
+                // the ground follows the pointer (like dragging a map).
+                Vector2 delta = screenPos - _pointerLastPos;
+                _pointerLastPos = screenPos;
+                if (!_isDrag && Vector2.Distance(screenPos, _pointerStartPos) > DragTapThresholdPx)
+                {
+                    _isDrag = true;
+                }
+                if (_isDrag && delta != Vector2.zero)
+                {
+                    AddPan(ScreenDeltaToWorld(delta));
+                }
+            }
+            else if (released && _pointerDown)
+            {
+                _pointerDown = false;
+                // A drag never fires as a tap — only a press that stayed
+                // within the threshold selects a node/camp or hides the
+                // panel.
+                if (_isDrag) return;
+                HandleTap(screenPos);
+            }
+        }
+
+        // Convert a screen-pixel drag delta to a world-space pan delta:
+        // the ground follows the pointer, so the camera moves the
+        // opposite way horizontally and the same way vertically (in
+        // ground-plane axes). World-per-pixel comes from the camera's
+        // distance and FOV so a drag feels the same at any zoom.
+        private Vector3 ScreenDeltaToWorld(Vector2 pixelDelta)
+        {
+            var cam = Camera.main;
+            if (cam == null) return Vector3.zero;
+            // Distance from the camera to the point it looks at (the
+            // pan offset cancels out — the camera and its look-at move
+            // together, so the distance is constant at ~107).
+            float distance = Vector3.Distance(cam.transform.position, Vector3.zero + _panOffset);
+            float worldPerPixel = 2f * distance * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1f, (float)Screen.height);
+            return CamRight * (-pixelDelta.x * worldPerPixel) + CamGroundForward * (pixelDelta.y * worldPerPixel);
+        }
+
+        private void AddPan(Vector3 delta)
+        {
+            _panOffset += delta;
+            _panOffset.x = Mathf.Clamp(_panOffset.x, -PanLimitX, PanLimitX);
+            _panOffset.z = Mathf.Clamp(_panOffset.z, -PanLimitZ, PanLimitZ);
+            _panOffset.y = 0f;
+            ApplyCamera();
+        }
+
+        private void ApplyCamera()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            cam.transform.position = ExteriorCameraPosition + _panOffset;
+            cam.transform.LookAt(Vector3.zero + _panOffset);
+        }
+
+        private void HandleTap(Vector2 screenPos)
+        {
             var cam = Camera.main;
             if (cam == null) return;
             var ray = cam.ScreenPointToRay(screenPos);
@@ -288,8 +434,12 @@ namespace LunarDominion.UI
             if (cam == null) return;
             if (visible)
             {
-                cam.transform.position = ExteriorCameraPosition;
-                cam.transform.LookAt(Vector3.zero);
+                // Opening the Map always recentres on the base — the
+                // pan starts from zero each time.
+                _panOffset = Vector3.zero;
+                _pointerDown = false;
+                _isDrag = false;
+                ApplyCamera();
             }
             else
             {
