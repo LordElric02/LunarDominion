@@ -77,7 +77,7 @@ namespace LunarDominion.UI
         }
 
         // 2026-11-06 landscape: the unit rows live in a vertical
-        // ScrollRect (same pattern as ExpeditionsView's squad list), so
+        // ScrollRect (same pattern as SquadPickerView's squad list), so
         // the list fits the shorter panel and scrolls if a class ever
         // holds more units. Rows are fixed-height LayoutElements.
         private void BuildRowsScroll()

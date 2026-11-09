@@ -25,7 +25,6 @@ namespace LunarDominion.Bootstrap
         private MapPointData _selectedPoint;
         private BuildingPanelView _buildingPanel;
         private ArmyView _armyView;
-        private ExpeditionsView _expeditionsView;
         private BottomNavView _bottomNav;
         private ResearchView _researchView;
         private DevHUDView _devHud;
@@ -93,9 +92,6 @@ namespace LunarDominion.Bootstrap
 
             _armyView = new GameObject("ArmyView").AddComponent<ArmyView>();
             _armyView.Build(canvas, _controller);
-
-            _expeditionsView = new GameObject("ExpeditionsView").AddComponent<ExpeditionsView>();
-            _expeditionsView.Build(canvas, _controller);
 
             _researchView = new GameObject("ResearchView").AddComponent<ResearchView>();
             _researchView.Build(canvas, _controller);
@@ -300,7 +296,6 @@ namespace LunarDominion.Bootstrap
             _mapInfoView.Hide();
             _squadPicker.Hide();
             _armyView.Hide();
-            _expeditionsView.Hide();
             _researchView.Hide();
             switch (tab)
             {
@@ -314,12 +309,6 @@ namespace LunarDominion.Bootstrap
                     _baseView.SetVisible(false);
                     _baseView.SetMountainsVisible(true);
                     _armyView.Show();
-                    break;
-                case NavTab.Expeditions:
-                    _exteriorView.SetVisible(false);
-                    _baseView.SetVisible(false);
-                    _baseView.SetMountainsVisible(true);
-                    _expeditionsView.Show();
                     break;
                 case NavTab.Research:
                     _exteriorView.SetVisible(false);
@@ -347,7 +336,6 @@ namespace LunarDominion.Bootstrap
             _topBar?.Refresh();
             _buildingPanel?.Refresh();
             _armyView?.Refresh();
-            _expeditionsView?.Refresh();
             _researchView?.Refresh();
             // An occupation may have ended (its timer is real-time, and
             // it can end while the app was closed — the harvest is
