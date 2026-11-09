@@ -12,7 +12,9 @@ namespace LunarDominion.UI
     /// ExteriorView.OnEmptyMapTapped to Hide).
     /// 2026-11-09: compact panel (360 ref px) — the detail text lives in
     /// a ScrollRect with an auto-hiding vertical scrollbar, so short node
-    /// info fits without scrolling and long battle results scroll.</summary>
+    /// info fits without scrolling and long battle results scroll. The
+    /// content height is set from the text's preferred height (a layout
+    /// group measured it as zero, so the text vanished).</summary>
     public class MapInfoView : MonoBehaviour
     {
         // Raised when the Send Excursion button is tapped.
@@ -28,6 +30,7 @@ namespace LunarDominion.UI
         private Text _infoText;
         private Button _sendButton;
         private ScrollRect _scroll;
+        private RectTransform _contentRt;
         private bool _showingResult;
 
         public void Build(Canvas canvas)
@@ -54,8 +57,11 @@ namespace LunarDominion.UI
             _root.SetActive(false);
         }
 
-        // Scrollable detail area (same ScrollRect pattern as the Army
-        // rows). The vertical scrollbar hides itself when the text
+        // Scrollable detail area. The content height is set from the
+        // text's preferred height whenever the text changes (see
+        // ResetScroll) — a VerticalLayoutGroup + ContentSizeFitter
+        // measured the single Text as zero height, so the text
+        // vanished. The vertical scrollbar hides itself when the text
         // fits the viewport and appears when it overflows.
         private void BuildInfoScroll()
         {
@@ -88,27 +94,19 @@ namespace LunarDominion.UI
 
             var contentGo = new GameObject("Content");
             contentGo.transform.SetParent(viewportGo.transform, false);
-            var contentRt = contentGo.AddComponent<RectTransform>();
-            contentRt.anchorMin = new Vector2(0, 1);
-            contentRt.anchorMax = new Vector2(1, 1);
-            contentRt.pivot = new Vector2(0.5f, 1);
-            contentRt.anchoredPosition = Vector2.zero;
-            contentRt.sizeDelta = Vector2.zero;
-            var layout = contentGo.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 0;
-            layout.padding = new RectOffset(8, 8, 6, 6);
-            layout.childAlignment = TextAnchor.UpperLeft;
-            layout.childControlWidth = true;
-            layout.childControlHeight = false;
-            layout.childForceExpandWidth = true;
-            layout.childForceExpandHeight = false;
-            var fitter = contentGo.AddComponent<ContentSizeFitter>();
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-            _scroll.content = contentRt;
+            _contentRt = contentGo.AddComponent<RectTransform>();
+            _contentRt.anchorMin = new Vector2(0, 1);
+            _contentRt.anchorMax = new Vector2(1, 1);
+            _contentRt.pivot = new Vector2(0.5f, 1);
+            _contentRt.anchoredPosition = Vector2.zero;
+            _contentRt.sizeDelta = Vector2.zero;
+            _scroll.content = _contentRt;
 
             _infoText = UIHelpers.LabelInRect(contentGo, "Info", "", 26, UIHelpers.Hex("#C0C8D0"),
                 new Rect(0, 0, 1, 1), TextAnchor.UpperLeft);
+            var infoRt = _infoText.GetComponent<RectTransform>();
+            infoRt.offsetMin = new Vector2(8, 6);
+            infoRt.offsetMax = new Vector2(-8, -6);
 
             // Vertical scrollbar, auto-hidden when the text fits.
             var barGo = new GameObject("InfoScrollbar");
@@ -171,11 +169,15 @@ namespace LunarDominion.UI
             _root.SetActive(false);
         }
 
-        // After the text changes, rebuild the layout so the scrollbar
-        // visibility is correct, then show the top of the text.
+        // After the text changes, size the content to the text's
+        // preferred height (plus padding) so the ScrollRect knows the
+        // true content size, then show the top of the text.
         private void ResetScroll()
         {
-            if (_scroll == null) return;
+            if (_scroll == null || _contentRt == null || _infoText == null) return;
+            Canvas.ForceUpdateCanvases();
+            float height = _infoText.preferredHeight + 12f;
+            _contentRt.sizeDelta = new Vector2(_contentRt.sizeDelta.x, height);
             Canvas.ForceUpdateCanvases();
             _scroll.verticalNormalizedPosition = 1f;
         }
