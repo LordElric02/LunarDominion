@@ -580,17 +580,24 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AlienPlanet";
-                // 2026-11-08 redesign (MOUNTAINS-PLANET-REDESIGN.md):
-                // the top-centre arc approach is abandoned — v1 C16
-                // and v2 V2J both verified in Blender but invisible in
-                // Unity. The planet now sits in the UPPER RIGHT as a
-                // large clearly banded disc, like Earth in reference
-                // image-103 — R3, verified in Blender with the real
-                // mountain ring: disc bbox x 67.6-92.0%, y 18.4-61.7%
-                // from top, fully below the UI top bar, fully in frame,
-                // ~24% of frame width. Same FBX + texture; rotation
-                // untouched.
-                go.transform.position = new Vector3(0f, -54f, -90f);
+                // 2026-11-08 V3 (PLACEMENT-FIX-V3.md): R3 (0,-54,-90)
+                // put the planet in the UPPER LEFT in Unity, not the
+                // upper right — the Blender conversion mirrored
+                // left/right (Unity is left-handed), and a half-size
+                // ground hid the occlusion. V3, computed with a
+                // camera calibrated against screenshot image-105,
+                // puts the disc upper right: bbox x 75.4-99.3%,
+                // y 16.1-50.7%, ~24% of frame width, fully below the
+                // top bar, fully in frame. Honest caveat: only a thin
+                // banded crescent (~7% of the disc) is visible at the
+                // top-right edge — the rest is behind the ground,
+                // because the 48.5° camera pitch puts the horizon
+                // above the frame. Patrick chose this over the 30°
+                // camera reframe (CAMERA-PITCH-PREVIEW.md), which
+                // gave a full disc but shrank the base to ~35% of
+                // the frame — he wants the base prominent. Same FBX
+                // + texture; rotation untouched.
+                go.transform.position = new Vector3(-137.2f, -68.8f, 4.1f);
                 go.transform.localScale = Vector3.one * 1.0f;
                 // 2026-11-07: assign the texture at runtime. The FBX
                 // import never linked AlienPlanet.png to the material's
