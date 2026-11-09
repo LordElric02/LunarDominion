@@ -495,9 +495,14 @@ namespace LunarDominion.UI
             // tapers 1.00 (top-left) to 0.80 (right edge) so the
             // horizon stays low and the planet clears it. 13-spot
             // ring = 4,252 tris total.
-            AddMountain("Models/HorizonB", new Vector3(-23f, 0f, 10f), 20f, new Vector3(1.4f, 1f, 1.4f));
+            // 2026-11-08 refine (PLANET-REFINE.md): spots 1 and 3
+            // are lowered (Y 1.00 -> 0.50 / 0.60) because their
+            // peaks landed on the planet disc's visible cap and
+            // split it — lowering them makes the arc continuous.
+            // All other spots unchanged.
+            AddMountain("Models/HorizonB", new Vector3(-23f, 0f, 10f), 20f, new Vector3(1.4f, 0.5f, 1.4f));
             AddMountain("Models/HorizonC", new Vector3(-21f, 0f, 15f), 310f, new Vector3(1.33f, 1f, 1.33f));
-            AddMountain("Models/HorizonA", new Vector3(-20f, 0f, 5f), 140f, new Vector3(1.4f, 1f, 1.4f));
+            AddMountain("Models/HorizonA", new Vector3(-20f, 0f, 5f), 140f, new Vector3(1.4f, 0.6f, 1.4f));
             AddMountain("Models/HorizonB", new Vector3(-21f, 0f, -4f), 260f, new Vector3(1.4f, 1f, 1.4f));
             AddMountain("Models/HorizonC", new Vector3(-19f, 0f, -13f), 90f, new Vector3(1.4f, 0.95f, 1.4f));
             AddMountain("Models/HorizonA", new Vector3(-14f, 0f, -20f), 200f, new Vector3(1.33f, 0.9f, 1.33f));
@@ -580,25 +585,17 @@ namespace LunarDominion.UI
             {
                 go = Instantiate(prefab);
                 go.name = "AlienPlanet";
-                // 2026-11-08 V3 (PLACEMENT-FIX-V3.md): R3 (0,-54,-90)
-                // put the planet in the UPPER LEFT in Unity, not the
-                // upper right — the Blender conversion mirrored
-                // left/right (Unity is left-handed), and a half-size
-                // ground hid the occlusion. V3, computed with a
-                // camera calibrated against screenshot image-105,
-                // puts the disc upper right: bbox x 75.4-99.3%,
-                // y 16.1-50.7%, ~24% of frame width, fully below the
-                // top bar, fully in frame. Honest caveat: only a thin
-                // banded crescent (~7% of the disc) is visible at the
-                // top-right edge — the rest is behind the ground,
-                // because the 48.5° camera pitch puts the horizon
-                // above the frame. Patrick chose this over the 30°
-                // camera reframe (CAMERA-PITCH-PREVIEW.md), which
-                // gave a full disc but shrank the base to ~35% of
-                // the frame — he wants the base prominent. Same FBX
-                // + texture; rotation untouched.
-                go.transform.position = new Vector3(-137.2f, -68.8f, 4.1f);
-                go.transform.localScale = Vector3.one * 1.0f;
+                // 2026-11-08 refine (PLANET-REFINE.md): V3 showed
+                // only ~6% of the disc (a thin sliver). Refined:
+                // planet moved further out and scaled DOWN to 0.70
+                // (narrower disc, 15.6% wide) so more of it fits
+                // the thin sky band — 21.5% visible, a broad
+                // continuous banded arc, +53% visible pixels vs V3.
+                // Camera unchanged (10,16,10), base stays prominent.
+                // Top edge y 15.7% — only ~5 px below the top bar,
+                // check it clears in Play.
+                go.transform.position = new Vector3(-170.6f, -70.0f, 7.9f);
+                go.transform.localScale = Vector3.one * 0.7f;
                 // 2026-11-07: assign the texture at runtime. The FBX
                 // import never linked AlienPlanet.png to the material's
                 // Base Map (the slot stays empty, and the embedded
