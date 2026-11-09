@@ -12,25 +12,26 @@ namespace LunarDominion.Expeditions
 {
     /// <summary>Map excursions (2026-11-09, Patrick's plan): tap a resource
     /// node or enemy camp on the exterior map, send the army, and resolve
-    /// the outcome. The whole army goes (strongest first, capped at the
-    /// squad size) and the marker marches visibly from the castle.
-    /// Nodes are OCCUPIED, not collected instantly (2026-11-09): on
-    /// arrival the army stays and farms the node for 120 min / troops
-    /// sent (8 troops = 15 min), the node turns amber while it is being
-    /// worked, and when the time is up the harvest lands, the army
-    /// marches back, and the node vanishes until it regenerates in 8h.
-    /// The occupation is saved, so it survives an app restart — if the
-    /// time ends while the app is closed, the harvest is granted on the
-    /// next load. Camps reuse ExpeditionService.TryStart exactly — same
-    /// tier gate (bypassed on the map with a warning), energy cost,
-    /// no-refund-on-defeat rule, rewards, XP, and permanent casualties —
-    /// so a map fight and a menu fight are the same fight. Energy is
-    /// spent and combat runs at ARRIVAL, not at send, so cancelling an
-    /// outbound march (leaving the Map tab) before arrival costs
-    /// nothing; an active occupation is never cancelled by leaving the
-    /// tab — the army keeps farming. This service owns the rules; the
-    /// march itself is visual and lives in ExteriorView. It owns no UI —
-    /// results go out as events.</summary>
+    /// the outcome. The player picks the squad in a picker (2026-11-09):
+    /// it opens pre-filled with the whole army (strongest first, capped
+    /// at the squad size) and they trim it; the chosen squad marches
+    /// visibly from the castle. Nodes are OCCUPIED, not collected
+    /// instantly (2026-11-09): on arrival the army stays and farms the
+    /// node for 120 min / troops sent (8 troops = 15 min), the node
+    /// turns amber while it is being worked, and when the time is up
+    /// the harvest lands, the army marches back, and the node vanishes
+    /// until it regenerates in 8h. The occupation is saved, so it
+    /// survives an app restart — if the time ends while the app is
+    /// closed, the harvest is granted on the next load. Camps reuse
+    /// ExpeditionService.TryStart exactly — same tier gate (bypassed on
+    /// the map with a warning), energy cost, no-refund-on-defeat rule,
+    /// rewards, XP, and permanent casualties — so a map fight and a menu
+    /// fight are the same fight. Energy is spent and combat runs at
+    /// ARRIVAL, not at send, so cancelling an outbound march (leaving
+    /// the Map tab) before arrival costs nothing; an active occupation
+    /// is never cancelled by leaving the tab — the army keeps farming.
+    /// This service owns the rules; the march itself is visual and lives
+    /// in ExteriorView. It owns no UI — results go out as events.</summary>
     public class MapExcursionService
     {
         // Node regen time after collection (Patrick-approved default).
@@ -61,6 +62,7 @@ namespace LunarDominion.Expeditions
         private readonly Action _notifyChanged;
 
         private MapPointData _activePoint;
+        private List<int> _activeSquad;
         private bool _marching;
         private bool _occupying;
 
@@ -155,16 +157,46 @@ namespace LunarDominion.Expeditions
 
         public void StartExcursion(MapPointData point)
         {
+            StartExcursion(point, null);
+        }
+
+        /// <summary>Send a chosen squad (army indices). Null or empty
+        /// falls back to the whole army, strongest first, capped — the
+        /// previous default. The squad is stored for arrival, so the
+        /// farming duration and the fight both use the units the player
+        /// picked, not the whole army.</summary>
+        public void StartExcursion(MapPointData point, List<int> squadIndices)
+        {
             if (!CanSend(point, out var reason))
             {
                 OnExcursionResult?.Invoke(point != null ? point.Title : "Excursion", reason);
                 return;
             }
             _activePoint = point;
+            _activeSquad = squadIndices != null && squadIndices.Count > 0
+                ? new List<int>(squadIndices)
+                : BuildSquadIndices();
             _marching = true;
             OnExcursionStateChanged?.Invoke();
             // Outbound: castle (origin) to the point, 1 unit above ground.
             _view.StartMarch(new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), OnArrivedAtTarget);
+        }
+
+        /// <summary>Default squad for the picker: the whole army,
+        /// strongest first, capped — as per-type counts. The picker
+        /// opens pre-filled with this and the player trims it.</summary>
+        public Dictionary<UnitId, int> DefaultSquadCounts()
+        {
+            var counts = new Dictionary<UnitId, int>();
+            foreach (int i in BuildSquadIndices())
+            {
+                if (_state.Army == null || i < 0 || i >= _state.Army.Count) continue;
+                var unit = _state.Army[i];
+                if (unit == null) continue;
+                if (!counts.ContainsKey(unit.Id)) counts[unit.Id] = 0;
+                counts[unit.Id]++;
+            }
+            return counts;
         }
 
         /// <summary>Cancel an in-flight excursion (leaving the Map tab).
@@ -186,6 +218,7 @@ namespace LunarDominion.Expeditions
             _view.CancelMarch();
             _marching = false;
             _activePoint = null;
+            _activeSquad = null;
             OnExcursionStateChanged?.Invoke();
         }
 
@@ -214,6 +247,7 @@ namespace LunarDominion.Expeditions
         {
             _marching = false;
             _activePoint = null;
+            _activeSquad = null;
             _view.CancelMarch();
             OnExcursionStateChanged?.Invoke();
         }
@@ -225,7 +259,7 @@ namespace LunarDominion.Expeditions
         // occupation is saved immediately, so it survives an app restart.
         private void BeginOccupation(MapPointData point)
         {
-            var squad = BuildSquadIndices();
+            var squad = ActiveSquad();
             int troops = Math.Max(1, squad.Count);
             float minutes = OccupationMinutesPerTroop / troops;
             _state.OccupiedNodeIndex = point.Index;
@@ -367,7 +401,7 @@ namespace LunarDominion.Expeditions
         private void FightCamp(MapPointData point)
         {
             var encounter = EncounterForTier(point.Tier);
-            var squad = BuildSquadIndices();
+            var squad = ActiveSquad();
             if (encounter == null || squad.Count == 0)
             {
                 OnExcursionResult?.Invoke(point.Title, "Could not start the fight.");
@@ -390,6 +424,14 @@ namespace LunarDominion.Expeditions
             {
                 OnExcursionResult?.Invoke(point.Title, reason);
             }
+        }
+
+        /// <summary>The squad chosen for this excursion, or the whole
+        /// army (strongest first, capped) when none was chosen.</summary>
+        private List<int> ActiveSquad()
+        {
+            if (_activeSquad != null && _activeSquad.Count > 0) return _activeSquad;
+            return BuildSquadIndices();
         }
 
         /// <summary>Whole army, strongest first, capped at the squad size.

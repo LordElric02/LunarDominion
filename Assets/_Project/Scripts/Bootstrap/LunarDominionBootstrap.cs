@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using LunarDominion.Expeditions;
 using LunarDominion.UI;
+using LunarDominion.Units;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -18,6 +20,7 @@ namespace LunarDominion.Bootstrap
         private BaseView _baseView;
         private ExteriorView _exteriorView;
         private MapInfoView _mapInfoView;
+        private SquadPickerView _squadPicker;
         private MapExcursionService _excursions;
         private MapPointData _selectedPoint;
         private BuildingPanelView _buildingPanel;
@@ -66,6 +69,13 @@ namespace LunarDominion.Bootstrap
 
             _mapInfoView = new GameObject("MapInfoView").AddComponent<MapInfoView>();
             _mapInfoView.Build(canvas);
+
+            // Squad picker (2026-11-09): choosing which units to send.
+            // Built with the map views; hidden until Send is tapped.
+            _squadPicker = new GameObject("SquadPickerView").AddComponent<SquadPickerView>();
+            _squadPicker.Build(canvas, _controller);
+            _squadPicker.OnConfirmClicked += OnSquadPickerConfirm;
+            _squadPicker.OnCancelClicked += OnSquadPickerCancel;
 
             // Map excursions (2026-11-09): the rules for sending the
             // army from the map. Built after the controller, exterior
@@ -181,10 +191,48 @@ namespace LunarDominion.Bootstrap
             _mapInfoView.Hide();
         }
 
-        // Send Excursion tapped in the info panel.
+        // Send Excursion tapped in the info panel: show the squad
+        // picker (pre-filled with the whole army) instead of sending
+        // immediately, so the player chooses which units go.
         private void OnSendExcursionClicked()
         {
-            if (_selectedPoint != null) _excursions.StartExcursion(_selectedPoint);
+            if (_selectedPoint == null) return;
+            _squadPicker.Show(_selectedPoint.Title, _excursions.DefaultSquadCounts());
+        }
+
+        // Squad picker confirmed: convert the chosen counts to army
+        // indices (first N of each type, in army order — same as the
+        // Expeditions menu) and send that squad.
+        private void OnSquadPickerConfirm(Dictionary<UnitId, int> counts)
+        {
+            _squadPicker.Hide();
+            if (_selectedPoint == null) return;
+            var squad = SquadIndicesForCounts(counts);
+            if (squad.Count == 0) return;
+            _excursions.StartExcursion(_selectedPoint, squad);
+        }
+
+        private void OnSquadPickerCancel()
+        {
+            _squadPicker.Hide();
+        }
+
+        private List<int> SquadIndicesForCounts(Dictionary<UnitId, int> counts)
+        {
+            var remaining = new Dictionary<UnitId, int>(counts);
+            var indices = new List<int>();
+            if (_controller.State.Army == null) return indices;
+            for (int i = 0; i < _controller.State.Army.Count; i++)
+            {
+                var unit = _controller.State.Army[i];
+                if (unit == null) continue;
+                if (remaining.ContainsKey(unit.Id) && remaining[unit.Id] > 0)
+                {
+                    remaining[unit.Id]--;
+                    indices.Add(i);
+                }
+            }
+            return indices;
         }
 
         // An excursion resolved (collection / battle) or could not start:
@@ -250,6 +298,7 @@ namespace LunarDominion.Bootstrap
             _selectedPoint = null;
             _buildingPanel.Hide();
             _mapInfoView.Hide();
+            _squadPicker.Hide();
             _armyView.Hide();
             _expeditionsView.Hide();
             _researchView.Hide();

@@ -5,11 +5,11 @@ using UnityEngine.UI;
 namespace LunarDominion.UI
 {
     /// <summary>Info panel for a tapped map node or enemy camp (exterior
-    /// Map view). Shows the title and detail lines, plus a Send Excursion
-    /// button when the point can take an army (map excursions, 2026-11-09).
-    /// Also shows excursion results (collection / battle outcome) in the
-    /// same panel. Tapping empty map ground hides it (the Bootstrap wires
-    /// ExteriorView.OnEmptyMapTapped to Hide).
+    /// Map view). Shows the title and detail lines, plus a Choose Squad
+    /// button when the point can take an army (map excursions, 2026-11-09)
+    /// — tapping it opens the squad picker so the player picks which
+    /// units go, instead of sending immediately. Also shows excursion
+    /// results (collection / battle outcome) in the same panel.
     /// 2026-11-09: compact panel (360 ref px) — the detail text lives in
     /// a ScrollRect with an auto-hiding vertical scrollbar, so short node
     /// info fits without scrolling and long battle results scroll. The
@@ -45,7 +45,7 @@ namespace LunarDominion.UI
                 new Rect(0.04f, 0.80f, 0.96f, 0.97f));
             BuildInfoScroll();
             // Send button in the bottom strip, below the info text.
-            _sendButton = UIHelpers.Button(_root, "SendButton", "Send Excursion", 28,
+            _sendButton = UIHelpers.Button(_root, "SendButton", "Choose Squad", 28,
                 UIHelpers.Hex("#2E7D32"), Color.white);
             var rt = _sendButton.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.04f, 0.02f);
