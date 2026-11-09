@@ -15,6 +15,8 @@ namespace LunarDominion.Bootstrap
         private GameController _controller;
         private TopBarView _topBar;
         private BaseView _baseView;
+        private ExteriorView _exteriorView;
+        private MapInfoView _mapInfoView;
         private BuildingPanelView _buildingPanel;
         private ArmyView _armyView;
         private ExpeditionsView _expeditionsView;
@@ -50,6 +52,17 @@ namespace LunarDominion.Bootstrap
             _baseView = new GameObject("BaseView").AddComponent<BaseView>();
             _baseView.Build(_controller);
             _baseView.OnBuildingSelected += OnBuildingSelected;
+
+            // Exterior map view (Phase 1): the big terrain + camera
+            // switch. Built after the base view so its terrain sits
+            // under the base ground; starts hidden (Base is default).
+            _exteriorView = new GameObject("ExteriorView").AddComponent<ExteriorView>();
+            _exteriorView.Build();
+            _exteriorView.OnMapPointSelected += OnMapPointSelected;
+            _exteriorView.OnEmptyMapTapped += OnEmptyMapTapped;
+
+            _mapInfoView = new GameObject("MapInfoView").AddComponent<MapInfoView>();
+            _mapInfoView.Build(canvas);
 
             _buildingPanel = new GameObject("BuildingPanelView").AddComponent<BuildingPanelView>();
             _buildingPanel.Build(canvas, _controller);
@@ -95,28 +108,55 @@ namespace LunarDominion.Bootstrap
             _buildingPanel.Hide();
         }
 
+        // Tap on a map node or camp shows its info panel.
+        private void OnMapPointSelected(string title, string info)
+        {
+            _mapInfoView.Show(title, info);
+        }
+
+        // Tap on empty map ground hides the info panel.
+        private void OnEmptyMapTapped()
+        {
+            _mapInfoView.Hide();
+        }
+
         private void OnTabSelected(NavTab tab)
         {
             _buildingPanel.Hide();
+            _mapInfoView.Hide();
             _armyView.Hide();
             _expeditionsView.Hide();
             _researchView.Hide();
             switch (tab)
             {
                 case NavTab.Base:
+                    _exteriorView.SetVisible(false);
                     _baseView.SetVisible(true);
                     break;
                 case NavTab.Army:
+                    _exteriorView.SetVisible(false);
                     _baseView.SetVisible(false);
                     _armyView.Show();
                     break;
                 case NavTab.Expeditions:
+                    _exteriorView.SetVisible(false);
                     _baseView.SetVisible(false);
                     _expeditionsView.Show();
                     break;
                 case NavTab.Research:
+                    _exteriorView.SetVisible(false);
                     _baseView.SetVisible(false);
                     _researchView.Show();
+                    break;
+                case NavTab.Map:
+                    // The detailed buildings are HIDDEN in the Map view
+                    // — at 5x distance they are tiny, and the simplified
+                    // BaseMarker (shown by ExteriorView) represents the
+                    // base instead. The wall/roads/props stay visible
+                    // (tiny from far, occluded by the marker's bold
+                    // wall); the ground, mountains and planet stay.
+                    _baseView.SetVisible(false);
+                    _exteriorView.SetVisible(true);
                     break;
             }
         }
