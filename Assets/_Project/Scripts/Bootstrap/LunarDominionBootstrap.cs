@@ -1,3 +1,4 @@
+using LunarDominion.Expeditions;
 using LunarDominion.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -17,6 +18,8 @@ namespace LunarDominion.Bootstrap
         private BaseView _baseView;
         private ExteriorView _exteriorView;
         private MapInfoView _mapInfoView;
+        private MapExcursionService _excursions;
+        private MapPointData _selectedPoint;
         private BuildingPanelView _buildingPanel;
         private ArmyView _armyView;
         private ExpeditionsView _expeditionsView;
@@ -64,6 +67,16 @@ namespace LunarDominion.Bootstrap
             _mapInfoView = new GameObject("MapInfoView").AddComponent<MapInfoView>();
             _mapInfoView.Build(canvas);
 
+            // Map excursions (2026-11-09): the rules for sending the
+            // army from the map. Built after the controller, exterior
+            // view, and info panel exist.
+            _excursions = new MapExcursionService(_controller.State, _controller.Economy, _controller.Expeditions,
+                _controller.Balance, _controller.UnitDefinitions, _controller.EncounterDefinitions,
+                _exteriorView, () => _controller.SaveGame(), () => _controller.NotifyChanged());
+            _excursions.OnExcursionResult += OnExcursionResult;
+            _excursions.OnExcursionStateChanged += OnExcursionStateChanged;
+            _mapInfoView.OnSendClicked += OnSendExcursionClicked;
+
             _buildingPanel = new GameObject("BuildingPanelView").AddComponent<BuildingPanelView>();
             _buildingPanel.Build(canvas, _controller);
             _baseView.OnEmptyBaseTapped += OnEmptyBaseTapped;
@@ -108,20 +121,85 @@ namespace LunarDominion.Bootstrap
             _buildingPanel.Hide();
         }
 
-        // Tap on a map node or camp shows its info panel.
-        private void OnMapPointSelected(string title, string info)
+        // Tap on a map node or camp shows its info panel, with the Send
+        // Excursion button when the point can take the army.
+        private void OnMapPointSelected(MapPointData point)
         {
-            _mapInfoView.Show(title, info);
+            _selectedPoint = point;
+            ShowMapPoint(point);
+        }
+
+        // Show the selected point's info + Send button state. A depleted
+        // node shows its regen countdown and no button; a point that
+        // cannot be sent (no army, tier locked, no energy, or a march
+        // already underway) shows the reason instead of the button.
+        private void ShowMapPoint(MapPointData point)
+        {
+            if (point == null) return;
+            string info = point.Info;
+            bool showSend = false;
+            if (point.Kind != MapPointKind.Camp && _excursions.IsNodeDepleted(point.Index, out var remaining))
+            {
+                info = $"{point.Info}\nDepleted — regenerates in {MapExcursionService.FormatRemaining(remaining)}.";
+            }
+            else if (_excursions.CanSend(point, out var reason))
+            {
+                showSend = true;
+            }
+            else if (reason != "Ready to send.")
+            {
+                info = $"{point.Info}\n{reason}";
+            }
+            _mapInfoView.Show(point.Title, info, showSend);
+            _mapInfoView.SetSendEnabled(!_excursions.IsMarching);
         }
 
         // Tap on empty map ground hides the info panel.
         private void OnEmptyMapTapped()
         {
+            _selectedPoint = null;
             _mapInfoView.Hide();
+        }
+
+        // Send Excursion tapped in the info panel.
+        private void OnSendExcursionClicked()
+        {
+            if (_selectedPoint != null) _excursions.StartExcursion(_selectedPoint);
+        }
+
+        // An excursion resolved (collection / battle) or could not start:
+        // show the outcome in the info panel.
+        private void OnExcursionResult(string title, string body)
+        {
+            _mapInfoView.ShowResult(title, body);
+            RefreshMapNodeStates();
+        }
+
+        // Marching started, finished, or cancelled: refresh the panel's
+        // Send button — but never overwrite a result the player is
+        // reading; tapping the point again refreshes it.
+        private void OnExcursionStateChanged()
+        {
+            if (_mapInfoView.ShowingResult) return;
+            if (_selectedPoint != null) ShowMapPoint(_selectedPoint);
+        }
+
+        // Dim depleted nodes, restore regenerated ones. Called on Map
+        // open, on excursion results, and on state changes while the
+        // Map is visible (so a node regenerating is noticed).
+        private void RefreshMapNodeStates()
+        {
+            if (_exteriorView == null || _excursions == null) return;
+            for (int i = 0; i < 9; i++)
+                _exteriorView.SetNodeDepleted(i, _excursions.IsNodeDepleted(i));
         }
 
         private void OnTabSelected(NavTab tab)
         {
+            // Leaving the Map tab cancels an in-flight excursion before
+            // any outcome is applied (energy is only spent at arrival).
+            _excursions?.Cancel();
+            _selectedPoint = null;
             _buildingPanel.Hide();
             _mapInfoView.Hide();
             _armyView.Hide();
@@ -162,6 +240,7 @@ namespace LunarDominion.Bootstrap
                     _baseView.SetVisible(false);
                     _baseView.SetMountainsVisible(false);
                     _exteriorView.SetVisible(true);
+                    RefreshMapNodeStates();
                     break;
             }
         }
@@ -173,6 +252,8 @@ namespace LunarDominion.Bootstrap
             _armyView?.Refresh();
             _expeditionsView?.Refresh();
             _researchView?.Refresh();
+            // A node may have regenerated while the Map is open.
+            if (_exteriorView != null && _exteriorView.IsVisible) RefreshMapNodeStates();
         }
     }
 }

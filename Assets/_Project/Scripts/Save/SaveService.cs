@@ -33,6 +33,9 @@ namespace LunarDominion.Save
         public float ProductionCarryBiomass;
         public float ProductionCarryAlloy;
         public float ProductionCarryHelium3;
+        // Map excursions (2026-11-09): node regen timestamps, one per
+        // resource node. Old saves without this field load as all "".
+        public string[] NodeRegenUtc = new string[9];
     }
 
     public class SaveService
@@ -79,7 +82,8 @@ namespace LunarDominion.Save
                 LastSaveTimeUtc = state.LastSaveTimeUtc,
                 ProductionCarryBiomass = state.ProductionCarryBiomass,
                 ProductionCarryAlloy = state.ProductionCarryAlloy,
-                ProductionCarryHelium3 = state.ProductionCarryHelium3
+                ProductionCarryHelium3 = state.ProductionCarryHelium3,
+                NodeRegenUtc = state.NodeRegenUtc != null ? (string[])state.NodeRegenUtc.Clone() : new string[9]
             };
             string json = JsonUtility.ToJson(data, true);
             string temp = SavePath + ".tmp";
@@ -116,7 +120,8 @@ namespace LunarDominion.Save
                     LastSaveTimeUtc = data.LastSaveTimeUtc ?? "",
                     ProductionCarryBiomass = Math.Max(0f, data.ProductionCarryBiomass),
                     ProductionCarryAlloy = Math.Max(0f, data.ProductionCarryAlloy),
-                    ProductionCarryHelium3 = Math.Max(0f, data.ProductionCarryHelium3)
+                    ProductionCarryHelium3 = Math.Max(0f, data.ProductionCarryHelium3),
+                    NodeRegenUtc = ValidateNodeRegenUtc(data.NodeRegenUtc)
                 };
                 if (state.ActiveResearchId < 0)
                 {
@@ -167,6 +172,25 @@ namespace LunarDominion.Save
             if (saved == null) return result;
             int count = Math.Min(saved.Length, 10);
             for (int i = 0; i < count; i++) result[i] = Math.Max(0, Math.Min(saved[i], 5));
+            return result;
+        }
+
+        // Map excursions (2026-11-09): one regen timestamp per resource
+        // node. Old saves have no field (null) and load as all available.
+        // Only keep parseable UTC timestamps; anything else means available.
+        private string[] ValidateNodeRegenUtc(string[] saved)
+        {
+            var result = new string[9];
+            if (saved == null) return result;
+            int count = Math.Min(saved.Length, 9);
+            for (int i = 0; i < count; i++)
+            {
+                string s = saved[i];
+                if (string.IsNullOrEmpty(s)) { result[i] = ""; continue; }
+                result[i] = DateTime.TryParse(s, null, DateTimeStyles.RoundtripKind, out _)
+                    ? s
+                    : "";
+            }
             return result;
         }
 

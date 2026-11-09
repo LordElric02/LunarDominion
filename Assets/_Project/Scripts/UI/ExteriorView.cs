@@ -5,6 +5,31 @@ using UnityEngine.EventSystems;
 
 namespace LunarDominion.UI
 {
+    /// <summary>What a tappable map point is: a resource node (Biomass,
+    /// Alloy, Helium-3) or an enemy camp (one per Expedition tier).</summary>
+    public enum MapPointKind
+    {
+        Biomass,
+        Alloy,
+        Helium3,
+        Camp
+    }
+
+    /// <summary>Structured data for one tappable map point — the display
+    /// strings plus what the excursion rules need (kind, tier, amount,
+    /// position, and the index into the node/camp lists). Nodes are
+    /// indices 0-8 (in NodeDefs order); camps are 9-11.</summary>
+    public class MapPointData
+    {
+        public int Index;
+        public MapPointKind Kind;
+        public int Tier; // camps only (1-3); 0 for nodes
+        public int Amount; // nodes only (500/1000/2000); 0 for camps
+        public Vector3 Position;
+        public string Title;
+        public string Info;
+    }
+
     /// <summary>Exterior map view (Phase 1 of the exterior base mode).
     /// A large sculpted terrain (5x the base: 280x240) with a sci-fi
     /// castle standing in for the base (like the castle on the world
@@ -18,15 +43,21 @@ namespace LunarDominion.UI
     /// mountains and planet stay visible in both views.
     /// Tapping a node or camp shows its info (resource type + amount,
     /// or enemy tier); tapping empty map hides the info panel. Sending
-    /// armies, node timeout/regeneration, and arrival/combat come in
-    /// later phases. No rules live here.</summary>
+    /// armies (map excursions, 2026-11-09) marches a marker from the
+    /// castle to the point and resolves the outcome on arrival — node
+    /// collection or camp combat via ExpeditionService. The march is
+    /// visual only: switching away from the Map tab cancels it before
+    /// any outcome is applied. No balance rules live here.</summary>
     public class ExteriorView : MonoBehaviour
     {
-        // Raised when a tap lands on a map node or camp — the title
-        // and info lines for the info panel.
-        public event Action<string, string> OnMapPointSelected;
+        // Raised when a tap lands on a map node or camp, with the
+        // point's structured data (not just display strings).
+        public event Action<MapPointData> OnMapPointSelected;
         // Raised when a tap lands on empty map ground (not a node/camp).
         public event Action OnEmptyMapTapped;
+
+        // True while the Map tab is the active view.
+        public bool IsVisible => _visible;
 
         // Exterior camera: 5x the base camera distance, same pitch.
         // Base camera (10,16,10) frames the 56x48 ground; scaling
@@ -39,13 +70,28 @@ namespace LunarDominion.UI
         private bool _visible;
 
         // A tappable point on the map: a resource node or an enemy camp.
+        // Renderers + original colours are kept so a depleted node can
+        // be dimmed and later restored without touching other points
+        // that share the same material.
         private class MapPoint
         {
             public GameObject Go;
-            public string Title;
-            public string Info;
+            public MapPointData Data;
+            public Renderer[] Renderers;
+            public Color[] OriginalColors;
         }
         private readonly List<MapPoint> _mapPoints = new List<MapPoint>();
+
+        // Excursion march marker (2026-11-09): a bright capsule that
+        // carries the army from the castle to the tapped point and back.
+        // Pure visual — the rules live in MapExcursionService. The march
+        // only runs while the Map is visible; leaving the Map tab cancels
+        // it (the service calls CancelMarch before any outcome applies).
+        private GameObject _marchMarker;
+        private bool _marching;
+        private Vector3 _marchTarget;
+        private Action _marchCallback;
+        private static readonly float MarchSpeed = 25f; // units/second
 
         // Map camera pan (Patrick 2026-11-09): the Map view is 5x the
         // base, so the camera can be panned across it — arrow keys on
@@ -76,31 +122,35 @@ namespace LunarDominion.UI
         // First-iteration layout (Patrick 2026-11-09): 3 nodes per
         // resource (one 500, one 1000, one 2000 — farther nodes hold
         // more), and 1 enemy camp per Expedition tier (Tier 1 near the
-        // base, Tier 2 mid-range, Tier 3 far out). Amounts are display
-        // values for now; node timeout/regeneration is a later phase.
-        // Positions are world coords on the 280x240 map (x ±140,
-        // z ±120), all outside the central 56x48 base footprint.
+        // base, Tier 2 mid-range, Tier 3 far out). Positions are world
+        // coords on the 280x240 map (x ±140, z ±120), all outside the
+        // central 56x48 base footprint. Node indices 0-8 are the
+        // depletion state indices (GameState.NodeRegenUtc); camps are
+        // 9-11 and never deplete.
         private struct NodeDef
         {
             public string ResourcePath; // Resources/Models/<name>
+            public MapPointKind Kind;
+            public int Tier; // camps only (1-3)
+            public int Amount; // nodes only (500/1000/2000)
             public string Title;
             public string Info;
             public Vector3 Position;
         }
         private static readonly NodeDef[] NodeDefs =
         {
-            new NodeDef { ResourcePath = "Models/BiomassNode", Title = "Biomass Node", Info = "Biomass: 500", Position = new Vector3(35f, 0f, 25f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Title = "Biomass Node", Info = "Biomass: 1000", Position = new Vector3(-55f, 0f, 45f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Title = "Biomass Node", Info = "Biomass: 2000", Position = new Vector3(95f, 0f, -55f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Title = "Alloy Node", Info = "Alloy: 500", Position = new Vector3(-30f, 0f, -35f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Title = "Alloy Node", Info = "Alloy: 1000", Position = new Vector3(65f, 0f, 55f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Title = "Alloy Node", Info = "Alloy: 2000", Position = new Vector3(-105f, 0f, -65f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Title = "Helium-3 Node", Info = "Helium-3: 500", Position = new Vector3(45f, 0f, -40f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Title = "Helium-3 Node", Info = "Helium-3: 1000", Position = new Vector3(-70f, 0f, -20f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Title = "Helium-3 Node", Info = "Helium-3: 2000", Position = new Vector3(110f, 0f, 75f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(55f, 0f, 15f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-85f, 0f, 60f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(120f, 0f, -80f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 500, Title = "Biomass Node", Info = "Biomass: 500", Position = new Vector3(35f, 0f, 25f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 1000, Title = "Biomass Node", Info = "Biomass: 1000", Position = new Vector3(-55f, 0f, 45f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 2000, Title = "Biomass Node", Info = "Biomass: 2000", Position = new Vector3(95f, 0f, -55f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 500, Title = "Alloy Node", Info = "Alloy: 500", Position = new Vector3(-30f, 0f, -35f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 1000, Title = "Alloy Node", Info = "Alloy: 1000", Position = new Vector3(65f, 0f, 55f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 2000, Title = "Alloy Node", Info = "Alloy: 2000", Position = new Vector3(-105f, 0f, -65f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 500, Title = "Helium-3 Node", Info = "Helium-3: 500", Position = new Vector3(45f, 0f, -40f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 1000, Title = "Helium-3 Node", Info = "Helium-3: 1000", Position = new Vector3(-70f, 0f, -20f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 2000, Title = "Helium-3 Node", Info = "Helium-3: 2000", Position = new Vector3(110f, 0f, 75f) },
+            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(55f, 0f, 15f) },
+            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-85f, 0f, 60f) },
+            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(120f, 0f, -80f) },
         };
 
         public void Build()
@@ -194,6 +244,29 @@ namespace LunarDominion.UI
 
             BuildMapPoints();
             BuildCreatures();
+            BuildMarchMarker();
+        }
+
+        // Excursion march marker (2026-11-09): a bright cyan capsule,
+        // big enough to read from the far exterior camera. No collider —
+        // the tap raycast only checks map points, so the marker can never
+        // be tapped by mistake. Hidden until a march starts.
+        private void BuildMarchMarker()
+        {
+            _marchMarker = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            _marchMarker.name = "ExcursionMarker";
+            var renderer = _marchMarker.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                // URP Lit (the project's pipeline) so the marker never
+                // renders magenta; fall back to the primitive's own
+                // material if the shader lookup fails.
+                var lit = Shader.Find("Universal Render Pipeline/Lit");
+                if (lit != null) renderer.material = new Material(lit);
+                renderer.material.color = new Color(0.2f, 0.9f, 1.0f);
+            }
+            _marchMarker.transform.localScale = Vector3.one * 2f;
+            _marchMarker.SetActive(false);
         }
 
         // Enemy creatures on the map (Patrick 2026-11-09): the actual
@@ -207,29 +280,29 @@ namespace LunarDominion.UI
         private struct CreatureDef
         {
             public string ResourcePath; // Resources/Models/<name>
-            public string Title;
-            public string Info;
+            public int CampIndex; // index into NodeDefs (9-11) — tapping
+            // a creature selects its camp, not a separate point.
             public Vector3 Position;
             public float Scale;
         }
         private static readonly CreatureDef[] CreatureDefs =
         {
-            // Tier 1 — Spore Crawlers around (55, 15).
-            new CreatureDef { ResourcePath = "Models/SporeCrawler", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(61f, 0f, 19f), Scale = 2f },
-            new CreatureDef { ResourcePath = "Models/SporeCrawler", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(49f, 0f, 20f), Scale = 2f },
-            new CreatureDef { ResourcePath = "Models/SporeCrawler", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(60f, 0f, 9f), Scale = 2f },
-            new CreatureDef { ResourcePath = "Models/SporeCrawler", Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(50f, 0f, 10f), Scale = 2f },
-            // Tier 2 — Void Stalkers around (-85, 60).
-            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-78f, 0f, 65f), Scale = 2f },
-            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-92f, 0f, 64f), Scale = 2f },
-            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-79f, 0f, 54f), Scale = 2f },
-            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-91f, 0f, 55f), Scale = 2f },
-            new CreatureDef { ResourcePath = "Models/VoidStalker", Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-85f, 0f, 68f), Scale = 2f },
-            // Tier 3 — Brood Tyrant + 3 brood around (120, -80).
-            new CreatureDef { ResourcePath = "Models/BroodTyrant", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(128f, 0f, -80f), Scale = 2f },
-            new CreatureDef { ResourcePath = "Models/BroodTyrant", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(113f, 0f, -74f), Scale = 1f },
-            new CreatureDef { ResourcePath = "Models/BroodTyrant", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(113f, 0f, -86f), Scale = 1f },
-            new CreatureDef { ResourcePath = "Models/BroodTyrant", Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(122f, 0f, -71f), Scale = 1f },
+            // Tier 1 — Spore Crawlers around (55, 15), camp index 9.
+            new CreatureDef { ResourcePath = "Models/SporeCrawler", CampIndex = 9, Position = new Vector3(61f, 0f, 19f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/SporeCrawler", CampIndex = 9, Position = new Vector3(49f, 0f, 20f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/SporeCrawler", CampIndex = 9, Position = new Vector3(60f, 0f, 9f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/SporeCrawler", CampIndex = 9, Position = new Vector3(50f, 0f, 10f), Scale = 2f },
+            // Tier 2 — Void Stalkers around (-85, 60), camp index 10.
+            new CreatureDef { ResourcePath = "Models/VoidStalker", CampIndex = 10, Position = new Vector3(-78f, 0f, 65f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/VoidStalker", CampIndex = 10, Position = new Vector3(-92f, 0f, 64f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/VoidStalker", CampIndex = 10, Position = new Vector3(-79f, 0f, 54f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/VoidStalker", CampIndex = 10, Position = new Vector3(-91f, 0f, 55f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/VoidStalker", CampIndex = 10, Position = new Vector3(-85f, 0f, 68f), Scale = 2f },
+            // Tier 3 — Brood Tyrant + 3 brood around (120, -80), camp index 11.
+            new CreatureDef { ResourcePath = "Models/BroodTyrant", CampIndex = 11, Position = new Vector3(128f, 0f, -80f), Scale = 2f },
+            new CreatureDef { ResourcePath = "Models/BroodTyrant", CampIndex = 11, Position = new Vector3(113f, 0f, -74f), Scale = 1f },
+            new CreatureDef { ResourcePath = "Models/BroodTyrant", CampIndex = 11, Position = new Vector3(113f, 0f, -86f), Scale = 1f },
+            new CreatureDef { ResourcePath = "Models/BroodTyrant", CampIndex = 11, Position = new Vector3(122f, 0f, -71f), Scale = 1f },
         };
 
         private void BuildCreatures()
@@ -251,7 +324,7 @@ namespace LunarDominion.UI
                     continue;
                 }
                 var go = Instantiate(prefab);
-                go.name = def.Title + " Creature";
+                go.name = NodeDefs[def.CampIndex].Title + " Creature";
                 go.transform.position = def.Position;
                 // Same rotation rule as the terrain: leave the imported
                 // rotation alone (Bake Axis Conversion).
@@ -265,14 +338,34 @@ namespace LunarDominion.UI
                     box.size = new Vector3(4f, 4f, 4f);
                 }
                 go.SetActive(false);
-                _mapPoints.Add(new MapPoint { Go = go, Title = def.Title, Info = def.Info });
+                // The creature IS its camp for tapping: it carries the
+                // camp's MapPointData, so the panel and the excursion
+                // treat a creature tap exactly like a camp tap.
+                _mapPoints.Add(new MapPoint { Go = go, Data = DataForNodeDef(def.CampIndex) });
             }
+        }
+
+        // Structured data for a NodeDefs entry (nodes 0-8, camps 9-11).
+        private static MapPointData DataForNodeDef(int index)
+        {
+            var def = NodeDefs[index];
+            return new MapPointData
+            {
+                Index = index,
+                Kind = def.Kind,
+                Tier = def.Tier,
+                Amount = def.Amount,
+                Position = def.Position,
+                Title = def.Title,
+                Info = def.Info
+            };
         }
 
         private void BuildMapPoints()
         {
-            foreach (var def in NodeDefs)
+            for (int i = 0; i < NodeDefs.Length; i++)
             {
+                var def = NodeDefs[i];
                 GameObject prefab = null;
                 try
                 {
@@ -309,13 +402,40 @@ namespace LunarDominion.UI
                     box.size = new Vector3(4f, 4f, 4f);
                 }
                 go.SetActive(false);
-                _mapPoints.Add(new MapPoint { Go = go, Title = def.Title, Info = def.Info });
+                // Keep every renderer + its original colour: a depleted
+                // node is dimmed per-renderer, and accessing .material
+                // here gives each point its own material instance so
+                // dimming one never dims the others.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                var colors = new Color[renderers.Length];
+                for (int r = 0; r < renderers.Length; r++)
+                {
+                    colors[r] = renderers[r].material.color;
+                }
+                _mapPoints.Add(new MapPoint { Go = go, Data = DataForNodeDef(i), Renderers = renderers, OriginalColors = colors });
             }
         }
 
         private void Update()
         {
             if (!_visible) return;
+            // Excursion march: the marker walks from its start to the
+            // target at a steady speed, then fires the arrival callback
+            // (the service resolves the outcome and starts the return
+            // march). Only runs while the Map is visible — leaving the
+            // Map tab cancels the march before any outcome applies.
+            if (_marching && _marchMarker != null)
+            {
+                Vector3 next = Vector3.MoveTowards(_marchMarker.transform.position, _marchTarget, MarchSpeed * Time.deltaTime);
+                _marchMarker.transform.position = next;
+                if (Vector3.Distance(next, _marchTarget) < 0.1f)
+                {
+                    _marching = false;
+                    var callback = _marchCallback;
+                    _marchCallback = null;
+                    callback?.Invoke();
+                }
+            }
             // Arrow keys pan the map camera (PC). Same pattern as the
             // tap input below: Keyboard when the Input System is
             // enabled, legacy Input otherwise.
@@ -483,16 +603,61 @@ namespace LunarDominion.UI
             {
                 foreach (var point in _mapPoints)
                 {
-                    if (point.Go == null) continue;
+                    if (point.Go == null || point.Data == null) continue;
                     if (hit.transform == point.Go.transform || hit.transform.IsChildOf(point.Go.transform))
                     {
-                        OnMapPointSelected?.Invoke(point.Title, point.Info);
+                        OnMapPointSelected?.Invoke(point.Data);
                         hitPoint = true;
                         break;
                     }
                 }
             }
             if (!hitPoint) OnEmptyMapTapped?.Invoke();
+        }
+
+        // Start the march marker at `from`, walking to `to`, then fire
+        // `onArrive`. The marker rides 1 unit above the ground so it
+        // never clips the terrain. The caller (MapExcursionService)
+        // chains outbound and return marches through the callback.
+        public void StartMarch(Vector3 from, Vector3 to, Action onArrive)
+        {
+            if (_marchMarker == null) return;
+            _marchMarker.transform.position = from;
+            _marchMarker.SetActive(true);
+            _marchTarget = to;
+            _marchCallback = onArrive;
+            _marching = true;
+        }
+
+        // Stop the march and hide the marker. Called when the player
+        // leaves the Map tab mid-excursion, or when a march completes.
+        // Cancelling before arrival means no outcome was applied.
+        public void CancelMarch()
+        {
+            _marching = false;
+            _marchCallback = null;
+            if (_marchMarker != null) _marchMarker.SetActive(false);
+        }
+
+        // Dim (or restore) a resource node. Depleted nodes read as
+        // dark grey; restored nodes get their original colours back.
+        // Camps never deplete, and creature points carry camp data
+        // (index 9-11), so the index check alone keeps them out.
+        public void SetNodeDepleted(int nodeIndex, bool depleted)
+        {
+            foreach (var point in _mapPoints)
+            {
+                if (point.Data == null || point.Data.Index != nodeIndex) continue;
+                if (point.Data.Kind == MapPointKind.Camp) continue;
+                if (point.Renderers == null) continue;
+                for (int i = 0; i < point.Renderers.Length; i++)
+                {
+                    if (point.Renderers[i] == null) continue;
+                    point.Renderers[i].material.color = depleted
+                        ? new Color(0.35f, 0.35f, 0.35f)
+                        : point.OriginalColors[i];
+                }
+            }
         }
 
         public void SetVisible(bool visible)
@@ -504,6 +669,10 @@ namespace LunarDominion.UI
             {
                 if (point.Go != null) point.Go.SetActive(visible);
             }
+            // Hiding the Map also stops any march in progress — the
+            // service cancels the excursion on tab switch, and this is
+            // the backstop so the marker never lingers in the Base view.
+            if (!visible) CancelMarch();
             var cam = Camera.main;
             if (cam == null) return;
             if (visible)

@@ -32,6 +32,12 @@ namespace LunarDominion.Core
 
         public string LastEnergyDate = "";
         public string LastSaveTimeUtc = "";
+
+        // Map excursions (2026-11-09): one regen timestamp per resource
+        // node (9 nodes, in ExteriorView NodeDefs order, indices 0-8).
+        // "" = available. UTC round-trip format, same as
+        // ActiveResearchFinishUtc. Old saves load with all "" (available).
+        public string[] NodeRegenUtc = new string[9];
         public float ProductionCarryBiomass;
         public float ProductionCarryAlloy;
         public float ProductionCarryHelium3;
