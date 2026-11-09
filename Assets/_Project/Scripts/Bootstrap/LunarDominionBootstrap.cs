@@ -132,30 +132,35 @@ namespace LunarDominion.Bootstrap
                 case NavTab.Base:
                     _exteriorView.SetVisible(false);
                     _baseView.SetVisible(true);
+                    _baseView.SetMountainsVisible(true);
                     break;
                 case NavTab.Army:
                     _exteriorView.SetVisible(false);
                     _baseView.SetVisible(false);
+                    _baseView.SetMountainsVisible(true);
                     _armyView.Show();
                     break;
                 case NavTab.Expeditions:
                     _exteriorView.SetVisible(false);
                     _baseView.SetVisible(false);
+                    _baseView.SetMountainsVisible(true);
                     _expeditionsView.Show();
                     break;
                 case NavTab.Research:
                     _exteriorView.SetVisible(false);
                     _baseView.SetVisible(false);
+                    _baseView.SetMountainsVisible(true);
                     _researchView.Show();
                     break;
                 case NavTab.Map:
                     // The detailed buildings are HIDDEN in the Map view
-                    // — at 5x distance they are tiny, and the simplified
-                    // BaseMarker (shown by ExteriorView) represents the
-                    // base instead. The wall/roads/props stay visible
-                    // (tiny from far, occluded by the marker's bold
-                    // wall); the ground, mountains and planet stay.
+                    // — at 5x distance they are tiny, and the sci-fi
+                    // BaseCastle (shown by ExteriorView) represents the
+                    // base instead. The horizon mountains are hidden
+                    // too (Patrick 2026-11-09: they crowd the big map);
+                    // the ground and planet stay.
                     _baseView.SetVisible(false);
+                    _baseView.SetMountainsVisible(false);
                     _exteriorView.SetVisible(true);
                     break;
             }

@@ -27,6 +27,10 @@ namespace LunarDominion.UI
         // the whole model to one colour. Primitives keep the old path.
         private readonly Dictionary<BuildingId, List<Renderer>> _modelRenderers = new Dictionary<BuildingId, List<Renderer>>();
         private readonly Dictionary<Renderer, Color> _modelBaseColors = new Dictionary<Renderer, Color>();
+        // Horizon mountains (2026-11-09): the 13 HorizonA/B/C models
+        // that frame the base view. Tracked so the Map tab can hide them
+        // (they crowd the big map) while the Base tab keeps them.
+        private readonly List<GameObject> _mountains = new List<GameObject>();
         private GameController _controller;
         // Rotated layout root (2026-11-06): buildings, wall and decor
         // are children of this object, so the whole base turns 45 degrees
@@ -544,6 +548,7 @@ namespace LunarDominion.UI
                 go.transform.localScale = scale;
                 foreach (var collider in go.GetComponentsInChildren<Collider>())
                     Destroy(collider);
+                _mountains.Add(go);
             }
             catch (System.Exception e)
             {
@@ -1604,6 +1609,19 @@ namespace LunarDominion.UI
         public void SetVisible(bool visible)
         {
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
+        }
+
+        /// <summary>Show or hide the 13 horizon mountains. The Map tab
+        /// hides them (they crowd the big map and take space the nodes,
+        /// camps and future bases need); the Base tab shows them again
+        /// (they frame the base view). The planet is untouched — it
+        /// stays in the sky in both views.</summary>
+        public void SetMountainsVisible(bool visible)
+        {
+            foreach (var go in _mountains)
+            {
+                if (go != null) go.SetActive(visible);
+            }
         }
 
         /// <summary>Highlight the selected building; locked buildings stay dim.</summary>
