@@ -1,7 +1,7 @@
 using System.Collections.Generic;
+using LunarDominion.Core;
 using LunarDominion.Expeditions;
 using LunarDominion.UI;
-using LunarDominion.Units;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
