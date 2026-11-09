@@ -482,29 +482,32 @@ namespace LunarDominion.UI
         // missing, that spot stays empty.
         private void BuildMountains()
         {
-            // 2026-11-08 redesign (MOUNTAINS-PLANET-REDESIGN.md):
-            // the old 13 spots were all on the far -X/-Z edges, a tall
-            // ridgeline (h 5.5-8.0) that filled the top of the frame
-            // and blocked the sky (and the planet arc). The new layout
-            // is a 13-spot ring/bowl around the base — left, top, and
-            // right edges, radius ~22-24, heights tapering from ~6.0
-            // (top-left) down to ~3.15 (right edge, under the planet),
-            // centre-back peaks spread 9-10 units apart so they read
-            // as individual crags with sky gaps. Same MountainA/B/C
-            // models, 4,400 tris total. Foreground (+X/+Z) stays clear.
-            AddMountain("Models/MountainB", new Vector3(-23f, 0f, 10f), 20f, new Vector3(1f, 0.85f, 1f));
-            AddMountain("Models/MountainC", new Vector3(-21f, 0f, 15f), 310f, new Vector3(0.95f, 0.75f, 0.95f));
-            AddMountain("Models/MountainA", new Vector3(-20f, 0f, 5f), 140f, new Vector3(1f, 0.8f, 1f));
-            AddMountain("Models/MountainB", new Vector3(-21f, 0f, -4f), 260f, new Vector3(1f, 0.75f, 1f));
-            AddMountain("Models/MountainC", new Vector3(-19f, 0f, -13f), 90f, new Vector3(1f, 0.75f, 1f));
-            AddMountain("Models/MountainA", new Vector3(-14f, 0f, -20f), 200f, new Vector3(0.95f, 0.65f, 0.95f));
-            AddMountain("Models/MountainB", new Vector3(-5f, 0f, -23f), 170f, new Vector3(0.95f, 0.6f, 0.95f));
-            AddMountain("Models/MountainC", new Vector3(5f, 0f, -23f), 15f, new Vector3(0.95f, 0.6f, 0.95f));
-            AddMountain("Models/MountainA", new Vector3(13f, 0f, -20f), 230f, new Vector3(0.9f, 0.55f, 0.9f));
-            AddMountain("Models/MountainB", new Vector3(19f, 0f, -16f), 120f, new Vector3(0.9f, 0.5f, 0.9f));
-            AddMountain("Models/MountainC", new Vector3(23f, 0f, -8f), 45f, new Vector3(0.85f, 0.5f, 0.85f));
-            AddMountain("Models/MountainA", new Vector3(24f, 0f, 1f), 280f, new Vector3(0.85f, 0.45f, 0.85f));
-            AddMountain("Models/MountainB", new Vector3(-17f, 0f, 16f), 180f, new Vector3(0.9f, 0.6f, 0.9f));
+            // 2026-11-08 horizon models (hidden_files/mountains-horizon/):
+            // the old MountainA/B/C were tall peaks (h 5.5-8.0) that
+            // read as a ridgeline even in a ring. The new HorizonA/B/C
+            // are LOW rugged ridges by design — 3-4 sub-peaks, wide,
+            // h 2.80-3.60 at scale 1, wider than tall (ratio ~1.8).
+            // Same 13-spot ring/bowl positions and rotations as the
+            // redesign (MOUNTAINS-PLANET-REDESIGN.md), but wired to
+            // the Horizon models. Scale divisors are the Horizon
+            // nominal envelope (radius 2.5, height 4.0) — do NOT reuse
+            // the old tall-mountain divisors (3.5 / 7.0). Y scale
+            // tapers 1.00 (top-left) to 0.80 (right edge) so the
+            // horizon stays low and the planet clears it. 13-spot
+            // ring = 4,252 tris total.
+            AddMountain("Models/HorizonB", new Vector3(-23f, 0f, 10f), 20f, new Vector3(1.4f, 1f, 1.4f));
+            AddMountain("Models/HorizonC", new Vector3(-21f, 0f, 15f), 310f, new Vector3(1.33f, 1f, 1.33f));
+            AddMountain("Models/HorizonA", new Vector3(-20f, 0f, 5f), 140f, new Vector3(1.4f, 1f, 1.4f));
+            AddMountain("Models/HorizonB", new Vector3(-21f, 0f, -4f), 260f, new Vector3(1.4f, 1f, 1.4f));
+            AddMountain("Models/HorizonC", new Vector3(-19f, 0f, -13f), 90f, new Vector3(1.4f, 0.95f, 1.4f));
+            AddMountain("Models/HorizonA", new Vector3(-14f, 0f, -20f), 200f, new Vector3(1.33f, 0.9f, 1.33f));
+            AddMountain("Models/HorizonB", new Vector3(-5f, 0f, -23f), 170f, new Vector3(1.33f, 0.9f, 1.33f));
+            AddMountain("Models/HorizonC", new Vector3(5f, 0f, -23f), 15f, new Vector3(1.33f, 0.9f, 1.33f));
+            AddMountain("Models/HorizonA", new Vector3(13f, 0f, -20f), 230f, new Vector3(1.26f, 0.85f, 1.26f));
+            AddMountain("Models/HorizonB", new Vector3(19f, 0f, -16f), 120f, new Vector3(1.26f, 0.85f, 1.26f));
+            AddMountain("Models/HorizonC", new Vector3(23f, 0f, -8f), 45f, new Vector3(1.19f, 0.8f, 1.19f));
+            AddMountain("Models/HorizonA", new Vector3(24f, 0f, 1f), 280f, new Vector3(1.19f, 0.8f, 1.19f));
+            AddMountain("Models/HorizonB", new Vector3(-17f, 0f, 16f), 180f, new Vector3(1.26f, 0.9f, 1.26f));
         }
 
         private void AddMountain(string resourcePath, Vector3 position, float rotationY, Vector3 scale)
