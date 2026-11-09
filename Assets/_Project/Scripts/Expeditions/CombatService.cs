@@ -79,15 +79,22 @@ namespace LunarDominion.Expeditions
         }
 
         /// <summary>Enemy scale for a Nexus level: 1.0 at the encounter's
-        /// gate, +4% per Nexus level above it. Applied to HP, Attack
-        /// and Defense (rounded). Examples: Tier 1 at Nexus 8 = 1.28
-        /// (Spore Crawler 80 HP / 12 ATK / 5 DEF -> 102 / 15 / 6);
-        /// Tier 2 at Nexus 15 = 1.28; Tier 3 at Nexus 20 = 1.20.
-        /// Rewards and XP pools are NOT scaled — only enemy stats.</summary>
+        /// gate, +4% per Nexus level away from it in either direction.
+        /// Above the gate this keeps lower tiers challenging as the
+        /// player grows; below the gate (only reachable through the
+        /// map excursion bypass, since the Expeditions menu blocks
+        /// locked tiers) it makes the fight harder the further under
+        /// the gate the player is, so a Tier 1 squad cannot beat a
+        /// Tier 3 encounter. Applied to HP, Attack and Defense
+        /// (rounded). Examples: Tier 1 at Nexus 8 = 1.28 (Spore
+        /// Crawler 80 HP / 12 ATK / 5 DEF -> 102 / 15 / 6); Tier 2
+        /// at Nexus 15 = 1.28; Tier 3 at Nexus 20 = 1.20; Tier 3 at
+        /// Nexus 1 = 1.56. Rewards and XP pools are NOT scaled —
+        /// only enemy stats.</summary>
         public static float EnemyScale(int nexusLevel, int requiredNexusLevel)
         {
-            int aboveGate = Math.Max(0, nexusLevel - requiredNexusLevel);
-            return 1f + 0.04f * aboveGate;
+            int distanceFromGate = Math.Abs(nexusLevel - requiredNexusLevel);
+            return 1f + 0.04f * distanceFromGate;
         }
 
         public static CombatOutcome Resolve(List<SquadCombatant> squad, EncounterDefinition encounter, int nexusLevel)
