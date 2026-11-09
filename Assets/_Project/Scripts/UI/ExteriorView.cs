@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -652,6 +653,142 @@ namespace LunarDominion.UI
             _marching = false;
             _marchCallback = null;
             if (_marchMarker != null) _marchMarker.SetActive(false);
+        }
+
+        // Fight animation (2026-11-09, last feature of the phase): a
+        // short (~2s) clash on the map when the army reaches a camp.
+        // No new FBX — the existing creature models and the march marker
+        // are animated in code. Phase 1 (~0.9s) is the clash: the marker
+        // pulses and the creatures shake. Phase 2 (~1.1s) is the
+        // outcome: on victory the creatures tip over and sink away; on
+        // defeat the marker shakes and shrinks while the creatures hop.
+        // Transforms are restored at the end (so a respawned camp is
+        // upright), then onComplete fires — the service shows the result
+        // panel, vanishes the camp on victory, and starts the return
+        // march. The restore + hide happen in the same frame, so the
+        // player never sees the creatures pop back upright.
+        public void PlayFightAnimation(int campIndex, bool victory, Action onComplete)
+        {
+            StartCoroutine(FightAnimationRoutine(campIndex, victory, onComplete));
+        }
+
+        private IEnumerator FightAnimationRoutine(int campIndex, bool victory, Action onComplete)
+        {
+            // The camp's creatures (not the camp marker itself — its
+            // name is the camp Title, creatures are "<Title> Creature").
+            var creatures = new List<GameObject>();
+            var origPos = new List<Vector3>();
+            var origRot = new List<Quaternion>();
+            foreach (var point in _mapPoints)
+            {
+                if (point.Data == null || point.Data.Index != campIndex) continue;
+                if (point.Data.Kind != MapPointKind.Camp) continue;
+                if (point.Go == null) continue;
+                if (!point.Go.name.EndsWith(" Creature")) continue;
+                creatures.Add(point.Go);
+                origPos.Add(point.Go.transform.position);
+                origRot.Add(point.Go.transform.rotation);
+            }
+            var marker = _marchMarker;
+            Vector3 markerPos = marker != null ? marker.transform.position : Vector3.zero;
+            Vector3 markerScale = marker != null ? marker.transform.localScale : Vector3.one;
+
+            // Phase 1 — clash (~0.9s): marker pulses, creatures shake.
+            float clashTime = 0.9f;
+            float t = 0f;
+            while (t < clashTime)
+            {
+                // Pause while the Map is hidden (the player left the tab
+                // mid-animation) — resume when they come back.
+                while (!_visible) yield return null;
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / clashTime);
+                if (marker != null)
+                {
+                    float pulse = 1f + 0.18f * Mathf.Abs(Mathf.Sin(t * 18f));
+                    marker.transform.localScale = markerScale * pulse;
+                }
+                for (int i = 0; i < creatures.Count; i++)
+                {
+                    var go = creatures[i];
+                    if (go == null) continue;
+                    Vector3 jitter = new Vector3(
+                        UnityEngine.Random.Range(-0.7f, 0.7f), 0f,
+                        UnityEngine.Random.Range(-0.7f, 0.7f));
+                    go.transform.position = origPos[i] + jitter;
+                }
+                yield return null;
+            }
+
+            // Phase 2 — outcome (~1.1s).
+            float outcomeTime = 1.1f;
+            t = 0f;
+            while (t < outcomeTime)
+            {
+                while (!_visible) yield return null;
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / outcomeTime);
+                if (victory)
+                {
+                    // Creatures tip over and sink away.
+                    for (int i = 0; i < creatures.Count; i++)
+                    {
+                        var go = creatures[i];
+                        if (go == null) continue;
+                        go.transform.rotation = origRot[i] * Quaternion.Euler(80f * p, 0f, 0f);
+                        Vector3 pos = origPos[i];
+                        pos.y = origPos[i].y - 2f * p;
+                        go.transform.position = pos;
+                    }
+                    // Marker does a small victory bounce.
+                    if (marker != null)
+                    {
+                        marker.transform.localScale = markerScale;
+                        Vector3 pos = markerPos;
+                        pos.y = markerPos.y + Mathf.Sin(p * Mathf.PI) * 1.5f;
+                        marker.transform.position = pos;
+                    }
+                }
+                else
+                {
+                    // Marker shakes hard and shrinks (the army is broken);
+                    // creatures hop once (they won).
+                    if (marker != null)
+                    {
+                        Vector3 jitter = new Vector3(
+                            UnityEngine.Random.Range(-1.2f, 1.2f), 0f,
+                            UnityEngine.Random.Range(-1.2f, 1.2f));
+                        marker.transform.position = markerPos + jitter;
+                        marker.transform.localScale = markerScale * Mathf.Lerp(1f, 0.55f, p);
+                    }
+                    for (int i = 0; i < creatures.Count; i++)
+                    {
+                        var go = creatures[i];
+                        if (go == null) continue;
+                        Vector3 pos = origPos[i];
+                        pos.y = origPos[i].y + Mathf.Sin(p * Mathf.PI) * 1.2f;
+                        go.transform.position = pos;
+                        go.transform.rotation = origRot[i];
+                    }
+                }
+                yield return null;
+            }
+
+            // Restore transforms (so a respawned camp is upright and the
+            // marker is full-size for the return march), then finish.
+            for (int i = 0; i < creatures.Count; i++)
+            {
+                var go = creatures[i];
+                if (go == null) continue;
+                go.transform.position = origPos[i];
+                go.transform.rotation = origRot[i];
+            }
+            if (marker != null)
+            {
+                marker.transform.position = markerPos;
+                marker.transform.localScale = markerScale;
+            }
+            onComplete?.Invoke();
         }
 
         // Structured data for a node/camp by index (0-11), for restoring

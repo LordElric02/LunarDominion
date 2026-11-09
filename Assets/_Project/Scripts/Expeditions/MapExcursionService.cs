@@ -256,8 +256,9 @@ namespace LunarDominion.Expeditions
                 return;
             }
             FightCamp(point);
-            // Return march: back to the castle, then the excursion ends.
-            _view.StartMarch(point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), FinishMarch);
+            // Nodes start an occupation (the return march waits until it
+            // completes); camps fight — FightCamp plays the animation,
+            // shows the result, and starts the return march itself.
         }
 
         private void FinishMarch()
@@ -520,6 +521,7 @@ namespace LunarDominion.Expeditions
             if (encounter == null || squad.Count == 0)
             {
                 OnExcursionResult?.Invoke(point.Title, "Could not start the fight.");
+                StartReturnMarch(point);
                 return;
             }
             // Same fight as the Expeditions menu: energy spent at start,
@@ -531,19 +533,34 @@ namespace LunarDominion.Expeditions
             {
                 _saveGame?.Invoke();
                 _notifyChanged?.Invoke();
-                OnExcursionResult?.Invoke(
-                    result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
-                    FormatBattleResult(result));
-                // A defeated camp vanishes (2026-11-09): the camp and
-                // its creatures disappear, and another of the same tier
-                // respawns elsewhere after CampRespawnHours. Losing
-                // leaves the camp in place, so the player can retry.
-                if (result.Victory) VanishCamp(point.Tier);
+                // Play the fight animation first (~2s on the map), then
+                // show the result, vanish the camp on victory, and march
+                // back. The combat itself already resolved above — the
+                // animation is purely visual.
+                _view.PlayFightAnimation(point.Index, result.Victory, () =>
+                {
+                    OnExcursionResult?.Invoke(
+                        result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
+                        FormatBattleResult(result));
+                    // A defeated camp vanishes (2026-11-09): the camp and
+                    // its creatures disappear, and another of the same tier
+                    // respawns elsewhere after CampRespawnHours. Losing
+                    // leaves the camp in place, so the player can retry.
+                    if (result.Victory) VanishCamp(point.Tier);
+                    StartReturnMarch(point);
+                });
             }
             else
             {
                 OnExcursionResult?.Invoke(point.Title, reason);
+                StartReturnMarch(point);
             }
+        }
+
+        // Return march: back to the castle, then the excursion ends.
+        private void StartReturnMarch(MapPointData point)
+        {
+            _view.StartMarch(point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), FinishMarch);
         }
 
         /// <summary>The squad chosen for this excursion, or the whole
