@@ -48,13 +48,14 @@ namespace LunarDominion.UI
         {
             _controller = controller;
             var safe = SafeArea.Get(canvas);
-            // 2026-11-06 landscape: shorter panel — top sits just below
-            // the top bar (920 ref px above the bottom, less the top safe
-            // inset), bottom stays above the quick-select row. Height is
-            // 610 minus the safe insets in the Editor; the squad list
+            // 2026-11-09: panel bottom lowered to just above the
+            // bottom nav (200 ref px above the bottom, 20 px above
+            // the 180 px nav bar). The old 310 px bottom dated from
+            // the quick-select row, removed 2026-11-06. Height is
+            // 720 minus the safe insets in the Editor; the squad list
             // already scrolls, and the detail block gets more room.
             _root = UIHelpers.Panel(canvas.gameObject, "ExpeditionsPanel", UIHelpers.Hex("#16202F"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310 + safe.Bottom), new Vector2(-20, 920 - safe.Top));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 200 + safe.Bottom), new Vector2(-20, 920 - safe.Top));
             UIHelpers.LabelInRect(_root, "Title", "EXPEDITIONS", 36, Color.white,
                 new Rect(0.04f, 0.90f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
             _summaryText = UIHelpers.LabelInRect(_root, "Summary", "", 26, Color.white,
@@ -371,10 +372,10 @@ namespace LunarDominion.UI
         private void BuildResultPanel(Canvas canvas)
         {
             var safe = SafeArea.Get(canvas);
-            // Result panel uses the same shorter landscape rect as the
-            // main expeditions panel.
+            // Result panel uses the same landscape rect as the
+            // main expeditions panel (bottom just above the nav).
             _resultRoot = UIHelpers.Panel(canvas.gameObject, "ExpeditionResultPanel", UIHelpers.Hex("#16202F"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310 + safe.Bottom), new Vector2(-20, 920 - safe.Top));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 200 + safe.Bottom), new Vector2(-20, 920 - safe.Top));
             _resultTitleText = UIHelpers.LabelInRect(_resultRoot, "ResultTitle", "", 36, Color.white,
                 new Rect(0.04f, 0.88f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
             _resultBodyText = UIHelpers.LabelInRect(_resultRoot, "ResultBody", "", 24, UIHelpers.Hex("#C0C8D0"),

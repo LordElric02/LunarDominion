@@ -38,12 +38,13 @@ namespace LunarDominion.UI
         {
             _controller = controller;
             var safe = SafeArea.Get(canvas);
-            // 2026-11-06 landscape: shorter panel — top sits just below
-            // the top bar (920 ref px above the bottom, less the top safe
-            // inset), bottom stays above the quick-select row. Height is
-            // 610 minus the safe insets in the Editor, so the rows scroll.
+            // 2026-11-09: panel bottom lowered to just above the
+            // bottom nav (200 ref px above the bottom, 20 px above
+            // the 180 px nav bar). The old 310 px bottom dated from
+            // the quick-select row, removed 2026-11-06. Height is
+            // 720 minus the safe insets in the Editor, so the rows scroll.
             _root = UIHelpers.Panel(canvas.gameObject, "ResearchPanel", UIHelpers.Hex("#16202F"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 310 + safe.Bottom), new Vector2(-20, 920 - safe.Top));
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 200 + safe.Bottom), new Vector2(-20, 920 - safe.Top));
             UIHelpers.LabelInRect(_root, "Title", "RESEARCH", 36, Color.white,
                 new Rect(0.04f, 0.90f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
             _labText = UIHelpers.LabelInRect(_root, "LabStatus", "", 24, Color.white,
