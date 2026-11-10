@@ -290,12 +290,19 @@ namespace LunarDominion.UI
 
             _aresVisual = new GameObject("AresVisual");
             _aresVisual.transform.SetParent(_aresRoot.transform, false);
+            // The yaw lives on the WRAPPER, never on the imported
+            // instance: the FBX root (the Ares09 empty) carries
+            // Blender's axis-conversion rotation, and overwriting
+            // the instance's localRotation discards it — the model
+            // then lies flat, its height along the ground (the
+            // terrain regression lesson: never force rotation on an
+            // imported FBX; preserve it). The FBX faces +X as
+            // imported; the wrapper's -90 yaw maps that to the
+            // fight root's forward. Scale 3x (~8.9 units tall).
+            _aresVisual.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
             var aresModel = Instantiate(aresPrefab);
             aresModel.name = "Ares09";
             aresModel.transform.SetParent(_aresVisual.transform, false);
-            // The FBX faces +X; the wrapper's -90 yaw maps that to
-            // the fight root's forward. Scale 3x (~8.9 units tall).
-            aresModel.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
             aresModel.transform.localScale = Vector3.one * 3f;
             foreach (var collider in aresModel.GetComponentsInChildren<Collider>())
                 Destroy(collider);
