@@ -520,6 +520,15 @@ namespace LunarDominion.UI
                 // (wall x +/-24, z +/-13.5 -> 48 x 27).
                 plane.transform.localScale = new Vector3(4.8f, 1f, 2.7f);
                 var rend = plane.GetComponent<Renderer>();
+                // Explicit URP Lit material (2026-11-10, phone magenta
+                // fix): a runtime Plane primitive's default material
+                // uses the Standard shader, which renders magenta in a
+                // URP build (the phone) even though it looks fine in
+                // the Editor. SetPrimitiveColor creates the URP Lit
+                // material (same as the ground plane above and the
+                // march marker), then the texture goes on that material.
+                // White so the paving shows at full brightness.
+                SetPrimitiveColor(rend, Color.white);
                 // URP Lit, texture as _BaseMap. The PNG is authored in
                 // sRGB at the paving's colour, so the material colour
                 // goes to white — colour x texture would double-darken.
@@ -752,9 +761,20 @@ namespace LunarDominion.UI
                 // finds the PNG under Resources/Models/, and setting
                 // _BaseMap on the instance material bypasses the
                 // import entirely.
+                // 2026-11-10 (phone magenta fix): the FBX's embedded
+                // material can come in with a shader that renders
+                // magenta in a URP build (the phone) even though it
+                // looks fine in the Editor — same class as the
+                // CreatePrimitive default-material bug (see
+                // SetPrimitiveColor). Assign a fresh URP Lit material
+                // first (the march-marker pattern), then the texture
+                // on that material, so the planet uses the same
+                // shader the buildings use.
                 var planetRenderer = go.GetComponentInChildren<MeshRenderer>();
                 if (planetRenderer != null)
                 {
+                    var lit = Shader.Find("Universal Render Pipeline/Lit");
+                    if (lit != null) planetRenderer.material = new Material(lit);
                     Texture2D planetTex = Resources.Load<Texture2D>("Models/AlienPlanet");
                     if (planetTex != null)
                         planetRenderer.material.SetTexture("_BaseMap", planetTex);
