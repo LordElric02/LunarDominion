@@ -158,30 +158,22 @@ namespace LunarDominion.Bootstrap
         // The map hides underneath; closing returns to the Map. Clear
         // the selected point so nothing refreshes the map info panel
         // over the lair view while it is open (the lair shows its own
-        // result; the map refreshes on close).
+        // result; the map refreshes on close). The boss never vanishes
+        // now (2026-11-10 ladder), so the lair always opens.
         private void OpenLairView()
         {
-            if (_excursions != null && _excursions.IsBossDefeated())
-            {
-                _mapInfoView.Show("War Robot Lair", "The War Robot is defeated. It will return in about an hour.", false);
-                return;
-            }
             _mapInfoView.Hide();
             _selectedPoint = null;
             _exteriorView.SetVisible(false);
             _lairView.Show();
         }
 
-        // A boss fight finished in the lair view. On victory the boss
-        // vanishes (respawns after the timer, at the same spot); the
-        // result is already shown in the lair view, and the player taps
-        // Back to Map to return. On defeat the boss stays.
+        // A boss fight finished in the lair view. The boss never
+        // vanishes now (2026-11-10 ladder) — the lair view already
+        // unlocked the next level on a victory, and the player taps
+        // Back to Map to return. Just refresh the map.
         private void OnLairFightComplete(BattleResult result)
         {
-            if (result != null && result.Victory)
-            {
-                _excursions.OnBossDefeatedInLair();
-            }
             RefreshMapNodeStates();
         }
 
@@ -259,14 +251,17 @@ namespace LunarDominion.Bootstrap
 
         // Squad picker confirmed: convert the chosen counts to army
         // indices (first N of each type, in army order — same as the
-        // Expeditions menu) and send that squad.
+        // Expeditions menu) and hero indices (each hero is unique), and
+        // send that mixed squad. Heroes march with the army now
+        // (2026-11-10) and gain XP from camp fights.
         private void OnSquadPickerConfirm(Dictionary<UnitId, int> counts)
         {
             _squadPicker.Hide();
             if (_selectedPoint == null) return;
             var squad = SquadIndicesForCounts(counts);
-            if (squad.Count == 0) return;
-            _excursions.StartExcursion(_selectedPoint, squad);
+            var heroes = HeroIndicesForCounts(counts);
+            if (squad.Count == 0 && heroes.Count == 0) return;
+            _excursions.StartExcursion(_selectedPoint, squad, heroes);
         }
 
         private void OnSquadPickerCancel()
@@ -292,6 +287,25 @@ namespace LunarDominion.Bootstrap
             return indices;
         }
 
+        // Hero indices for the chosen counts: each hero is unique, so a
+        // count of 1 for a hero id means include that hero (by its
+        // position in State.Heroes).
+        private List<int> HeroIndicesForCounts(Dictionary<UnitId, int> counts)
+        {
+            var indices = new List<int>();
+            if (_controller.State.Heroes == null) return indices;
+            for (int i = 0; i < _controller.State.Heroes.Count; i++)
+            {
+                var hero = _controller.State.Heroes[i];
+                if (hero == null) continue;
+                if (counts.ContainsKey(hero.Id) && counts[hero.Id] > 0)
+                {
+                    indices.Add(i);
+                }
+            }
+            return indices;
+        }
+
         // An excursion resolved (collection / battle) or could not start:
         // show the outcome in the info panel — but only while the Map is
         // open. An occupation can complete while the player is on another
@@ -311,7 +325,7 @@ namespace LunarDominion.Bootstrap
         // Send button — but never overwrite a result the player is
         // reading; tapping the point again refreshes it. And never pop
         // the map info panel over the lair view while it is open: a boss
-        // victory triggers this (VanishBoss) and the lair shows its own
+        // fight finishing triggers this, and the lair shows its own
         // result — the map refreshes when the lair closes.
         private void OnExcursionStateChanged()
         {

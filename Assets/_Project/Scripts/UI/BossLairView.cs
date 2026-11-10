@@ -40,6 +40,14 @@ namespace LunarDominion.UI
         private bool _visible;
         private bool _fighting;
 
+        // Boss ladder (2026-11-10): 15 levels of War Robot. The player
+        // fights the selected level (1 to the highest unlocked =
+        // BossLevelDefeated + 1, capped at 15). Defeating a level
+        // unlocks the next; the boss never vanishes.
+        private int _selectedBossLevel = 1;
+        private Button _prevLevelButton;
+        private Button _nextLevelButton;
+
         // UI.
         private GameObject _root;
         private GameObject _headerGo;
@@ -208,12 +216,30 @@ namespace LunarDominion.UI
             rootRt.offsetMin = new Vector2(20, 200 + safe.Bottom);
             rootRt.offsetMax = new Vector2(-20, 920 - safe.Top);
 
-            // Header band (top ~20%): title, boss info, energy. Opaque
-            // dark so the text reads over the 3D scene.
+            // Header band (top ~20%): title (with the boss-level
+            // selector), boss info, energy. Opaque dark so the text
+            // reads over the 3D scene. The < and > buttons pick any
+            // unlocked boss level (1 to the highest unlocked).
             _headerGo = UIHelpers.Panel(_root, "Header", UIHelpers.Hex("#0D1420"),
                 new Vector2(0, 0.80f), new Vector2(1, 1f), Vector2.zero, Vector2.zero);
             _titleText = UIHelpers.LabelInRect(_headerGo, "Title", "WAR ROBOT LAIR", 36, Color.white,
-                new Rect(0.04f, 0.62f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
+                new Rect(0.12f, 0.62f, 0.88f, 0.98f), TextAnchor.MiddleCenter);
+            _prevLevelButton = UIHelpers.Button(_headerGo, "PrevLevelBtn", "<", 30,
+                UIHelpers.Hex("#1A2436"), Color.white);
+            var prevRt = _prevLevelButton.GetComponent<RectTransform>();
+            prevRt.anchorMin = new Vector2(0.02f, 0.62f);
+            prevRt.anchorMax = new Vector2(0.10f, 0.98f);
+            prevRt.offsetMin = Vector2.zero;
+            prevRt.offsetMax = Vector2.zero;
+            _prevLevelButton.onClick.AddListener(() => ChangeBossLevel(-1));
+            _nextLevelButton = UIHelpers.Button(_headerGo, "NextLevelBtn", ">", 30,
+                UIHelpers.Hex("#1A2436"), Color.white);
+            var nextRt = _nextLevelButton.GetComponent<RectTransform>();
+            nextRt.anchorMin = new Vector2(0.90f, 0.62f);
+            nextRt.anchorMax = new Vector2(0.98f, 0.98f);
+            nextRt.offsetMin = Vector2.zero;
+            nextRt.offsetMax = Vector2.zero;
+            _nextLevelButton.onClick.AddListener(() => ChangeBossLevel(1));
             _bossInfoText = UIHelpers.LabelInRect(_headerGo, "BossInfo", "", 24, UIHelpers.Hex("#FFD166"),
                 new Rect(0.04f, 0.30f, 0.96f, 0.62f), TextAnchor.MiddleCenter);
             _energyText = UIHelpers.LabelInRect(_headerGo, "Energy", "", 22, UIHelpers.Hex("#C0C8D0"),
@@ -306,6 +332,10 @@ namespace LunarDominion.UI
             _fighting = false;
             _selectedHeroIndices.Clear();
             _resultText.text = "";
+            // Open on the highest unlocked level (the frontier) — the
+            // player can step back to an earlier level with < if they
+            // want to re-fight it.
+            _selectedBossLevel = HighestUnlockedBossLevel();
             _sceneRoot.SetActive(true);
             _root.SetActive(true);
             // A fresh open always shows the header + bottom panel (they
@@ -347,15 +377,38 @@ namespace LunarDominion.UI
                 _energyText.text = "";
                 return;
             }
-            _bossInfoText.text = $"War Robot  •  HP {(boss.Spawns.Count > 0 ? boss.Spawns[0].Health : 0)}  ATK {(boss.Spawns.Count > 0 ? boss.Spawns[0].Attack : 0)}  DEF {(boss.Spawns.Count > 0 ? boss.Spawns[0].Defense : 0)}  •  Reward {boss.Reward.Biomass}B {boss.Reward.Alloy}A {boss.Reward.Helium3}H  •  {boss.XpPool} XP";
+            int highest = HighestUnlockedBossLevel();
+            _titleText.text = $"WAR ROBOT — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}";
+            _bossInfoText.text = $"HP {(boss.Spawns.Count > 0 ? boss.Spawns[0].Health : 0)}  ATK {(boss.Spawns.Count > 0 ? boss.Spawns[0].Attack : 0)}  DEF {(boss.Spawns.Count > 0 ? boss.Spawns[0].Defense : 0)}  •  Reward {boss.Reward.Biomass}B {boss.Reward.Alloy}A {boss.Reward.Helium3}H  •  {boss.XpPool} XP";
             _energyText.text = $"Energy: {_controller.State.Energy} / {boss.EnergyCost}  •  Unlocks at Nexus {boss.RequiredNexusLevel} (you are Nexus {_controller.State.NexusLevel})";
+            UIHelpers.SetButtonEnabled(_prevLevelButton, _selectedBossLevel > 1);
+            UIHelpers.SetButtonEnabled(_nextLevelButton, _selectedBossLevel < highest);
             RefreshFightButton();
+        }
+
+        // Highest boss level the player may fight: one past the highest
+        // defeated, capped at 15. Defeating a level unlocks the next.
+        private int HighestUnlockedBossLevel()
+        {
+            int defeated = _controller != null && _controller.State != null
+                ? _controller.State.BossLevelDefeated : 0;
+            return Math.Max(1, Math.Min(defeated + 1, EncounterCatalog.MaxBossLevel));
+        }
+
+        private void ChangeBossLevel(int delta)
+        {
+            int next = _selectedBossLevel + delta;
+            int highest = HighestUnlockedBossLevel();
+            if (next < 1 || next > highest) return;
+            _selectedBossLevel = next;
+            _resultText.text = "";
+            RefreshBossInfo();
         }
 
         private EncounterDefinition BossEncounter()
         {
-            if (_controller == null || _controller.EncounterDefinitions == null) return null;
-            return _controller.EncounterDefinitions.Find(e => e != null && e.Tier == 4);
+            if (_controller == null) return null;
+            return EncounterCatalog.CreateBossEncounter(_selectedBossLevel);
         }
 
         private void RefreshHeroRows()
@@ -666,6 +719,16 @@ namespace LunarDominion.UI
             if (_headerGo != null) _headerGo.SetActive(true);
             if (_bottomGo != null) _bottomGo.SetActive(true);
             _fighting = false;
+            // Boss ladder: a victory at the frontier unlocks the next
+            // level. The boss never vanishes — it stays, and the player
+            // can fight any unlocked level at will, energy permitting.
+            if (result.Victory && _selectedBossLevel > _controller.State.BossLevelDefeated)
+            {
+                _controller.State.BossLevelDefeated = _selectedBossLevel;
+                _controller.SaveGame();
+                // Step up to the newly unlocked level for the next fight.
+                _selectedBossLevel = HighestUnlockedBossLevel();
+            }
             ShowResult(result);
             RefreshHeroRows();
             RefreshHeroFigures();

@@ -41,10 +41,12 @@ namespace LunarDominion.Core
 
         // Heroes (2026-11-10): named characters (Reyes, Vega, Okafor),
         // one of each, max 3. They live here, separate from the Army —
-        // they fight bosses in the lair view, not regular squads. They
-        // keep their level and XP like army units. Old saves load with
-        // an empty list. Injured heroes go to the Injured list (shared
-        // with army units) and heal back here, not to the Army.
+        // they fight bosses in the lair view, and march with the army
+        // in map squads (2026-11-10) where they gain XP from camp
+        // fights. They keep their level and XP like army units. Old
+        // saves load with an empty list. Injured heroes go to the
+        // Injured list (shared with army units) and heal back here,
+        // not to the Army.
         public List<OwnedUnit> Heroes = new List<OwnedUnit>();
 
         public string LastEnergyDate = "";
@@ -66,12 +68,15 @@ namespace LunarDominion.Core
         public string[] CampRespawnUtc = new string[3];
         public int[] CampSpotIndex = new int[3];
 
-        // Boss lair (2026-11-09): the War Robot boss. One respawn
-        // timestamp; "" = the boss is active at its lair. When the
-        // boss is defeated the lair vanishes, and it respawns at the
-        // SAME spot after the timer (lairs do not move, unlike camps).
-        // Old saves load with "" (active).
+        // Boss lair (2026-11-09, redesigned 2026-11-10): the War Robot
+        // boss. BossLevelDefeated = the highest boss level beaten
+        // (0 = none yet, up to MaxBossLevel 15). Defeating a level
+        // unlocks the next; the boss NEVER vanishes now (2026-11-10) —
+        // the player can fight any unlocked level at will, energy
+        // permitting. BossRespawnUtc is a leftover from the old
+        // vanish/respawn design and is no longer used (always "").
         public string BossRespawnUtc = "";
+        public int BossLevelDefeated = 0;
 
         // Node occupation (2026-11-09): the army farms a node for a
         // real-time duration (120 min / troops sent) instead of

@@ -213,6 +213,93 @@ namespace LunarDominion.Expeditions
             return true;
         }
 
+        /// <summary>Mixed map squad (2026-11-10): heroes go along with
+        /// the army when attacking enemy camps on the map, and gain XP
+        /// from those fights. squadArmyIndices are positions in
+        /// State.Army, squadHeroIndices positions in State.Heroes; the
+        /// COMBINED squad is capped at MaxSquadSize (8). Fallen army
+        /// units move Army -> Injured, fallen heroes Heroes -> Injured
+        /// (highest index first in each list, so earlier indices stay
+        /// valid). Same combat, energy and reward as TryStart.</summary>
+        public bool TryStartMixed(EncounterDefinition encounter, List<int> squadArmyIndices, List<int> squadHeroIndices,
+            out BattleResult result, out string reason, bool allowLockedTier = false)
+        {
+            result = null;
+            int total = (squadArmyIndices != null ? squadArmyIndices.Count : 0)
+                + (squadHeroIndices != null ? squadHeroIndices.Count : 0);
+            var status = CheckExpedition(encounter, total, out reason, allowLockedTier);
+            if (status != ExpeditionStatus.CanStart) return false;
+
+            var squad = new List<SquadCombatant>();
+            int squadIndex = 0;
+            int armyInSquad = 0;
+            if (squadArmyIndices != null)
+            {
+                for (int i = 0; i < squadArmyIndices.Count; i++)
+                {
+                    int armyIndex = squadArmyIndices[i];
+                    if (armyIndex < 0 || armyIndex >= _state.Army.Count) continue;
+                    var owned = _state.Army[armyIndex];
+                    var def = _units.Find(u => u.Id == owned.Id);
+                    if (def == null) continue;
+                    squad.Add(new SquadCombatant { Unit = owned, Definition = def, SquadIndex = squadIndex++ });
+                    armyInSquad++;
+                }
+            }
+            if (squadHeroIndices != null)
+            {
+                for (int i = 0; i < squadHeroIndices.Count; i++)
+                {
+                    int heroIndex = squadHeroIndices[i];
+                    if (_state.Heroes == null || heroIndex < 0 || heroIndex >= _state.Heroes.Count) continue;
+                    var owned = _state.Heroes[heroIndex];
+                    var def = _units.Find(u => u.Id == owned.Id);
+                    if (def == null) continue;
+                    squad.Add(new SquadCombatant { Unit = owned, Definition = def, SquadIndex = squadIndex++ });
+                }
+            }
+            if (squad.Count == 0)
+            {
+                reason = "Select at least one unit or hero for your squad.";
+                return false;
+            }
+            if (!ResolveFight(encounter, squad, out result, out var outcome, out reason)) return false;
+
+            // Casualties are INJURED, not dead (Hospital). Army units
+            // move Army -> Injured, heroes Heroes -> Injured. The dead
+            // indices are squad positions; map each back to its own
+            // list (army indices first, then hero indices) and move
+            // highest-first so earlier indices stay valid.
+            var deadArmyIndices = new List<int>();
+            var deadHeroIndices = new List<int>();
+            foreach (int deadIndex in outcome.DeadSquadIndices)
+            {
+                if (deadIndex < armyInSquad) deadArmyIndices.Add(squadArmyIndices[deadIndex]);
+                else deadHeroIndices.Add(squadHeroIndices[deadIndex - armyInSquad]);
+            }
+            deadArmyIndices.Sort((a, b) => b.CompareTo(a));
+            deadHeroIndices.Sort((a, b) => b.CompareTo(a));
+            foreach (int armyIndex in deadArmyIndices)
+            {
+                if (armyIndex >= 0 && armyIndex < _state.Army.Count)
+                {
+                    _state.Injured.Add(_state.Army[armyIndex]);
+                    _state.Army.RemoveAt(armyIndex);
+                }
+            }
+            foreach (int heroIndex in deadHeroIndices)
+            {
+                if (_state.Heroes != null && heroIndex >= 0 && heroIndex < _state.Heroes.Count)
+                {
+                    _state.Injured.Add(_state.Heroes[heroIndex]);
+                    _state.Heroes.RemoveAt(heroIndex);
+                }
+            }
+
+            reason = outcome.Victory ? "Victory!" : (outcome.Timeout ? "Defeat — 20-round timeout." : "Defeat.");
+            return true;
+        }
+
         /// <summary>Shared fight resolution (2026-11-10): spend energy,
         /// resolve combat, build the result, apply XP to survivors and
         /// the victory reward. TryStart (army) and TryStartHeroes
@@ -283,10 +370,13 @@ namespace LunarDominion.Expeditions
                 {
                     var member = squad[outcome.SurvivingSquadIndices[i]];
                     int gained = share + (i == 0 ? remainder : 0);
-                    // Heroes level at half rate (HeroXpRate): a solo hero
-                    // would otherwise take the whole pool and rocket to
-                    // Lv 10 in a few boss fights.
-                    if (member.Definition.IsHero)
+                    // Heroes level at half rate from BOSS fights only
+                    // (HeroXpRate, Tier 4): a solo hero would otherwise
+                    // take the whole 1000+ XP boss pool and rocket to
+                    // Lv 10 in a few fights. Map camp fights (Tier 1-3)
+                    // give full XP — that is the heroes' steady XP path
+                    // now that they march with the army (2026-11-10).
+                    if (member.Definition.IsHero && encounter.Tier == 4)
                     {
                         gained = (int)Math.Round(gained * HeroXpRate);
                     }

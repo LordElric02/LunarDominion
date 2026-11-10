@@ -30,13 +30,13 @@ namespace LunarDominion.Expeditions
     /// fight are the same fight. A defeated camp vanishes (2026-11-09)
     /// with its creatures, and another of the same tier respawns at a
     /// different spot after CampRespawnHours; losing leaves the camp in
-    /// place. The boss lair (2026-11-09) works like a camp — same march,
-    /// same TryStart fight, same vanish-on-victory — but the boss is a
-    /// single Tier 4 encounter (War Robot) and it respawns at the SAME
-    /// spot after BossRespawnHours (lairs do not move). Energy is spent
-    /// and combat runs at ARRIVAL, not at send, so cancelling an outbound march (leaving
-    /// the Map tab) before arrival costs nothing; an active occupation
-    /// is never cancelled by leaving the tab — the army keeps farming.
+    /// place. The boss lair (2026-11-09; ladder 2026-11-10) is a single
+    /// Tier 4 encounter (War Robot) that never vanishes — the player
+    /// fights it in the lair view (heroes, 15-level ladder) at will,
+    /// energy permitting. Energy is spent and combat runs at ARRIVAL,
+    /// not at send, so cancelling an outbound march (leaving the Map
+    /// tab) before arrival costs nothing; an active occupation is never
+    /// cancelled by leaving the tab — the army keeps farming.
     /// This service owns the rules; the march itself is visual and lives
     /// in ExteriorView. It owns no UI — results go out as events.</summary>
     public class MapExcursionService
@@ -50,10 +50,6 @@ namespace LunarDominion.Expeditions
         // Shortened to 1h (2026-11-09, Patrick) so it is quick to see
         // in testing; raise it again for a slower live pace.
         public const float CampRespawnHours = 1f;
-        // Boss respawn (2026-11-09): a defeated War Robot vanishes, and
-        // it respawns at the SAME lair spot after this many real-time
-        // hours. Same 1h as camps for testing.
-        public const float BossRespawnHours = 1f;
 
         // Raised when an excursion resolves (arrival outcome) or cannot
         // start — title + multi-line body for the info panel.
@@ -79,6 +75,7 @@ namespace LunarDominion.Expeditions
 
         private MapPointData _activePoint;
         private List<int> _activeSquad;
+        private List<int> _activeHeroSquad;
         private bool _marching;
         private bool _occupying;
 
@@ -135,7 +132,8 @@ namespace LunarDominion.Expeditions
                     : "An excursion is already underway.";
                 return false;
             }
-            if (_state.Army == null || _state.Army.Count == 0)
+            if ((_state.Army == null || _state.Army.Count == 0)
+                && (_state.Heroes == null || _state.Heroes.Count == 0))
             {
                 reason = "Recruit units first — your army is empty.";
                 return false;
@@ -159,11 +157,6 @@ namespace LunarDominion.Expeditions
                 if (boss == null)
                 {
                     reason = "No boss encounter.";
-                    return false;
-                }
-                if (IsBossDefeated())
-                {
-                    reason = "The War Robot was defeated — it will return to its lair soon.";
                     return false;
                 }
                 if (_state.Energy < boss.EnergyCost)
@@ -221,12 +214,13 @@ namespace LunarDominion.Expeditions
             StartExcursion(point, null);
         }
 
-        /// <summary>Send a chosen squad (army indices). Null or empty
-        /// falls back to the whole army, strongest first, capped — the
-        /// previous default. The squad is stored for arrival, so the
-        /// farming duration and the fight both use the units the player
-        /// picked, not the whole army.</summary>
-        public void StartExcursion(MapPointData point, List<int> squadIndices)
+        /// <summary>Send a chosen squad (army indices + hero indices).
+        /// Null or empty falls back to the whole army + heroes, strongest
+        /// first, capped — the previous default. The squad is stored for
+        /// arrival, so the farming duration and the fight both use the
+        /// units the player picked, not the whole army. Heroes march
+        /// with the army now (2026-11-10) and gain XP from camp fights.</summary>
+        public void StartExcursion(MapPointData point, List<int> squadIndices, List<int> heroIndices = null)
         {
             if (!CanSend(point, out var reason))
             {
@@ -237,15 +231,19 @@ namespace LunarDominion.Expeditions
             _activeSquad = squadIndices != null && squadIndices.Count > 0
                 ? new List<int>(squadIndices)
                 : BuildSquadIndices();
+            _activeHeroSquad = heroIndices != null && heroIndices.Count > 0
+                ? new List<int>(heroIndices)
+                : BuildSquadHeroIndices();
             _marching = true;
             OnExcursionStateChanged?.Invoke();
             // Outbound: castle (origin) to the point, 1 unit above ground.
             _view.StartMarch(new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), OnArrivedAtTarget);
         }
 
-        /// <summary>Default squad for the picker: the whole army,
-        /// strongest first, capped — as per-type counts. The picker
-        /// opens pre-filled with this and the player trims it.</summary>
+        /// <summary>Default squad for the picker: the whole army +
+        /// heroes, strongest first, capped — as per-type counts. Heroes
+        /// are included (they are the strongest) and share the cap.
+        /// The picker opens pre-filled with this and the player trims it.</summary>
         public Dictionary<UnitId, int> DefaultSquadCounts()
         {
             var counts = new Dictionary<UnitId, int>();
@@ -256,6 +254,14 @@ namespace LunarDominion.Expeditions
                 if (unit == null) continue;
                 if (!counts.ContainsKey(unit.Id)) counts[unit.Id] = 0;
                 counts[unit.Id]++;
+            }
+            foreach (int i in BuildSquadHeroIndices())
+            {
+                if (_state.Heroes == null || i < 0 || i >= _state.Heroes.Count) continue;
+                var hero = _state.Heroes[i];
+                if (hero == null) continue;
+                if (!counts.ContainsKey(hero.Id)) counts[hero.Id] = 0;
+                counts[hero.Id]++;
             }
             return counts;
         }
@@ -280,6 +286,7 @@ namespace LunarDominion.Expeditions
             _marching = false;
             _activePoint = null;
             _activeSquad = null;
+            _activeHeroSquad = null;
             OnExcursionStateChanged?.Invoke();
         }
 
@@ -316,6 +323,7 @@ namespace LunarDominion.Expeditions
             _marching = false;
             _activePoint = null;
             _activeSquad = null;
+            _activeHeroSquad = null;
             _view.CancelMarch();
             OnExcursionStateChanged?.Invoke();
         }
@@ -328,7 +336,8 @@ namespace LunarDominion.Expeditions
         private void BeginOccupation(MapPointData point)
         {
             var squad = ActiveSquad();
-            int troops = Math.Max(1, squad.Count);
+            var heroSquad = ActiveHeroSquad();
+            int troops = Math.Max(1, squad.Count + heroSquad.Count);
             float minutes = OccupationMinutesPerTroop / troops;
             _state.OccupiedNodeIndex = point.Index;
             _state.OccupationEndUtc = DateTime.UtcNow.AddMinutes(minutes).ToString("o");
@@ -508,64 +517,52 @@ namespace LunarDominion.Expeditions
             }
         }
 
-        // Boss lair (2026-11-09): the War Robot. Same vanish/respawn
-        // shape as camps, but a single boss (no tier, no spots) — it
-        // respawns at the SAME lair spot after BossRespawnHours.
+        // Boss lair (2026-11-09, redesigned 2026-11-10): the War Robot.
+        // The boss NEVER vanishes now — the player can fight any
+        // unlocked level at will, energy permitting (15-level ladder).
+        // IsBossDefeated always returns false; VanishBoss and the
+        // respawn timer are retired (BossRespawnUtc stays "" and is
+        // ignored). The lair is always visible at the same spot.
 
-        /// <summary>True while the War Robot is defeated and waiting to
-        /// respawn (its BossRespawnUtc is set).</summary>
+        /// <summary>The boss never vanishes now (2026-11-10 ladder
+        /// redesign), so this is always false. Kept so callers that
+        /// used to gate on a defeated boss keep compiling.</summary>
         public bool IsBossDefeated()
         {
-            return !string.IsNullOrEmpty(_state.BossRespawnUtc);
+            return false;
         }
 
-        // Vanish a defeated boss: record its respawn time, hide the
-        // lair and its robot, and save. The boss reappears at the same
-        // spot when CheckBossRespawn runs after the time.
-        private void VanishBoss()
-        {
-            _state.BossRespawnUtc = DateTime.UtcNow.AddHours(BossRespawnHours).ToString("o");
-            _view.SetBossVisible(false);
-            _saveGame?.Invoke();
-            _notifyChanged?.Invoke();
-            OnExcursionStateChanged?.Invoke();
-        }
-
-        /// <summary>Hero boss fight (2026-11-10): the lair view runs the
-        /// fight itself (TryStartHeroes) and reports the victory here so
-        /// the boss vanishes and respawns after the timer, exactly as a
-        /// map boss victory would. No-op if the boss is already gone.</summary>
+        /// <summary>Hero boss fight (2026-11-10 ladder): the lair view
+        /// runs the fight itself (TryStartHeroes) and reports the
+        /// victory here. The boss does NOT vanish — it stays, and the
+        /// lair view unlocks the next level. This just refreshes the
+        /// map so the lair display stays current.</summary>
         public void OnBossDefeatedInLair()
         {
-            if (IsBossDefeated()) return;
-            VanishBoss();
-        }
-
-        /// <summary>Called regularly (Bootstrap RefreshAll, ~once a
-        /// second) and on load: if the defeated boss's respawn time has
-        /// passed, bring it back at the same lair spot. Also completes
-        /// a respawn whose time passed while the app was closed — the
-        /// boss is there on the next load.</summary>
-        public void CheckBossRespawn()
-        {
-            if (string.IsNullOrEmpty(_state.BossRespawnUtc)) return;
-            if (!DateTime.TryParse(_state.BossRespawnUtc, null, DateTimeStyles.RoundtripKind, out var respawnUtc)) return;
-            if (DateTime.UtcNow < respawnUtc) return;
-            _state.BossRespawnUtc = "";
-            _view.SetBossVisible(true);
-            _saveGame?.Invoke();
-            _notifyChanged?.Invoke();
             OnExcursionStateChanged?.Invoke();
         }
 
-        /// <summary>Hide the boss lair from the save when it is
-        /// defeated, or show it when active. Called on load
-        /// (constructor) and whenever the Map is shown. No-op for old
-        /// saves (boss active).</summary>
+        /// <summary>Retired (2026-11-10): the boss no longer respawns —
+        /// it never leaves. This only clears a stale BossRespawnUtc
+        /// left by an old save and makes sure the lair shows.</summary>
+        public void CheckBossRespawn()
+        {
+            if (!string.IsNullOrEmpty(_state.BossRespawnUtc))
+            {
+                _state.BossRespawnUtc = "";
+                _saveGame?.Invoke();
+                _notifyChanged?.Invoke();
+            }
+            _view?.SetBossVisible(true);
+        }
+
+        /// <summary>The boss lair is always visible now (2026-11-10
+        /// ladder redesign — the boss never vanishes). Called on load
+        /// and whenever the Map is shown.</summary>
         public void SyncBoss()
         {
             if (_view == null) return;
-            _view.SetBossVisible(!IsBossDefeated());
+            _view.SetBossVisible(true);
         }
 
         /// <summary>The War Robot encounter (Tier 4). Null when the
@@ -636,7 +633,8 @@ namespace LunarDominion.Expeditions
         {
             var encounter = EncounterForTier(point.Tier);
             var squad = ActiveSquad();
-            if (encounter == null || squad.Count == 0)
+            var heroSquad = ActiveHeroSquad();
+            if (encounter == null || (squad.Count == 0 && heroSquad.Count == 0))
             {
                 OnExcursionResult?.Invoke(point.Title, "Could not start the fight.");
                 StartReturnMarch(point);
@@ -644,10 +642,12 @@ namespace LunarDominion.Expeditions
             }
             // Same fight as the Expeditions menu: energy spent at start,
             // no refund on defeat, rewards only on victory, casualties
-            // permanent. TryStart applies all of it. allowLockedTier:
-            // map excursions let the player attack above their Nexus —
-            // the fight proceeds and (almost certainly) fails.
-            if (_expeditions.TryStart(encounter, squad, out var result, out var reason, allowLockedTier: true))
+            // injured (hospital). TryStartMixed applies all of it, with
+            // heroes marching alongside the army (2026-11-10) and gaining
+            // XP. allowLockedTier: map excursions let the player attack
+            // above their Nexus — the fight proceeds and (almost
+            // certainly) fails.
+            if (_expeditions.TryStartMixed(encounter, squad, heroSquad, out var result, out var reason, allowLockedTier: true))
             {
                 _saveGame?.Invoke();
                 _notifyChanged?.Invoke();
@@ -675,12 +675,10 @@ namespace LunarDominion.Expeditions
             }
         }
 
-        // Boss lair (2026-11-09): the War Robot. Same fight as a camp —
-        // energy spent at start, no refund on defeat, rewards only on
-        // victory, casualties injured (hospital) — via TryStart with the
-        // Tier 4 boss encounter. A defeated boss vanishes with its robot,
-        // and it respawns at the SAME lair spot after BossRespawnHours.
-        // Losing leaves the boss in place, so the player can retry.
+        // Boss lair (2026-11-09; ladder 2026-11-10): the War Robot. This
+        // old map-march fight is now unreachable — tapping the lair opens
+        // the lair view (heroes, 15-level ladder) instead. Kept so the
+        // class still compiles if anything references it.
         private void FightBoss(MapPointData point)
         {
             var encounter = EncounterForBoss();
@@ -709,7 +707,6 @@ namespace LunarDominion.Expeditions
                     OnExcursionResult?.Invoke(
                         result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
                         FormatBattleResult(result));
-                    if (result.Victory) VanishBoss();
                     StartReturnMarch(point);
                 });
             }
@@ -734,28 +731,72 @@ namespace LunarDominion.Expeditions
             return BuildSquadIndices();
         }
 
-        /// <summary>Whole army, strongest first, capped at the squad size.
-        /// Per-unit power is the same formula as PowerService: (HP +
-        /// 8*ATK + 4*DEF) * (1 + 0.08*(level-1)).</summary>
-        private List<int> BuildSquadIndices()
+        private List<int> ActiveHeroSquad()
         {
-            var scored = new List<(int index, long power)>();
-            if (_state.Army == null) return new List<int>();
-            for (int i = 0; i < _state.Army.Count; i++)
+            if (_activeHeroSquad != null && _activeHeroSquad.Count > 0) return _activeHeroSquad;
+            return BuildSquadHeroIndices();
+        }
+
+        // Default squad (army + heroes combined, strongest first,
+        // capped): scores every Army unit and Hero by power and takes
+        // the top MaxSquadSize, split back into army / hero index lists.
+        // Per-unit power is the same formula as PowerService.
+        private void BuildDefaultSquad(out List<int> armyIndices, out List<int> heroIndices)
+        {
+            var scored = new List<(bool isHero, int index, long power)>();
+            if (_state.Army != null)
             {
-                var unit = _state.Army[i];
-                if (unit == null) continue;
-                var def = _units != null ? _units.Find(u => u.Id == unit.Id) : null;
-                if (def == null) continue;
-                long basePower = def.BaseHealth + 8L * def.BaseAttack + 4L * def.BaseDefense;
-                long power = (long)Math.Round(basePower * (1.0 + 0.08 * (Math.Max(1, unit.Level) - 1)));
-                scored.Add((i, power));
+                for (int i = 0; i < _state.Army.Count; i++)
+                {
+                    var unit = _state.Army[i];
+                    if (unit == null) continue;
+                    var def = _units != null ? _units.Find(u => u.Id == unit.Id) : null;
+                    if (def == null) continue;
+                    long basePower = def.BaseHealth + 8L * def.BaseAttack + 4L * def.BaseDefense;
+                    long power = (long)Math.Round(basePower * (1.0 + 0.08 * (Math.Max(1, unit.Level) - 1)));
+                    scored.Add((false, i, power));
+                }
+            }
+            if (_state.Heroes != null)
+            {
+                for (int i = 0; i < _state.Heroes.Count; i++)
+                {
+                    var hero = _state.Heroes[i];
+                    if (hero == null) continue;
+                    var def = _units != null ? _units.Find(u => u.Id == hero.Id) : null;
+                    if (def == null) continue;
+                    long basePower = def.BaseHealth + 8L * def.BaseAttack + 4L * def.BaseDefense;
+                    long power = (long)Math.Round(basePower * (1.0 + 0.08 * (Math.Max(1, hero.Level) - 1)));
+                    scored.Add((true, i, power));
+                }
             }
             scored.Sort((a, b) => b.power.CompareTo(a.power));
-            var result = new List<int>();
+            armyIndices = new List<int>();
+            heroIndices = new List<int>();
             int count = Math.Min(scored.Count, _balance.MaxSquadSize);
-            for (int i = 0; i < count; i++) result.Add(scored[i].index);
-            return result;
+            for (int i = 0; i < count; i++)
+            {
+                if (scored[i].isHero) heroIndices.Add(scored[i].index);
+                else armyIndices.Add(scored[i].index);
+            }
+        }
+
+        /// <summary>Army portion of the default (strongest) squad.</summary>
+        private List<int> BuildSquadHeroIndices()
+        {
+            BuildDefaultSquad(out _, out var heroIndices);
+            return heroIndices;
+        }
+
+        /// <summary>Whole army, strongest first, capped at the squad size.
+        /// Per-unit power is the same formula as PowerService: (HP +
+        /// 8*ATK + 4*DEF) * (1 + 0.08*(level-1)). This is the army
+        /// portion of the combined default squad (army + heroes) — see
+        /// BuildDefaultSquad.</summary>
+        private List<int> BuildSquadIndices()
+        {
+            BuildDefaultSquad(out var armyIndices, out _);
+            return armyIndices;
         }
 
         private EncounterDefinition EncounterForTier(int tier)

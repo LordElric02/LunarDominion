@@ -144,13 +144,14 @@ namespace LunarDominion
             NotifyChanged();
         }
 
-        /// <summary>Dev / test helper (2026-11-10): bring the War Robot
-        /// boss back immediately, clearing its respawn timer so the lair
-        /// reappears at the same spot. Called only by DevHUDView, never
-        /// by gameplay UI. The map re-shows the lair on the next refresh
-        /// (SyncBoss, via RefreshMapNodeStates).</summary>
+        /// <summary>Dev / test helper (2026-11-10): reset the boss ladder
+        /// to Level 1 (BossLevelDefeated = 0) so the ladder can be
+        /// re-tested from the start. Called only by DevHUDView, never by
+        /// gameplay UI. The boss never vanishes now, so there is no
+        /// respawn timer to clear — this just resets the level.</summary>
         public void ResetBoss()
         {
+            State.BossLevelDefeated = 0;
             State.BossRespawnUtc = "";
             SaveGame();
             NotifyChanged();

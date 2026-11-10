@@ -174,15 +174,28 @@ namespace LunarDominion.UI
                 }
             }
             // Drop picks for types no longer owned (e.g. casualties),
-            // and clamp picks to what is owned.
+            // and clamp picks to what is owned. Heroes count too (each
+            // is unique, so a hero pick is 0 or 1).
+            var ownedIds = new HashSet<UnitId>(ownedCounts.Keys);
+            if (_controller.State.Heroes != null)
+            {
+                foreach (var hero in _controller.State.Heroes)
+                {
+                    if (hero != null) ownedIds.Add(hero.Id);
+                }
+            }
             var keys = new List<UnitId>(_counts.Keys);
             foreach (var key in keys)
             {
-                if (!ownedCounts.ContainsKey(key)) _counts.Remove(key);
-                else if (_counts[key] > ownedCounts[key]) _counts[key] = ownedCounts[key];
+                if (!ownedIds.Contains(key)) _counts.Remove(key);
+                else
+                {
+                    int max = ownedCounts.ContainsKey(key) ? ownedCounts[key] : 1;
+                    if (_counts[key] > max) _counts[key] = max;
+                }
             }
 
-            if (types.Count == 0)
+            if (types.Count == 0 && (_controller.State.Heroes == null || _controller.State.Heroes.Count == 0))
             {
                 var emptyGo = new GameObject("EmptyRow");
                 emptyGo.transform.SetParent(_rowsContent.transform, false);
@@ -190,7 +203,7 @@ namespace LunarDominion.UI
                 emptyImg.color = UIHelpers.Hex("#1A2436");
                 var layout = emptyGo.AddComponent<LayoutElement>();
                 layout.preferredHeight = 100;
-                UIHelpers.LabelInRect(emptyGo, "Empty", "No units yet — recruit in Army first.", 24, UIHelpers.Hex("#C0C8D0"),
+                UIHelpers.LabelInRect(emptyGo, "Empty", "No units yet — recruit troops from a barracks, or a hero from the Heroes tab.", 24, UIHelpers.Hex("#C0C8D0"),
                     new Rect(0.03f, 0.05f, 0.97f, 0.95f), TextAnchor.MiddleCenter);
                 return;
             }
@@ -199,44 +212,64 @@ namespace LunarDominion.UI
             {
                 var def = _controller.UnitDefinitions.Find(u => u.Id == type);
                 string name = def != null ? def.DisplayName : type.ToString();
-                var rowGo = new GameObject(name + "Row");
-                rowGo.transform.SetParent(_rowsContent.transform, false);
-                var rowImg = rowGo.AddComponent<Image>();
-                rowImg.color = UIHelpers.Hex("#1A2436");
-                var layout = rowGo.AddComponent<LayoutElement>();
-                layout.preferredHeight = 100;
-                var rowRt = rowGo.GetComponent<RectTransform>();
-                rowRt.anchorMin = Vector2.zero;
-                rowRt.anchorMax = Vector2.one;
-                UIHelpers.LabelInRect(rowGo, "Name", name, 28, Color.white,
-                    new Rect(0.03f, 0.50f, 0.60f, 0.97f));
-                var countText = UIHelpers.LabelInRect(rowGo, "Count", "", 24, UIHelpers.Hex("#C0C8D0"),
-                    new Rect(0.03f, 0.05f, 0.60f, 0.50f));
-                var addBtn = UIHelpers.Button(rowGo, "AddBtn", "+", 30, UIHelpers.Hex("#2E7D32"), Color.white);
-                var addRt = addBtn.GetComponent<RectTransform>();
-                addRt.anchorMin = new Vector2(0.62f, 0.15f);
-                addRt.anchorMax = new Vector2(0.76f, 0.85f);
-                addRt.offsetMin = Vector2.zero;
-                addRt.offsetMax = Vector2.zero;
-                var removeBtn = UIHelpers.Button(rowGo, "RemoveBtn", "–", 30, UIHelpers.Hex("#7A2E2E"), Color.white);
-                var removeRt = removeBtn.GetComponent<RectTransform>();
-                removeRt.anchorMin = new Vector2(0.78f, 0.15f);
-                removeRt.anchorMax = new Vector2(0.97f, 0.85f);
-                removeRt.offsetMin = Vector2.zero;
-                removeRt.offsetMax = Vector2.zero;
-                var rowType = type;
-                addBtn.onClick.AddListener(() => OnAdd(rowType));
-                removeBtn.onClick.AddListener(() => OnRemove(rowType));
-                _rows.Add(new SquadRow
-                {
-                    Root = rowGo,
-                    Type = type,
-                    Owned = ownedCounts[type],
-                    CountText = countText,
-                    AddButton = addBtn,
-                    RemoveButton = removeBtn
-                });
+                AddRow(type, name, ownedCounts[type]);
             }
+
+            // Heroes (2026-11-10): heroes march with the army now. One
+            // row per owned hero (each is unique, so Owned is 1 and the
+            // pick is 0 or 1). They share the squad cap with the army.
+            if (_controller.State.Heroes != null)
+            {
+                foreach (var hero in _controller.State.Heroes)
+                {
+                    if (hero == null) continue;
+                    var def = _controller.UnitDefinitions.Find(u => u.Id == hero.Id);
+                    string name = def != null ? $"{def.DisplayName}  ★ HERO" : hero.Id.ToString();
+                    if (!_counts.ContainsKey(hero.Id)) _counts[hero.Id] = 0;
+                    AddRow(hero.Id, name, 1);
+                }
+            }
+        }
+
+        private void AddRow(UnitId type, string name, int owned)
+        {
+            var rowGo = new GameObject(name + "Row");
+            rowGo.transform.SetParent(_rowsContent.transform, false);
+            var rowImg = rowGo.AddComponent<Image>();
+            rowImg.color = UIHelpers.Hex("#1A2436");
+            var layout = rowGo.AddComponent<LayoutElement>();
+            layout.preferredHeight = 100;
+            var rowRt = rowGo.GetComponent<RectTransform>();
+            rowRt.anchorMin = Vector2.zero;
+            rowRt.anchorMax = Vector2.one;
+            UIHelpers.LabelInRect(rowGo, "Name", name, 28, Color.white,
+                new Rect(0.03f, 0.50f, 0.60f, 0.97f));
+            var countText = UIHelpers.LabelInRect(rowGo, "Count", "", 24, UIHelpers.Hex("#C0C8D0"),
+                new Rect(0.03f, 0.05f, 0.60f, 0.50f));
+            var addBtn = UIHelpers.Button(rowGo, "AddBtn", "+", 30, UIHelpers.Hex("#2E7D32"), Color.white);
+            var addRt = addBtn.GetComponent<RectTransform>();
+            addRt.anchorMin = new Vector2(0.62f, 0.15f);
+            addRt.anchorMax = new Vector2(0.76f, 0.85f);
+            addRt.offsetMin = Vector2.zero;
+            addRt.offsetMax = Vector2.zero;
+            var removeBtn = UIHelpers.Button(rowGo, "RemoveBtn", "–", 30, UIHelpers.Hex("#7A2E2E"), Color.white);
+            var removeRt = removeBtn.GetComponent<RectTransform>();
+            removeRt.anchorMin = new Vector2(0.78f, 0.15f);
+            removeRt.anchorMax = new Vector2(0.97f, 0.85f);
+            removeRt.offsetMin = Vector2.zero;
+            removeRt.offsetMax = Vector2.zero;
+            var rowType = type;
+            addBtn.onClick.AddListener(() => OnAdd(rowType));
+            removeBtn.onClick.AddListener(() => OnRemove(rowType));
+            _rows.Add(new SquadRow
+            {
+                Root = rowGo,
+                Type = type,
+                Owned = owned,
+                CountText = countText,
+                AddButton = addBtn,
+                RemoveButton = removeBtn
+            });
         }
 
         private void OnAdd(UnitId type)

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using LunarDominion.Core;
 using UnityEngine;
@@ -9,6 +10,38 @@ namespace LunarDominion.Expeditions
     /// EncounterDefinition assets yet.</summary>
     public static class EncounterCatalog
     {
+        // Boss ladder (2026-11-10 redesign): 15 levels of War Robot.
+        // Defeating a level unlocks the next; the boss never vanishes.
+        // Level 1 is the buffed boss (HP 3000 / ATK 100 / DEF 40).
+        // Each level compounds: HP x1.20, ATK x1.12, DEF x1.08, energy
+        // +10, reward and XP pool x level. A maxed Lv 20 hero team can
+        // reach ~Level 10-11; Levels 12-15 need Nexus 30/35 and tiers
+        // above the current 3 max (future) — they are impossible now,
+        // by design.
+        public const int MaxBossLevel = 15;
+
+        /// <summary>War Robot encounter for a boss level (1-15, clamped).
+        /// Level 1 = the current buffed boss; higher levels scale up.</summary>
+        public static EncounterDefinition CreateBossEncounter(int level)
+        {
+            level = Math.Max(1, Math.Min(level, MaxBossLevel));
+            var boss = ScriptableObject.CreateInstance<EncounterDefinition>();
+            boss.Tier = 4;
+            boss.DisplayName = $"War Robot Lv {level}";
+            boss.RequiredNexusLevel = 10;
+            boss.EnergyCost = 50 + 10 * (level - 1);
+            boss.Reward = new ResourceCost(1500 * level, 1200 * level, 400 * level);
+            boss.XpPool = 1000 * level;
+            int hp = (int)Math.Round(3000 * Math.Pow(1.20, level - 1));
+            int atk = (int)Math.Round(100 * Math.Pow(1.12, level - 1));
+            int def = (int)Math.Round(40 * Math.Pow(1.08, level - 1));
+            boss.Spawns = new List<EnemySpawn>
+            {
+                new EnemySpawn { DisplayName = "War Robot", Class = UnitClass.Mechanized, Health = hp, Attack = atk, Defense = def, Count = 1 }
+            };
+            return boss;
+        }
+
         public static List<EncounterDefinition> CreateDefaultEncounters()
         {
             var list = new List<EncounterDefinition>();
@@ -53,31 +86,14 @@ namespace LunarDominion.Expeditions
             };
             list.Add(tier3);
 
-            // Boss — War Robot (2026-11-09, Patrick's first boss): a
-            // single giant Mechanized enemy in a lair on the map (not a
-            // camp — see MapExcursionService for the lair flow). Tier 4
-            // keeps it out of the camp tier 1-3 loops. Infantry counters
-            // it (Mechanized is weak to Infantry). Single-phase: one big
-            // enemy, no special attacks yet — those come later.
-            var boss = ScriptableObject.CreateInstance<EncounterDefinition>();
-            boss.Tier = 4;
-            boss.DisplayName = "War Robot";
-            boss.RequiredNexusLevel = 10;
-            boss.EnergyCost = 50;
-            boss.Reward = new ResourceCost(1500, 1200, 400);
-            boss.XpPool = 1000;
-            // Boss buff (2026-11-10): a solo Tier 1 hero was beating it
-            // easily (Infantry counters Mechanized, 1.5x, and the robot's
-            // 60 ATK barely scratched a hero's DEF). Now HP 3000 / ATK
-            // 100 / DEF 40: a solo Lv 1 hero loses (dies ~round 16 with
-            // the robot still standing); a 3-hero team wins in ~9 rounds
-            // but likely loses someone (injured); a Lv 10 hero can solo
-            // it — earned, after real progression.
-            boss.Spawns = new List<EnemySpawn>
-            {
-                new EnemySpawn { DisplayName = "War Robot", Class = UnitClass.Mechanized, Health = 3000, Attack = 100, Defense = 40, Count = 1 }
-            };
-            list.Add(boss);
+            // Boss — War Robot (2026-11-09, Patrick's first boss; ladder
+            // 2026-11-10): a single giant Mechanized enemy in a lair on
+            // the map (not a camp). Tier 4 keeps it out of the camp tier
+            // 1-3 loops. Infantry counters it (Mechanized is weak to
+            // Infantry). Single-phase: one big enemy, no special attacks
+            // yet — those come later. The default list carries Level 1;
+            // the lair view builds the level it fights on demand.
+            list.Add(CreateBossEncounter(1));
 
             return list;
         }

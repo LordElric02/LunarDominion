@@ -900,11 +900,11 @@ namespace LunarDominion.UI
             }
         }
 
-        // Show or hide the boss lair (2026-11-09): a defeated boss
-        // vanishes with its robot until it respawns at the SAME spot
-        // after BossRespawnHours. Hiding also hides it from taps. The
-        // lair (index 12) and its robot both carry Data.Index == 12,
-        // so one pass hides the whole lair.
+        // Show or hide the boss lair (2026-11-09; ladder 2026-11-10):
+        // the boss never vanishes now, so this is always called with
+        // true. Hiding also hides it from taps. The lair (index 12)
+        // and its robot both carry Data.Index == 12, so one pass hides
+        // the whole lair.
         public void SetBossVisible(bool visible)
         {
             foreach (var point in _mapPoints)

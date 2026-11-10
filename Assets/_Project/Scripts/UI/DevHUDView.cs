@@ -36,10 +36,9 @@ namespace LunarDominion.UI
             AddButton("Grant +1000 Alloy", 0.62f, () => _controller.GrantResources(0, 1000, 0));
             AddButton("Grant +1000 Helium-3", 0.51f, () => _controller.GrantResources(0, 0, 1000));
             AddButton("Grant +1000 Energy", 0.40f, () => _controller.GrantEnergy(1000));
-            // Reset Boss (2026-11-10): bring the War Robot back instantly
-            // (clears its 1h respawn timer) so the lair can be re-tested
-            // without waiting. The lair reappears at the same spot.
-            AddButton("Reset Boss (lair back now)", 0.29f, () => _controller.ResetBoss());
+            // Reset Boss (2026-11-10; ladder 2026-11-10): reset the boss
+            // ladder to Level 1 so it can be re-tested from the start.
+            AddButton("Reset Boss (ladder to Lv 1)", 0.29f, () => _controller.ResetBoss());
             AddButton("Reset save (new game)", 0.18f, () => { _controller.ResetGame(); _controller.SaveGame(); });
             AddButton("Save now", 0.07f, () => _controller.SaveGame());
             _root.SetActive(false);

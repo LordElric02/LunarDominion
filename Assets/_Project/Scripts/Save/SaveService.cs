@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using LunarDominion.Core;
+using LunarDominion.Expeditions;
 using UnityEngine;
 
 namespace LunarDominion.Save
@@ -49,9 +50,10 @@ namespace LunarDominion.Save
         public int OccupationAmount;
         public int OccupationKind;
         public int OccupationTroops;
-        // Boss lair (2026-11-09): War Robot respawn timestamp.
-        // Old saves load with "" (boss active).
+        // Boss lair (2026-11-09, ladder 2026-11-10): highest boss level
+        // defeated (0 = none yet, up to 15). Old saves load as 0.
         public string BossRespawnUtc = "";
+        public int BossLevelDefeated = 0;
     }
 
     public class SaveService
@@ -107,7 +109,8 @@ namespace LunarDominion.Save
                 OccupationAmount = state.OccupationAmount,
                 OccupationKind = state.OccupationKind,
                 OccupationTroops = state.OccupationTroops,
-                BossRespawnUtc = state.BossRespawnUtc ?? ""
+                BossRespawnUtc = state.BossRespawnUtc ?? "",
+                BossLevelDefeated = Math.Max(0, Math.Min(state.BossLevelDefeated, EncounterCatalog.MaxBossLevel))
             };
             string json = JsonUtility.ToJson(data, true);
             string temp = SavePath + ".tmp";
@@ -153,7 +156,8 @@ namespace LunarDominion.Save
                     OccupationAmount = Math.Max(0, data.OccupationAmount),
                     OccupationKind = Math.Max(0, Math.Min(data.OccupationKind, 2)),
                     OccupationTroops = Math.Max(0, Math.Min(data.OccupationTroops, 8)),
-                    BossRespawnUtc = data.BossRespawnUtc ?? ""
+                    BossRespawnUtc = data.BossRespawnUtc ?? "",
+                    BossLevelDefeated = Math.Max(0, Math.Min(data.BossLevelDefeated, EncounterCatalog.MaxBossLevel))
                 };
                 if (state.ActiveResearchId < 0)
                 {
