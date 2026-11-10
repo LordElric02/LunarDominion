@@ -444,6 +444,21 @@ namespace LunarDominion.UI
                 groundRenderer.material.mainTextureScale = new Vector2(8f, 7f);
                 groundRenderer.material.color = Color.white;
             }
+            // Ground normal map (GroundRegolith_Normal.png in
+            // Resources/Textures/, from BuildGroundTextureV2.py). Same
+            // (8,7) tiling as the colour texture so the relief stays
+            // in register with the pebbles/pocks. URP Lit reads it
+            // from _BumpMap. The PNG must be imported as Texture Type
+            // "Normal Map" in Unity or it unpacks wrong. If the PNG
+            // is missing (v1 ground), the ground just stays flat —
+            // the colour texture above still applies.
+            var regolithNormal = Resources.Load<Texture2D>("Textures/GroundRegolith_Normal");
+            if (regolithNormal != null && groundRenderer != null)
+            {
+                regolithNormal.wrapMode = TextureWrapMode.Repeat;
+                groundRenderer.material.SetTexture("_BumpMap", regolithNormal);
+                groundRenderer.material.SetTextureScale("_BumpMap", new Vector2(8f, 7f));
+            }
         }
 
         // 2026-11-06 full-bleed: perimeter wall around the building
