@@ -155,7 +155,10 @@ namespace LunarDominion.Bootstrap
         }
 
         // Open the lair interior view (full-screen, inside the lair).
-        // The map hides underneath; closing returns to the Map.
+        // The map hides underneath; closing returns to the Map. Clear
+        // the selected point so nothing refreshes the map info panel
+        // over the lair view while it is open (the lair shows its own
+        // result; the map refreshes on close).
         private void OpenLairView()
         {
             if (_excursions != null && _excursions.IsBossDefeated())
@@ -164,6 +167,7 @@ namespace LunarDominion.Bootstrap
                 return;
             }
             _mapInfoView.Hide();
+            _selectedPoint = null;
             _exteriorView.SetVisible(false);
             _lairView.Show();
         }
@@ -305,9 +309,13 @@ namespace LunarDominion.Bootstrap
 
         // Marching started, finished, or cancelled: refresh the panel's
         // Send button — but never overwrite a result the player is
-        // reading; tapping the point again refreshes it.
+        // reading; tapping the point again refreshes it. And never pop
+        // the map info panel over the lair view while it is open: a boss
+        // victory triggers this (VanishBoss) and the lair shows its own
+        // result — the map refreshes when the lair closes.
         private void OnExcursionStateChanged()
         {
+            if (_lairView != null && _lairView.IsVisible) return;
             if (_mapInfoView.ShowingResult) return;
             if (_selectedPoint != null) ShowMapPoint(_selectedPoint);
         }

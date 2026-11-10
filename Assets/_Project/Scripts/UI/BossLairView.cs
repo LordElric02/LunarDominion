@@ -304,12 +304,15 @@ namespace LunarDominion.UI
             RefreshBossInfo();
             // Camera: frame the lair interior — the robot large on the
             // right, the heroes on the left. Same 48.5-degree pitch as
-            // the base/map cameras so the framing feels consistent.
+            // the base/map cameras so the framing feels consistent. The
+            // look-at is low (y 1.8) so the ground-level heroes sit in
+            // the open middle band (above the bottom panel), not hidden
+            // behind it.
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.transform.position = new Vector3(-2f, 6f, -13f);
-                cam.transform.LookAt(new Vector3(1f, 2f, 0f));
+                cam.transform.position = new Vector3(-2f, 6.5f, -14f);
+                cam.transform.LookAt(new Vector3(0f, 1.8f, 0f));
             }
         }
 
