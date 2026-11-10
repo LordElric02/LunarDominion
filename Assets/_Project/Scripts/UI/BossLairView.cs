@@ -835,6 +835,44 @@ namespace LunarDominion.UI
         // colour-coded to the picker row. (Proper hero FBX models are a
         // later step — the figures read clearly at this scale, and the
         // boss is the focus.) Unselected heroes have no figure.
+        // The hero's built model (Blender), if installed: the FBX
+        // lives at Resources/Models/Hero<Name>. Null when the hero
+        // has no model — callers fall back to the primitive figure.
+        private static string HeroModelPath(UnitId id)
+        {
+            switch (id)
+            {
+                case UnitId.HeroReyes: return "Models/HeroReyes";
+                case UnitId.HeroVega: return "Models/HeroVega";
+                case UnitId.HeroOkafor: return "Models/HeroOkafor";
+                default: return null;
+            }
+        }
+
+        // Add the hero's real model under `fig`. The facing yaw
+        // lives on a wrapper, never on the imported instance (the
+        // A.R.E.S. lesson: the FBX root carries Blender's axis
+        // conversion — overwrite it and the model lies flat). The
+        // model faces +X as imported; the wrapper's -90 yaw maps
+        // that to the figure root's +Z, the direction both lair
+        // views face their targets.
+        private bool TryAddHeroModel(GameObject fig, UnitDefinition def)
+        {
+            var path = HeroModelPath(def.Id);
+            if (path == null) return false;
+            var prefab = Resources.Load<GameObject>(path);
+            if (prefab == null) return false;
+            var wrap = new GameObject("HeroModel");
+            wrap.transform.SetParent(fig.transform, false);
+            wrap.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+            var model = Instantiate(prefab);
+            model.name = "HeroModelInstance";
+            model.transform.SetParent(wrap.transform, false);
+            foreach (var col in model.GetComponentsInChildren<Collider>(true))
+                Destroy(col);
+            return true;
+        }
+
         private void RefreshHeroFigures()
         {
             foreach (var go in _heroFigures)
@@ -862,21 +900,35 @@ namespace LunarDominion.UI
                 // figures are BIG (~3.5 tall, near-human scale next to
                 // the 5+ tall robot) so the fight is actually visible.
                 fig.transform.localPosition = new Vector3(-3.5f, 0f, zSpots[s]);
-                // Body: capsule, ~2.6 tall. Head: sphere on top.
-                var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                body.name = "HeroBody";
-                body.transform.SetParent(fig.transform, false);
-                body.transform.localPosition = new Vector3(0f, 1.3f, 0f);
-                body.transform.localScale = new Vector3(1.0f, 1.3f, 1.0f);
-                SetColor(body.GetComponent<Renderer>(), color);
-                Destroy(body.GetComponent<Collider>());
-                var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                head.name = "HeroHead";
-                head.transform.SetParent(fig.transform, false);
-                head.transform.localPosition = new Vector3(0f, 2.9f, 0f);
-                head.transform.localScale = Vector3.one * 0.8f;
-                SetColor(head.GetComponent<Renderer>(), new Color(0.85f, 0.75f, 0.65f));
-                Destroy(head.GetComponent<Collider>());
+                // The hero's real model when installed; the
+                // primitive figure otherwise. Modeled figures turn
+                // to face the robot (+X in cave space).
+                var def = _controller.UnitDefinitions != null
+                    ? _controller.UnitDefinitions.Find(d => d.Id == hero.Id)
+                    : null;
+                bool modeled = def != null && TryAddHeroModel(fig, def);
+                if (modeled)
+                {
+                    fig.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                }
+                else
+                {
+                    // Body: capsule, ~2.6 tall. Head: sphere on top.
+                    var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                    body.name = "HeroBody";
+                    body.transform.SetParent(fig.transform, false);
+                    body.transform.localPosition = new Vector3(0f, 1.3f, 0f);
+                    body.transform.localScale = new Vector3(1.0f, 1.3f, 1.0f);
+                    SetColor(body.GetComponent<Renderer>(), color);
+                    Destroy(body.GetComponent<Collider>());
+                    var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    head.name = "HeroHead";
+                    head.transform.SetParent(fig.transform, false);
+                    head.transform.localPosition = new Vector3(0f, 2.9f, 0f);
+                    head.transform.localScale = Vector3.one * 0.8f;
+                    SetColor(head.GetComponent<Renderer>(), new Color(0.85f, 0.75f, 0.65f));
+                    Destroy(head.GetComponent<Collider>());
+                }
                 // A flat coloured disc under the hero so it stands out
                 // against the dark cave floor.
                 var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -1152,20 +1204,23 @@ namespace LunarDominion.UI
         private GameObject BuildCombatFigure(UnitDefinition def, Color color)
         {
             var fig = new GameObject("HeroFigure_" + def.DisplayName);
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "HeroBody";
-            body.transform.SetParent(fig.transform, false);
-            body.transform.localPosition = new Vector3(0f, 1.3f, 0f);
-            body.transform.localScale = new Vector3(1.0f, 1.3f, 1.0f);
-            SetColor(body.GetComponent<Renderer>(), color);
-            Destroy(body.GetComponent<Collider>());
-            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.name = "HeroHead";
-            head.transform.SetParent(fig.transform, false);
-            head.transform.localPosition = new Vector3(0f, 2.9f, 0f);
-            head.transform.localScale = Vector3.one * 0.8f;
-            SetColor(head.GetComponent<Renderer>(), new Color(0.85f, 0.75f, 0.65f));
-            Destroy(head.GetComponent<Collider>());
+            if (!TryAddHeroModel(fig, def))
+            {
+                var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                body.name = "HeroBody";
+                body.transform.SetParent(fig.transform, false);
+                body.transform.localPosition = new Vector3(0f, 1.3f, 0f);
+                body.transform.localScale = new Vector3(1.0f, 1.3f, 1.0f);
+                SetColor(body.GetComponent<Renderer>(), color);
+                Destroy(body.GetComponent<Collider>());
+                var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                head.name = "HeroHead";
+                head.transform.SetParent(fig.transform, false);
+                head.transform.localPosition = new Vector3(0f, 2.9f, 0f);
+                head.transform.localScale = Vector3.one * 0.8f;
+                SetColor(head.GetComponent<Renderer>(), new Color(0.85f, 0.75f, 0.65f));
+                Destroy(head.GetComponent<Collider>());
+            }
             var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             disc.name = "HeroDisc";
             disc.transform.SetParent(fig.transform, false);

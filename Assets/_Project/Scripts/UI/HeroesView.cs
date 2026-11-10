@@ -194,12 +194,31 @@ namespace LunarDominion.UI
                 var rowRt = rowGo.GetComponent<RectTransform>();
                 rowRt.anchorMin = Vector2.zero;
                 rowRt.anchorMax = Vector2.one;
+                // Hero portrait (rendered by the hero's Blender
+                // build script) when installed; without one the
+                // text spans from the left edge as before.
+                float textLeft = 0.03f;
+                var iconTex = HeroIconTexture(def.Id);
+                if (iconTex != null)
+                {
+                    var iconGo = new GameObject("Icon");
+                    iconGo.transform.SetParent(rowGo.transform, false);
+                    var raw = iconGo.AddComponent<RawImage>();
+                    raw.texture = iconTex;
+                    raw.raycastTarget = false;
+                    var irt = iconGo.GetComponent<RectTransform>();
+                    irt.anchorMin = new Vector2(0.015f, 0.08f);
+                    irt.anchorMax = new Vector2(0.135f, 0.92f);
+                    irt.offsetMin = Vector2.zero;
+                    irt.offsetMax = Vector2.zero;
+                    textLeft = 0.15f;
+                }
                 UIHelpers.LabelInRect(rowGo, "Name", $"{def.DisplayName}  ★ HERO  •  {def.Class}", 28, Color.white,
-                    new Rect(0.03f, 0.62f, 0.72f, 0.97f));
+                    new Rect(textLeft, 0.62f, 0.72f, 0.97f));
                 var stats = UIHelpers.LabelInRect(rowGo, "Stats", "", 24, UIHelpers.Hex("#C0C8D0"),
-                    new Rect(0.03f, 0.32f, 0.72f, 0.62f));
+                    new Rect(textLeft, 0.32f, 0.72f, 0.62f));
                 var cost = UIHelpers.LabelInRect(rowGo, "Cost", "", 24, UIHelpers.Hex("#FFD166"),
-                    new Rect(0.03f, 0.03f, 0.72f, 0.32f));
+                    new Rect(textLeft, 0.03f, 0.72f, 0.32f));
                 var btn = UIHelpers.Button(rowGo, "RecruitBtn", "Recruit", 26,
                     UIHelpers.Hex("#2E7D32"), Color.white);
                 var rt = btn.GetComponent<RectTransform>();
@@ -211,6 +230,20 @@ namespace LunarDominion.UI
                 btn.onClick.AddListener(() => OnRecruitClicked(heroDef));
                 _rows.Add(new Row { Root = rowGo, Def = def, StatsText = stats, CostText = cost, RecruitButton = btn });
             }
+        }
+
+        // The hero's menu portrait (rendered by BuildHero<Name>.py
+        // into Resources/Textures), or null when not installed.
+        private static Texture2D HeroIconTexture(UnitId id)
+        {
+            string path = null;
+            switch (id)
+            {
+                case UnitId.HeroReyes: path = "Textures/HeroIcon_Reyes"; break;
+                case UnitId.HeroVega: path = "Textures/HeroIcon_Vega"; break;
+                case UnitId.HeroOkafor: path = "Textures/HeroIcon_Okafor"; break;
+            }
+            return path != null ? Resources.Load<Texture2D>(path) : null;
         }
 
         private void OnRecruitClicked(UnitDefinition def)
