@@ -422,8 +422,12 @@ namespace LunarDominion.UI
             {
                 if (realtime)
                 {
-                    cam.transform.position = new Vector3(497f, 26f, -37f);
-                    cam.transform.LookAt(new Vector3(500f, 1f, 3f));
+                    // INSIDE the tube: the arena is an enclosed set
+                    // (walls r~29.5, ceiling ~18), so the camera sits
+                    // within it — south end, above the heroes,
+                    // looking down the tube toward the boss.
+                    cam.transform.position = new Vector3(500f, 9f, -24f);
+                    cam.transform.LookAt(new Vector3(500f, 2.5f, 4f));
                 }
                 else
                 {
