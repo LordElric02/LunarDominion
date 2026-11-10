@@ -42,6 +42,8 @@ namespace LunarDominion.UI
 
         // UI.
         private GameObject _root;
+        private GameObject _headerGo;
+        private GameObject _bottomGo;
         private Text _titleText;
         private Text _bossInfoText;
         private Text _energyText;
@@ -201,24 +203,24 @@ namespace LunarDominion.UI
 
             // Header band (top ~20%): title, boss info, energy. Opaque
             // dark so the text reads over the 3D scene.
-            var headerGo = UIHelpers.Panel(_root, "Header", UIHelpers.Hex("#0D1420"),
+            _headerGo = UIHelpers.Panel(_root, "Header", UIHelpers.Hex("#0D1420"),
                 new Vector2(0, 0.80f), new Vector2(1, 1f), Vector2.zero, Vector2.zero);
-            _titleText = UIHelpers.LabelInRect(headerGo, "Title", "WAR ROBOT LAIR", 36, Color.white,
+            _titleText = UIHelpers.LabelInRect(_headerGo, "Title", "WAR ROBOT LAIR", 36, Color.white,
                 new Rect(0.04f, 0.62f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
-            _bossInfoText = UIHelpers.LabelInRect(headerGo, "BossInfo", "", 24, UIHelpers.Hex("#FFD166"),
+            _bossInfoText = UIHelpers.LabelInRect(_headerGo, "BossInfo", "", 24, UIHelpers.Hex("#FFD166"),
                 new Rect(0.04f, 0.30f, 0.96f, 0.62f), TextAnchor.MiddleCenter);
-            _energyText = UIHelpers.LabelInRect(headerGo, "Energy", "", 22, UIHelpers.Hex("#C0C8D0"),
+            _energyText = UIHelpers.LabelInRect(_headerGo, "Energy", "", 22, UIHelpers.Hex("#C0C8D0"),
                 new Rect(0.04f, 0.02f, 0.96f, 0.30f), TextAnchor.MiddleCenter);
 
             // Bottom band (bottom ~45%): result text, hero picker, and
             // the Fight / Back buttons. Opaque dark; the 3D scene shows
             // in the open middle band above this.
-            var bottomGo = UIHelpers.Panel(_root, "BottomPanel", UIHelpers.Hex("#0D1420"),
+            _bottomGo = UIHelpers.Panel(_root, "BottomPanel", UIHelpers.Hex("#0D1420"),
                 new Vector2(0, 0f), new Vector2(1, 0.45f), Vector2.zero, Vector2.zero);
-            _resultText = UIHelpers.LabelInRect(bottomGo, "Result", "", 24, Color.white,
+            _resultText = UIHelpers.LabelInRect(_bottomGo, "Result", "", 24, Color.white,
                 new Rect(0.04f, 0.72f, 0.96f, 0.98f), TextAnchor.UpperLeft);
-            BuildHeroRowsScroll(bottomGo);
-            _fightButton = UIHelpers.Button(bottomGo, "FightButton", "FIGHT", 28,
+            BuildHeroRowsScroll(_bottomGo);
+            _fightButton = UIHelpers.Button(_bottomGo, "FightButton", "FIGHT", 28,
                 UIHelpers.Hex("#B71C1C"), Color.white);
             var fightRt = _fightButton.GetComponent<RectTransform>();
             fightRt.anchorMin = new Vector2(0.02f, 0.02f);
@@ -227,7 +229,7 @@ namespace LunarDominion.UI
             fightRt.offsetMax = Vector2.zero;
             _fightButton.onClick.AddListener(OnFightClicked);
 
-            _closeButton = UIHelpers.Button(bottomGo, "CloseButton", "Back to Map", 28,
+            _closeButton = UIHelpers.Button(_bottomGo, "CloseButton", "Back to Map", 28,
                 UIHelpers.Hex("#1A2436"), Color.white);
             var closeRt = _closeButton.GetComponent<RectTransform>();
             closeRt.anchorMin = new Vector2(0.51f, 0.02f);
@@ -299,6 +301,10 @@ namespace LunarDominion.UI
             _resultText.text = "";
             _sceneRoot.SetActive(true);
             _root.SetActive(true);
+            // A fresh open always shows the header + bottom panel (they
+            // are hidden during a fight — see OnFightClicked).
+            if (_headerGo != null) _headerGo.SetActive(true);
+            if (_bottomGo != null) _bottomGo.SetActive(true);
             RefreshHeroRows();
             RefreshHeroFigures();
             RefreshBossInfo();
@@ -523,7 +529,12 @@ namespace LunarDominion.UI
             var heroIndices = new List<int>(_selectedHeroIndices);
             _fighting = true;
             RefreshFightButton();
-            _resultText.text = "Fighting...";
+            // Hide the UI during the fight (header + bottom panel: the
+            // hero rows, FIGHT and Back buttons) so the player sees the
+            // full 3D fight unobstructed. It comes back with the result
+            // when the animation finishes (FightAnimationRoutine).
+            if (_headerGo != null) _headerGo.SetActive(false);
+            if (_bottomGo != null) _bottomGo.SetActive(false);
             // Resolve the fight immediately (combat is instant); the
             // animation below is purely visual, then the result shows.
             if (_controller.Expeditions.TryStartHeroes(boss, heroIndices, out var result, out var reason, allowLockedTier: true))
@@ -535,6 +546,8 @@ namespace LunarDominion.UI
             else
             {
                 _fighting = false;
+                if (_headerGo != null) _headerGo.SetActive(true);
+                if (_bottomGo != null) _bottomGo.SetActive(true);
                 _resultText.text = reason;
                 RefreshFightButton();
             }
@@ -626,7 +639,9 @@ namespace LunarDominion.UI
                 yield return null;
             }
 
-            // Restore transforms, then show the result.
+            // Restore transforms, then bring the UI back and show the
+            // result. The header + bottom panel were hidden for the
+            // fight; they return now with the result text.
             if (_robotGo != null)
             {
                 _robotGo.transform.localPosition = _robotOrigPos;
@@ -639,6 +654,8 @@ namespace LunarDominion.UI
                 fig.transform.localPosition = _heroOrigPos[i];
                 fig.transform.localScale = Vector3.one;
             }
+            if (_headerGo != null) _headerGo.SetActive(true);
+            if (_bottomGo != null) _bottomGo.SetActive(true);
             _fighting = false;
             ShowResult(result);
             RefreshHeroRows();
