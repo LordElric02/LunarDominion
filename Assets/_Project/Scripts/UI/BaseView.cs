@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using LunarDominion.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace LunarDominion.UI
 {
@@ -126,7 +128,12 @@ namespace LunarDominion.UI
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.25f;
+            // 2026-11-09 lighting upgrade: brighter, slightly warm sun
+            // (was 1.25 white) so the base reads vivid and the shadows
+            // have definition, and a stronger cool fill (was 0.35) so
+            // the faces turned away from the sun stay readable.
+            light.intensity = 1.5f;
+            light.color = new Color(1.0f, 0.96f, 0.88f);
             lightGo.transform.position = new Vector3(5f, 10f, 0f);
             lightGo.transform.LookAt(Vector3.zero);
 
@@ -137,10 +144,48 @@ namespace LunarDominion.UI
             var fillGo = new GameObject("Fill Light");
             var fill = fillGo.AddComponent<Light>();
             fill.type = LightType.Directional;
-            fill.intensity = 0.35f;
+            fill.intensity = 0.5f;
             fill.color = new Color(0.8f, 0.85f, 1f);
             fillGo.transform.position = new Vector3(-5f, 8f, -5f);
             fillGo.transform.LookAt(Vector3.zero);
+
+            // 2026-11-09 lighting upgrade: ambient + bloom.
+            // Ambient: brighten the scene's gradient ambient (sky /
+            // equator / ground) to a cool moonlight/earthshine so the
+            // shadowed faces are lifted without going flat. The scene
+            // (Main.unity) already uses Gradient ambient; these values
+            // replace its dark defaults.
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Gradient;
+            RenderSettings.ambientSkyColor = new Color(0.30f, 0.33f, 0.40f);
+            RenderSettings.ambientEquatorColor = new Color(0.22f, 0.24f, 0.29f);
+            RenderSettings.ambientGroundColor = new Color(0.12f, 0.13f, 0.16f);
+            // Bloom: a global Volume with a Bloom override, so the
+            // emissive materials (reactor rings, glowing windows,
+            // hazard bars, bollard tips, snow caps) glow instead of
+            // rendering as flat bright colour. The DefaultVolumeProfile
+            // in the project already has a Bloom override but its
+            // intensity is 0 (effectively off); this runtime Volume
+            // (priority 10) overrides it. Threshold 0.9 keeps the
+            // lit (non-emissive) surfaces from blooming — only the
+            // emissive parts (strength 1.0-3.0 in HDR) exceed it.
+            // Post-processing is enabled on the camera explicitly,
+            // since the camera is created here in code.
+            var camData = cam.GetUniversalAdditionalCameraData();
+            if (camData != null) camData.renderPostProcessing = true;
+            var bloomGo = new GameObject("Bloom Volume");
+            var bloomVolume = bloomGo.AddComponent<Volume>();
+            bloomVolume.isGlobal = true;
+            bloomVolume.priority = 10f;
+            var bloomProfile = ScriptableObject.CreateInstance<VolumeProfile>();
+            var bloom = bloomProfile.Add<Bloom>();
+            bloom.active = true;
+            bloom.threshold.overrideState = true;
+            bloom.threshold.value = 0.9f;
+            bloom.intensity.overrideState = true;
+            bloom.intensity.value = 0.5f;
+            bloom.scatter.overrideState = true;
+            bloom.scatter.value = 0.7f;
+            bloomVolume.profile = bloomProfile;
 
             // 2026-11-06 full-bleed: ground 56 wide by 48 deep, so it
             // runs past all four frame edges from the (10,16,10)
