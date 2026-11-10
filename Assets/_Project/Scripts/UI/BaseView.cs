@@ -880,22 +880,31 @@ namespace LunarDominion.UI
                 // The FBX has no collider, and tapping raycasts against
                 // colliders — give the model one matching the scaled
                 // footprint (1.75x: 3.5 wide, 5.25 tall, centred at
-                // y = 2.625).
+                // y = 2.625, in WORLD space). NOTE: the collider lives
+                // on the 1.75x-scaled Nexus, so its local centre/size
+                // are divided by 1.75 — otherwise the collider renders
+                // 6.13 wide, 9.19 tall, centred at 4.59.
                 if (go.GetComponentInChildren<Collider>() == null)
                 {
                     var box = go.AddComponent<BoxCollider>();
-                    box.center = new Vector3(0f, 2.625f, 0f);
-                    box.size = new Vector3(3.5f, 5.25f, 3.5f);
+                    box.center = new Vector3(0f, 2.625f / 1.75f, 0f);
+                    box.size = new Vector3(3.5f / 1.75f, 5.25f / 1.75f, 3.5f / 1.75f);
                 }
 
                 // Same white marker as the primitives, just above the
                 // antenna tip (model top ~2.9 x 1.75 = ~5.08, so 5.51
-                // sits on it).
+                // sits on it, in WORLD space). NOTE: the marker is a
+                // child of the 1.75x-scaled Nexus, so its local
+                // position/scale are divided by 1.75 — otherwise it
+                // floats at 9.64 and renders 1.84 wide (the "floating
+                // globe" Patrick reported 2026-11-09). Local 3.15 ->
+                // world 5.51; local 0.6 -> world 1.05 (proportionally
+                // bigger than the 0.6 markers on unscaled buildings).
                 var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 marker.name = "NexusMarker";
                 marker.transform.SetParent(go.transform, false);
-                marker.transform.localPosition = new Vector3(0f, 5.51f, 0f);
-                marker.transform.localScale = new Vector3(1.05f, 1.05f, 1.05f);
+                marker.transform.localPosition = new Vector3(0f, 5.51f / 1.75f, 0f);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
                 SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
 
                 _modelRenderers[BuildingId.CommandNexus] = list;
