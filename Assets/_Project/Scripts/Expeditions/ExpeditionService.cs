@@ -403,5 +403,146 @@ namespace LunarDominion.Expeditions
 
             return true;
         }
+
+        /// <summary>Real-time boss fight, start (2026-11-10): the
+        /// A.R.E.S.-09 fight in the lair resolves in real time via
+        /// AresBossController instead of CombatService, but the
+        /// economy around it is identical to TryStartHeroes — same
+        /// gate checks, energy spent up front (never refunded on
+        /// defeat) — and CompleteHeroesRealtime applies the same XP
+        /// pool / reward rules afterwards. Squad is heroes only
+        /// (positions in State.Heroes, 1-3); the returned
+        /// SquadCombatants carry the OwnedUnit + definition the
+        /// real-time combatants are built from.</summary>
+        public bool TryStartHeroesRealtime(EncounterDefinition encounter, List<int> squadHeroIndices,
+            out List<SquadCombatant> squad, out string reason, bool allowLockedTier = false)
+        {
+            squad = null;
+            var status = CheckExpedition(encounter, squadHeroIndices.Count, out reason, allowLockedTier);
+            if (status != ExpeditionStatus.CanStart) return false;
+
+            squad = new List<SquadCombatant>();
+            for (int i = 0; i < squadHeroIndices.Count; i++)
+            {
+                int heroIndex = squadHeroIndices[i];
+                if (_state.Heroes == null || heroIndex < 0 || heroIndex >= _state.Heroes.Count) continue;
+                var owned = _state.Heroes[heroIndex];
+                var def = _units.Find(u => u.Id == owned.Id);
+                if (def == null) continue;
+                squad.Add(new SquadCombatant { Unit = owned, Definition = def, SquadIndex = i });
+            }
+            if (squad.Count == 0)
+            {
+                reason = "Select at least one hero for the fight.";
+                squad = null;
+                return false;
+            }
+            if (!_energy.Spend(encounter.EnergyCost))
+            {
+                reason = $"Not enough energy ({_state.Energy} / {encounter.EnergyCost}).";
+                squad = null;
+                return false;
+            }
+            reason = "Fight started.";
+            return true;
+        }
+
+        /// <summary>Real-time boss fight, completion (2026-11-10):
+        /// applies the outcome of an AresBossController fight with
+        /// the same rules as ResolveFight's second half — victory
+        /// reward (research multiplier, storage-cap aware), XP pool
+        /// split among survivors at the hero boss rate (boss
+        /// encounters are Tier 4), flawless = victory with no fallen
+        /// hero. Fallen heroes recover instantly: they stay in
+        /// State.Heroes and never go to the Hospital (healing is
+        /// troops only). fallenSquadIndices are SquadIndex values
+        /// within the squad from TryStartHeroesRealtime;
+        /// fightSeconds is carried in the result's Rounds field
+        /// (the lair view formats it as the fight time).</summary>
+        public BattleResult CompleteHeroesRealtime(EncounterDefinition encounter, List<SquadCombatant> squad,
+            List<int> fallenSquadIndices, bool victory, int fightSeconds)
+        {
+            var result = new BattleResult
+            {
+                EncounterName = encounter.DisplayName,
+                Victory = victory,
+                Timeout = false,
+                Rounds = fightSeconds,
+                EnergySpent = encounter.EnergyCost
+            };
+            var fallen = new HashSet<int>(fallenSquadIndices ?? new List<int>());
+            foreach (int idx in fallen)
+            {
+                if (idx >= 0 && idx < squad.Count)
+                    result.HeroCasualtyNames.Add(squad[idx].Definition.DisplayName);
+            }
+            result.Flawless = victory && fallen.Count == 0;
+
+            // XP pool: full on victory (+flawless bonus), none on
+            // defeat (a real-time defeat means the whole squad fell,
+            // so there are no survivors to pay out anyway).
+            float xpMult = _research != null ? _research.XpMultiplier() : 1f;
+            float flawlessBonus = _research != null ? _research.FlawlessBonus() : 0.25f;
+            int pool = 0;
+            if (victory)
+            {
+                pool = result.Flawless
+                    ? (int)Math.Round(encounter.XpPool * (1f + flawlessBonus) * xpMult)
+                    : (int)Math.Round(encounter.XpPool * xpMult);
+            }
+            result.XpPool = pool;
+
+            var survivors = new List<SquadCombatant>();
+            for (int i = 0; i < squad.Count; i++)
+            {
+                if (!fallen.Contains(squad[i].SquadIndex)) survivors.Add(squad[i]);
+            }
+            if (pool > 0 && survivors.Count > 0)
+            {
+                int share = pool / survivors.Count;
+                int remainder = pool % survivors.Count;
+                for (int i = 0; i < survivors.Count; i++)
+                {
+                    var member = survivors[i];
+                    int gained = share + (i == 0 ? remainder : 0);
+                    // Heroes level at half rate from boss fights
+                    // (HeroXpRate — see ResolveFight).
+                    if (member.Definition.IsHero && encounter.Tier == 4)
+                    {
+                        gained = (int)Math.Round(gained * HeroXpRate);
+                    }
+                    int oldLevel = member.Unit.Level;
+                    member.Unit.XP += gained;
+                    while (member.Unit.Level < _balance.MaxUnitLevel
+                        && member.Unit.XP >= UnitStats.XpToNextLevel(member.Unit.Level))
+                    {
+                        member.Unit.XP -= UnitStats.XpToNextLevel(member.Unit.Level);
+                        member.Unit.Level++;
+                    }
+                    result.XpGains.Add(new XpGain
+                    {
+                        UnitName = member.Definition.DisplayName,
+                        XpGained = gained,
+                        OldLevel = oldLevel,
+                        NewLevel = member.Unit.Level
+                    });
+                }
+            }
+
+            // Victory reward only, reported after the storage cap.
+            if (victory)
+            {
+                float rewardMult = _research != null ? _research.RewardMultiplier() : 1f;
+                var scaledReward = new ResourceCost(
+                    (int)Math.Round(encounter.Reward.Biomass * rewardMult),
+                    (int)Math.Round(encounter.Reward.Alloy * rewardMult),
+                    (int)Math.Round(encounter.Reward.Helium3 * rewardMult));
+                int beforeB = _state.Biomass, beforeA = _state.Alloy, beforeH = _state.Helium3;
+                _economy.Earn(scaledReward);
+                result.RewardEarned = new ResourceCost(
+                    _state.Biomass - beforeB, _state.Alloy - beforeA, _state.Helium3 - beforeH);
+            }
+            return result;
+        }
     }
 }
