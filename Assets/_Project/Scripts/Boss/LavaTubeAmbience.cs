@@ -70,15 +70,13 @@ namespace LunarDominion.Boss
                 spot.range = 32f;
                 spot.spotAngle = 22f;
                 spot.innerSpotAngle = 12f;
-                var targetGo = new GameObject("ShaftTarget_" + (i + 1));
-                targetGo.transform.SetParent(transform, false);
-                targetGo.transform.localPosition = new Vector3(CrackXZ[i].x, 0f, CrackXZ[i].y);
-                spot.target = targetGo.transform;
+                // A spotlight shines along its transform's +Z —
+                // rotate the light to point straight down the shaft.
+                lightGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
                 if (i == 2)
                 {
                     // One shadow-casting light only (mobile budget).
                     spot.shadows = LightShadows.Soft;
-                    spot.shadowMapSize = 1024;
                 }
                 // Fake volumetric cone: additive, gradient alpha.
                 var cone = MakeCone(5.0f, 15.0f, 12);
