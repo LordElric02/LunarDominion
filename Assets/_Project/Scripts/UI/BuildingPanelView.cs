@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using LunarDominion.Core;
 using LunarDominion.Progression;
+using LunarDominion.Units;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -23,6 +24,18 @@ namespace LunarDominion.UI
             public Button HealButton;
         }
 
+        // Barracks recruitment (2026-11-10 redesign): one row per
+        // regular unit this building recruits, with a Recruit button.
+        // Heroes are NOT here — they live in the Heroes tab.
+        private class RecruitRow
+        {
+            public GameObject Root;
+            public UnitDefinition Def;
+            public Text NameText;
+            public Text StatsText;
+            public Button RecruitButton;
+        }
+
         private GameObject _root;
         private Text _nameText;
         private Text _levelText;
@@ -40,6 +53,15 @@ namespace LunarDominion.UI
         private GameObject _injuredContent;
         private readonly List<InjuredRow> _injuredRows = new List<InjuredRow>();
         private string _healFeedback = "";
+
+        // Barracks recruitment list (hidden unless a barracks building
+        // is selected). Replaces the info/status area, like the
+        // Hospital list does — a building is one or the other, never
+        // both, so the two sections never compete for the space.
+        private GameObject _recruitRoot;
+        private Text _recruitTitle;
+        private GameObject _recruitContent;
+        private readonly List<RecruitRow> _recruitRows = new List<RecruitRow>();
 
         public void Build(Canvas canvas, GameController controller)
         {
@@ -73,11 +95,12 @@ namespace LunarDominion.UI
             _upgradeButton.onClick.AddListener(OnUpgradeClicked);
 
             BuildInjuredSection();
+            BuildRecruitSection();
             _root.SetActive(false);
         }
 
         // Hospital injured list: a title + a vertical ScrollRect (same
-        // pattern as ArmyView's rows), occupying the info/status area
+        // pattern as the HeroesView rows), occupying the info/status area
         // (y 0.08-0.50) when the Hospital is selected with injured units.
         private void BuildInjuredSection()
         {
@@ -144,6 +167,75 @@ namespace LunarDominion.UI
             _injuredRoot.SetActive(false);
         }
 
+        // Barracks recruitment list: a title + a vertical ScrollRect
+        // (same pattern as the Hospital injured list), occupying the
+        // info/status area (y 0.08-0.50) when a barracks building is
+        // selected. One row per regular unit that building recruits.
+        private void BuildRecruitSection()
+        {
+            _recruitRoot = new GameObject("RecruitSection");
+            _recruitRoot.transform.SetParent(_root.transform, false);
+            var rootRt = _recruitRoot.AddComponent<RectTransform>();
+            rootRt.anchorMin = new Vector2(0.04f, 0.08f);
+            rootRt.anchorMax = new Vector2(0.96f, 0.50f);
+            rootRt.offsetMin = Vector2.zero;
+            rootRt.offsetMax = Vector2.zero;
+
+            _recruitTitle = UIHelpers.LabelInRect(_recruitRoot, "RecruitTitle",
+                "RECRUIT", 24, UIHelpers.Hex("#FFD166"),
+                new Rect(0f, 0.82f, 1f, 1f), TextAnchor.MiddleLeft);
+
+            var scrollGo = new GameObject("RecruitScroll");
+            scrollGo.transform.SetParent(_recruitRoot.transform, false);
+            var scrollRt = scrollGo.AddComponent<RectTransform>();
+            scrollRt.anchorMin = new Vector2(0f, 0f);
+            scrollRt.anchorMax = new Vector2(1f, 0.82f);
+            scrollRt.offsetMin = Vector2.zero;
+            scrollRt.offsetMax = Vector2.zero;
+            var scrollBg = scrollGo.AddComponent<Image>();
+            scrollBg.color = UIHelpers.Hex("#0F1724");
+            var scroll = scrollGo.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            var viewportGo = new GameObject("Viewport");
+            viewportGo.transform.SetParent(scrollGo.transform, false);
+            var viewportRt = viewportGo.AddComponent<RectTransform>();
+            viewportRt.anchorMin = Vector2.zero;
+            viewportRt.anchorMax = Vector2.one;
+            viewportRt.offsetMin = Vector2.zero;
+            viewportRt.offsetMax = Vector2.zero;
+            var viewportImg = viewportGo.AddComponent<Image>();
+            viewportImg.color = UIHelpers.Hex("#0F1724");
+            var mask = viewportGo.AddComponent<Mask>();
+            mask.showMaskGraphic = false;
+            scroll.viewport = viewportRt;
+
+            _recruitContent = new GameObject("Content");
+            _recruitContent.transform.SetParent(viewportGo.transform, false);
+            var contentRt = _recruitContent.AddComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(0, 1);
+            contentRt.anchorMax = new Vector2(1, 1);
+            contentRt.pivot = new Vector2(0.5f, 1);
+            contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = Vector2.zero;
+            var layout = _recruitContent.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 8;
+            layout.padding = new RectOffset(8, 8, 8, 8);
+            layout.childAlignment = TextAnchor.UpperCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            var fitter = _recruitContent.AddComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            scroll.content = contentRt;
+            _recruitRoot.SetActive(false);
+        }
+
         public void Show(BuildingDefinition def)
         {
             _current = def;
@@ -191,19 +283,106 @@ namespace LunarDominion.UI
             if (label != null) label.text = locked ? "Build" : "Upgrade";
 
             RefreshInjuredSection();
+            RefreshRecruitSection();
+            // The info/status texts show only when neither the injured
+            // list nor the recruit list occupies their area.
+            bool listShowing = (_injuredRoot != null && _injuredRoot.activeSelf)
+                || (_recruitRoot != null && _recruitRoot.activeSelf);
+            _infoText.gameObject.SetActive(!listShowing);
+            _statusText.gameObject.SetActive(!listShowing);
+        }
+
+        // Barracks only: show the recruitment list (one row per regular
+        // unit this building recruits). Heroes are NOT listed here —
+        // they live in the Heroes tab. The list occupies the info/status
+        // area, like the Hospital injured list does.
+        private void RefreshRecruitSection()
+        {
+            bool isBarracks = _current != null
+                && (_current.Id == BuildingId.MarineFoundry
+                    || _current.Id == BuildingId.NovaArsenal
+                    || _current.Id == BuildingId.AegisMotorPool);
+            _recruitRoot.SetActive(isBarracks);
+            if (!isBarracks)
+            {
+                foreach (var row in _recruitRows) row.Root.SetActive(false);
+                return;
+            }
+
+            _recruitTitle.text = $"RECRUIT — {_current.DisplayName}";
+
+            // Rebuild the rows to match the current building. The list
+            // is small (3 units per barracks), so a full rebuild is cheap.
+            foreach (var row in _recruitRows) Object.Destroy(row.Root);
+            _recruitRows.Clear();
+            var units = new List<UnitDefinition>();
+            foreach (var def in _controller.UnitDefinitions)
+            {
+                if (def != null && !def.IsHero && def.BarracksBuilding == _current.Id) units.Add(def);
+            }
+            units.Sort((a, b) => a.Tier.CompareTo(b.Tier));
+
+            foreach (var def in units)
+            {
+                var row = new RecruitRow { Def = def };
+                row.Root = new GameObject(def.DisplayName + "Row");
+                row.Root.transform.SetParent(_recruitContent.transform, false);
+                var rowRt = row.Root.AddComponent<RectTransform>();
+                rowRt.anchorMin = Vector2.zero;
+                rowRt.anchorMax = Vector2.one;
+                var le = row.Root.AddComponent<LayoutElement>();
+                le.preferredHeight = 96;
+                le.minHeight = 96;
+                var rowBg = row.Root.AddComponent<Image>();
+                rowBg.color = UIHelpers.Hex("#1A2436");
+
+                row.NameText = UIHelpers.LabelInRect(row.Root, "Name",
+                    $"{def.DisplayName} — Tier {def.Tier}", 26, Color.white,
+                    new Rect(0.03f, 0.55f, 0.66f, 0.97f), TextAnchor.MiddleLeft);
+                row.StatsText = UIHelpers.LabelInRect(row.Root, "Stats", "", 22, UIHelpers.Hex("#C0C8D0"),
+                    new Rect(0.03f, 0.05f, 0.66f, 0.55f), TextAnchor.MiddleLeft);
+
+                row.RecruitButton = UIHelpers.Button(row.Root, "RecruitBtn", "Recruit", 24,
+                    UIHelpers.Hex("#2E7D32"), Color.white);
+                var btnRt = row.RecruitButton.GetComponent<RectTransform>();
+                btnRt.anchorMin = new Vector2(0.68f, 0.12f);
+                btnRt.anchorMax = new Vector2(0.97f, 0.88f);
+                btnRt.offsetMin = Vector2.zero;
+                btnRt.offsetMax = Vector2.zero;
+                var captured = def;
+                row.RecruitButton.onClick.AddListener(() => OnRecruitClicked(captured));
+
+                int owned = _controller.Recruitment.CountOwned(def.Id);
+                row.StatsText.text = $"HP {def.BaseHealth}  ATK {def.BaseAttack}  DEF {def.BaseDefense}  •  Owned: {owned}";
+                var status = _controller.Recruitment.CheckRecruit(def, out var cost, out var reason);
+                string costText = CostText(cost);
+                row.NameText.text = status == RecruitStatus.CanRecruit
+                    ? $"{def.DisplayName} — Tier {def.Tier}  •  {costText}"
+                    : $"{def.DisplayName} — Tier {def.Tier}  •  {reason}";
+                UIHelpers.SetButtonEnabled(row.RecruitButton, status == RecruitStatus.CanRecruit);
+                _recruitRows.Add(row);
+            }
+        }
+
+        private void OnRecruitClicked(UnitDefinition def)
+        {
+            if (_controller.Recruitment.TryRecruit(def, out _))
+            {
+                _controller.SaveGame();
+            }
+            _controller.NotifyChanged();
+            Refresh();
         }
 
         // Hospital only: show the injured list when injured units are
-        // waiting, and hide the info/status texts while it is shown (the
-        // list occupies their area). Otherwise the list stays hidden and
-        // the normal info/status show.
+        // waiting. The info/status texts are hidden while EITHER the
+        // injured list or the recruit list is shown (handled in
+        // Refresh, after both sections are refreshed).
         private void RefreshInjuredSection()
         {
             bool isHospital = _current != null && _current.Id == BuildingId.Hospital;
             bool hasInjured = isHospital && _controller.Hospital != null && _controller.Hospital.HasInjured;
             _injuredRoot.SetActive(hasInjured);
-            _infoText.gameObject.SetActive(!hasInjured);
-            _statusText.gameObject.SetActive(!hasInjured);
             if (!hasInjured)
             {
                 foreach (var row in _injuredRows) row.Root.SetActive(false);

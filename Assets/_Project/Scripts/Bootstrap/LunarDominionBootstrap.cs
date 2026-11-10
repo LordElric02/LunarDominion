@@ -25,7 +25,7 @@ namespace LunarDominion.Bootstrap
         private MapExcursionService _excursions;
         private MapPointData _selectedPoint;
         private BuildingPanelView _buildingPanel;
-        private ArmyView _armyView;
+        private HeroesView _heroesView;
         private BottomNavView _bottomNav;
         private ResearchView _researchView;
         private DevHUDView _devHud;
@@ -101,8 +101,8 @@ namespace LunarDominion.Bootstrap
             _buildingPanel.Build(canvas, _controller);
             _baseView.OnEmptyBaseTapped += OnEmptyBaseTapped;
 
-            _armyView = new GameObject("ArmyView").AddComponent<ArmyView>();
-            _armyView.Build(canvas, _controller);
+            _heroesView = new GameObject("HeroesView").AddComponent<HeroesView>();
+            _heroesView.Build(canvas, _controller);
 
             _researchView = new GameObject("ResearchView").AddComponent<ResearchView>();
             _researchView.Build(canvas, _controller);
@@ -366,7 +366,7 @@ namespace LunarDominion.Bootstrap
             _mapInfoView.Hide();
             _squadPicker.Hide();
             _lairView?.Hide();
-            _armyView.Hide();
+            _heroesView.Hide();
             _researchView.Hide();
             switch (tab)
             {
@@ -375,11 +375,11 @@ namespace LunarDominion.Bootstrap
                     _baseView.SetVisible(true);
                     _baseView.SetMountainsVisible(true);
                     break;
-                case NavTab.Army:
+                case NavTab.Heroes:
                     _exteriorView.SetVisible(false);
                     _baseView.SetVisible(false);
                     _baseView.SetMountainsVisible(true);
-                    _armyView.Show();
+                    _heroesView.Show();
                     break;
                 case NavTab.Research:
                     _exteriorView.SetVisible(false);
@@ -406,7 +406,7 @@ namespace LunarDominion.Bootstrap
         {
             _topBar?.Refresh();
             _buildingPanel?.Refresh();
-            _armyView?.Refresh();
+            _heroesView?.Refresh();
             _researchView?.Refresh();
             // An occupation may have ended (its timer is real-time, and
             // it can end while the app was closed — the harvest is
