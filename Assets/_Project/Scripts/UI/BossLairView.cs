@@ -52,6 +52,7 @@ namespace LunarDominion.UI
         private GameObject _root;
         private GameObject _headerGo;
         private GameObject _bottomGo;
+        private RectTransform _bottomRt;
         private Text _titleText;
         private Text _bossInfoText;
         private Text _energyText;
@@ -250,6 +251,7 @@ namespace LunarDominion.UI
             // in the open middle band above this.
             _bottomGo = UIHelpers.Panel(_root, "BottomPanel", UIHelpers.Hex("#0D1420"),
                 new Vector2(0, 0f), new Vector2(1, 0.45f), Vector2.zero, Vector2.zero);
+            _bottomRt = _bottomGo.GetComponent<RectTransform>();
             _resultText = UIHelpers.LabelInRect(_bottomGo, "Result", "", 24, Color.white,
                 new Rect(0.04f, 0.72f, 0.96f, 0.98f), TextAnchor.UpperLeft);
             BuildHeroRowsScroll(_bottomGo);
@@ -336,8 +338,10 @@ namespace LunarDominion.UI
             // player can step back to an earlier level with < if they
             // want to re-fight it.
             _selectedBossLevel = HighestUnlockedBossLevel();
-            _sceneRoot.SetActive(true);
             _root.SetActive(true);
+            // Hero selection: hide the 3D lair and expand the panel so
+            // all heroes show without scrolling (Patrick 2026-11-10).
+            SetSelectMode(true);
             // A fresh open always shows the header + bottom panel (they
             // are hidden during a fight — see OnFightClicked).
             if (_headerGo != null) _headerGo.SetActive(true);
@@ -366,6 +370,20 @@ namespace LunarDominion.UI
             _visible = false;
             if (_sceneRoot != null) _sceneRoot.SetActive(false);
             if (_root != null) _root.SetActive(false);
+        }
+
+        // Hero selection mode (Patrick 2026-11-10): while the player is
+        // picking heroes, hide the 3D lair scene and expand the bottom
+        // panel to fill the area below the header, so all heroes show
+        // without scrolling. During the fight the 3D scene shows and
+        // the panel returns to its normal size (and the UI hides).
+        private void SetSelectMode(bool select)
+        {
+            if (_sceneRoot != null) _sceneRoot.SetActive(!select);
+            if (_bottomRt != null)
+            {
+                _bottomRt.anchorMax = select ? new Vector2(1, 0.80f) : new Vector2(1, 0.45f);
+            }
         }
 
         private void RefreshBossInfo()
@@ -427,11 +445,11 @@ namespace LunarDominion.UI
                 var emptyImg = emptyGo.AddComponent<Image>();
                 emptyImg.color = UIHelpers.Hex("#1A2436");
                 var layout = emptyGo.AddComponent<LayoutElement>();
-                layout.preferredHeight = 100;
+                layout.preferredHeight = 88;
                 var rt = emptyGo.GetComponent<RectTransform>();
                 rt.anchorMin = Vector2.zero;
                 rt.anchorMax = Vector2.one;
-                UIHelpers.LabelInRect(emptyGo, "Empty", "No heroes recruited yet — recruit one from the Army tab (Marine Foundry).", 24, UIHelpers.Hex("#C0C8D0"),
+                UIHelpers.LabelInRect(emptyGo, "Empty", "No heroes recruited yet — recruit one from the Heroes tab.", 24, UIHelpers.Hex("#C0C8D0"),
                     new Rect(0.03f, 0.10f, 0.97f, 0.90f));
                 RefreshFightButton();
                 return;
@@ -448,7 +466,9 @@ namespace LunarDominion.UI
                 var rowImg = rowGo.AddComponent<Image>();
                 rowImg.color = UIHelpers.Hex("#1A2436");
                 var rowLayout = rowGo.AddComponent<LayoutElement>();
-                rowLayout.preferredHeight = 100;
+                // 88px rows: in hero-selection mode the panel expands so
+                // all 3 heroes fit without scrolling (3x88 + spacing).
+                rowLayout.preferredHeight = 88;
                 var rowRt = rowGo.GetComponent<RectTransform>();
                 rowRt.anchorMin = Vector2.zero;
                 rowRt.anchorMax = Vector2.one;
@@ -591,10 +611,10 @@ namespace LunarDominion.UI
             var heroIndices = new List<int>(_selectedHeroIndices);
             _fighting = true;
             RefreshFightButton();
-            // Hide the UI during the fight (header + bottom panel: the
-            // hero rows, FIGHT and Back buttons) so the player sees the
-            // full 3D fight unobstructed. It comes back with the result
-            // when the animation finishes (FightAnimationRoutine).
+            // Leave hero-selection mode: show the 3D lair for the fight
+            // (the panel returns to normal size; the UI then hides for
+            // the ~2s fight so the full 3D fight is visible).
+            SetSelectMode(false);
             if (_headerGo != null) _headerGo.SetActive(false);
             if (_bottomGo != null) _bottomGo.SetActive(false);
             // Resolve the fight immediately (combat is instant); the
@@ -608,6 +628,9 @@ namespace LunarDominion.UI
             else
             {
                 _fighting = false;
+                // Fight could not start (e.g. not enough energy): back
+                // to hero-selection mode (3D hidden, panel expanded).
+                SetSelectMode(true);
                 if (_headerGo != null) _headerGo.SetActive(true);
                 if (_bottomGo != null) _bottomGo.SetActive(true);
                 _resultText.text = reason;
@@ -718,6 +741,10 @@ namespace LunarDominion.UI
             }
             if (_headerGo != null) _headerGo.SetActive(true);
             if (_bottomGo != null) _bottomGo.SetActive(true);
+            // Back to hero-selection mode: hide the 3D lair and expand
+            // the panel so all heroes show without scrolling, with the
+            // result at the top.
+            SetSelectMode(true);
             _fighting = false;
             // Boss ladder: a victory at the frontier unlocks the next
             // level. The boss never vanishes — it stays, and the player

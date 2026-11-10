@@ -10,18 +10,23 @@ namespace LunarDominion.Expeditions
     /// EncounterDefinition assets yet.</summary>
     public static class EncounterCatalog
     {
-        // Boss ladder (2026-11-10 redesign): 15 levels of War Robot.
-        // Defeating a level unlocks the next; the boss never vanishes.
-        // Level 1 is the buffed boss (HP 3000 / ATK 100 / DEF 40).
-        // Each level compounds: HP x1.20, ATK x1.12, DEF x1.08, energy
-        // +10, reward and XP pool x level. A maxed Lv 20 hero team can
-        // reach ~Level 10-11; Levels 12-15 need Nexus 30/35 and tiers
+        // Boss ladder (2026-11-10 redesign; difficulty cranked up
+        // 2026-11-10): 15 levels of War Robot. Defeating a level unlocks
+        // the next; the boss never vanishes. Patrick (Player Lv 9, top
+        // hero Lv 12) beat Level 8 on the old curve, but should only
+        // beat Level 3 — so the curve is much steeper now. Level 1 is
+        // the entry fight (HP 5000 / ATK 120 / DEF 50). Each level
+        // compounds: HP x1.30, ATK x1.18, DEF x1.12, energy +15, reward
+        // and XP pool x level. Level 3 (HP 8450) is a hard fight for
+        // Patrick's team (~15 rounds, losing Vega); Level 4 (HP 10985)
+        // is unbeatable for them (timeout). A maxed Lv 20 team caps
+        // around Level 4-5; Levels 12-15 need Nexus 30/35 and tiers
         // above the current 3 max (future) — they are impossible now,
         // by design.
         public const int MaxBossLevel = 15;
 
         /// <summary>War Robot encounter for a boss level (1-15, clamped).
-        /// Level 1 = the current buffed boss; higher levels scale up.</summary>
+        /// Level 1 = the entry boss; higher levels scale up steeply.</summary>
         public static EncounterDefinition CreateBossEncounter(int level)
         {
             level = Math.Max(1, Math.Min(level, MaxBossLevel));
@@ -29,12 +34,12 @@ namespace LunarDominion.Expeditions
             boss.Tier = 4;
             boss.DisplayName = $"War Robot Lv {level}";
             boss.RequiredNexusLevel = 10;
-            boss.EnergyCost = 50 + 10 * (level - 1);
+            boss.EnergyCost = 50 + 15 * (level - 1);
             boss.Reward = new ResourceCost(1500 * level, 1200 * level, 400 * level);
             boss.XpPool = 1000 * level;
-            int hp = (int)Math.Round(3000 * Math.Pow(1.20, level - 1));
-            int atk = (int)Math.Round(100 * Math.Pow(1.12, level - 1));
-            int def = (int)Math.Round(40 * Math.Pow(1.08, level - 1));
+            int hp = (int)Math.Round(5000 * Math.Pow(1.30, level - 1));
+            int atk = (int)Math.Round(120 * Math.Pow(1.18, level - 1));
+            int def = (int)Math.Round(50 * Math.Pow(1.12, level - 1));
             boss.Spawns = new List<EnemySpawn>
             {
                 new EnemySpawn { DisplayName = "War Robot", Class = UnitClass.Mechanized, Health = hp, Attack = atk, Defense = def, Count = 1 }
