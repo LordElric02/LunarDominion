@@ -144,6 +144,18 @@ namespace LunarDominion
             NotifyChanged();
         }
 
+        /// <summary>Dev / test helper (2026-11-10): bring the War Robot
+        /// boss back immediately, clearing its respawn timer so the lair
+        /// reappears at the same spot. Called only by DevHUDView, never
+        /// by gameplay UI. The map re-shows the lair on the next refresh
+        /// (SyncBoss, via RefreshMapNodeStates).</summary>
+        public void ResetBoss()
+        {
+            State.BossRespawnUtc = "";
+            SaveGame();
+            NotifyChanged();
+        }
+
         public void ResetGame()
         {
             Save.DeleteSave();

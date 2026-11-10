@@ -32,12 +32,16 @@ namespace LunarDominion.UI
                 new Vector2(0.05f, 0.55f), new Vector2(0.95f, 0.88f), Vector2.zero, Vector2.zero);
             var title = UIHelpers.LabelInRect(_root, "Title", "DEV — Test menu", 32, Color.white,
                 new Rect(0.05f, 0.85f, 0.95f, 0.98f), TextAnchor.MiddleCenter);
-            AddButton("Grant +1000 Biomass", 0.72f, () => _controller.GrantResources(1000, 0, 0));
-            AddButton("Grant +1000 Alloy", 0.60f, () => _controller.GrantResources(0, 1000, 0));
-            AddButton("Grant +1000 Helium-3", 0.48f, () => _controller.GrantResources(0, 0, 1000));
-            AddButton("Grant +1000 Energy", 0.36f, () => _controller.GrantEnergy(1000));
-            AddButton("Reset save (new game)", 0.24f, () => { _controller.ResetGame(); _controller.SaveGame(); });
-            AddButton("Save now", 0.12f, () => _controller.SaveGame());
+            AddButton("Grant +1000 Biomass", 0.73f, () => _controller.GrantResources(1000, 0, 0));
+            AddButton("Grant +1000 Alloy", 0.62f, () => _controller.GrantResources(0, 1000, 0));
+            AddButton("Grant +1000 Helium-3", 0.51f, () => _controller.GrantResources(0, 0, 1000));
+            AddButton("Grant +1000 Energy", 0.40f, () => _controller.GrantEnergy(1000));
+            // Reset Boss (2026-11-10): bring the War Robot back instantly
+            // (clears its 1h respawn timer) so the lair can be re-tested
+            // without waiting. The lair reappears at the same spot.
+            AddButton("Reset Boss (lair back now)", 0.29f, () => _controller.ResetBoss());
+            AddButton("Reset save (new game)", 0.18f, () => { _controller.ResetGame(); _controller.SaveGame(); });
+            AddButton("Save now", 0.07f, () => _controller.SaveGame());
             _root.SetActive(false);
         }
 
