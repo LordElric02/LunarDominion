@@ -186,44 +186,64 @@ namespace LunarDominion.UI
         private void BuildUI(Canvas canvas)
         {
             var safe = SafeArea.Get(canvas);
-            _root = UIHelpers.Panel(canvas.gameObject, "BossLairPanel", UIHelpers.Hex("#0D1420"),
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 200 + safe.Bottom), new Vector2(-20, 920 - safe.Top));
-            _titleText = UIHelpers.LabelInRect(_root, "Title", "WAR ROBOT LAIR", 36, Color.white,
-                new Rect(0.04f, 0.90f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
-            _bossInfoText = UIHelpers.LabelInRect(_root, "BossInfo", "", 24, UIHelpers.Hex("#FFD166"),
-                new Rect(0.04f, 0.82f, 0.96f, 0.90f), TextAnchor.MiddleCenter);
-            _energyText = UIHelpers.LabelInRect(_root, "Energy", "", 22, UIHelpers.Hex("#C0C8D0"),
-                new Rect(0.04f, 0.77f, 0.96f, 0.82f), TextAnchor.MiddleCenter);
-            BuildHeroRowsScroll();
-            _resultText = UIHelpers.LabelInRect(_root, "Result", "", 24, Color.white,
-                new Rect(0.04f, 0.10f, 0.96f, 0.30f), TextAnchor.UpperLeft);
+            // The root is a TRANSPARENT container (no opaque background):
+            // the 3D lair scene (robot + heroes) shows through the middle
+            // of the screen. The header (title/boss info/energy) sits at
+            // the top and the hero picker + buttons at the bottom; only
+            // those two bands are opaque, so the middle stays open.
+            _root = new GameObject("BossLairRoot");
+            _root.transform.SetParent(canvas.gameObject.transform, false);
+            var rootRt = _root.AddComponent<RectTransform>();
+            rootRt.anchorMin = new Vector2(0, 0);
+            rootRt.anchorMax = new Vector2(1, 0);
+            rootRt.offsetMin = new Vector2(20, 200 + safe.Bottom);
+            rootRt.offsetMax = new Vector2(-20, 920 - safe.Top);
 
-            _fightButton = UIHelpers.Button(_root, "FightButton", "FIGHT", 28,
+            // Header band (top ~20%): title, boss info, energy. Opaque
+            // dark so the text reads over the 3D scene.
+            var headerGo = UIHelpers.Panel(_root, "Header", UIHelpers.Hex("#0D1420"),
+                new Vector2(0, 0.80f), new Vector2(1, 1f), Vector2.zero, Vector2.zero);
+            _titleText = UIHelpers.LabelInRect(headerGo, "Title", "WAR ROBOT LAIR", 36, Color.white,
+                new Rect(0.04f, 0.62f, 0.96f, 0.98f), TextAnchor.MiddleCenter);
+            _bossInfoText = UIHelpers.LabelInRect(headerGo, "BossInfo", "", 24, UIHelpers.Hex("#FFD166"),
+                new Rect(0.04f, 0.30f, 0.96f, 0.62f), TextAnchor.MiddleCenter);
+            _energyText = UIHelpers.LabelInRect(headerGo, "Energy", "", 22, UIHelpers.Hex("#C0C8D0"),
+                new Rect(0.04f, 0.02f, 0.96f, 0.30f), TextAnchor.MiddleCenter);
+
+            // Bottom band (bottom ~45%): result text, hero picker, and
+            // the Fight / Back buttons. Opaque dark; the 3D scene shows
+            // in the open middle band above this.
+            var bottomGo = UIHelpers.Panel(_root, "BottomPanel", UIHelpers.Hex("#0D1420"),
+                new Vector2(0, 0f), new Vector2(1, 0.45f), Vector2.zero, Vector2.zero);
+            _resultText = UIHelpers.LabelInRect(bottomGo, "Result", "", 24, Color.white,
+                new Rect(0.04f, 0.72f, 0.96f, 0.98f), TextAnchor.UpperLeft);
+            BuildHeroRowsScroll(bottomGo);
+            _fightButton = UIHelpers.Button(bottomGo, "FightButton", "FIGHT", 28,
                 UIHelpers.Hex("#B71C1C"), Color.white);
             var fightRt = _fightButton.GetComponent<RectTransform>();
             fightRt.anchorMin = new Vector2(0.02f, 0.02f);
-            fightRt.anchorMax = new Vector2(0.49f, 0.08f);
+            fightRt.anchorMax = new Vector2(0.49f, 0.14f);
             fightRt.offsetMin = Vector2.zero;
             fightRt.offsetMax = Vector2.zero;
             _fightButton.onClick.AddListener(OnFightClicked);
 
-            _closeButton = UIHelpers.Button(_root, "CloseButton", "Back to Map", 28,
+            _closeButton = UIHelpers.Button(bottomGo, "CloseButton", "Back to Map", 28,
                 UIHelpers.Hex("#1A2436"), Color.white);
             var closeRt = _closeButton.GetComponent<RectTransform>();
             closeRt.anchorMin = new Vector2(0.51f, 0.02f);
-            closeRt.anchorMax = new Vector2(0.98f, 0.08f);
+            closeRt.anchorMax = new Vector2(0.98f, 0.14f);
             closeRt.offsetMin = Vector2.zero;
             closeRt.offsetMax = Vector2.zero;
             _closeButton.onClick.AddListener(() => OnCloseClicked?.Invoke());
         }
 
-        private void BuildHeroRowsScroll()
+        private void BuildHeroRowsScroll(GameObject parent)
         {
             var scrollGo = new GameObject("HeroRowsScroll");
-            scrollGo.transform.SetParent(_root.transform, false);
+            scrollGo.transform.SetParent(parent.transform, false);
             var scrollRt = scrollGo.AddComponent<RectTransform>();
-            scrollRt.anchorMin = new Vector2(0.02f, 0.32f);
-            scrollRt.anchorMax = new Vector2(0.98f, 0.76f);
+            scrollRt.anchorMin = new Vector2(0.02f, 0.16f);
+            scrollRt.anchorMax = new Vector2(0.98f, 0.70f);
             scrollRt.offsetMin = Vector2.zero;
             scrollRt.offsetMax = Vector2.zero;
             var scrollBg = scrollGo.AddComponent<Image>();
@@ -253,6 +273,18 @@ namespace LunarDominion.UI
             contentRt.anchorMax = new Vector2(1, 1);
             contentRt.pivot = new Vector2(0.5f, 1);
             contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = Vector2.zero;
+            // VerticalLayoutGroup (same as Army/SquadPicker): stacks the
+            // hero rows vertically and forces them to the content width.
+            // Without it the rows all overlap at the same spot and clip.
+            var layout = _heroRowsContent.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 10;
+            layout.padding = new RectOffset(10, 10, 10, 10);
+            layout.childAlignment = TextAnchor.UpperCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
             var fitter = _heroRowsContent.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
