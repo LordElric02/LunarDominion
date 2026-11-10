@@ -51,13 +51,19 @@ namespace LunarDominion.Units
             return _state.Heroes != null ? _state.Heroes.Count : 0;
         }
 
-        /// <summary>Barracks level required for a tier (GDD §3).</summary>
+        /// <summary>Barracks level required for a tier (GDD §3).
+        /// Tiers 4-6 (2026-11-10) unlock in the barracks' final
+        /// stretch; Tier 6 needs a maxed barracks (and so Nexus 30,
+        /// since a barracks cannot exceed the Nexus level).</summary>
         public static int RequiredBarracksLevel(int tier)
         {
             switch (tier)
             {
                 case 2: return 10;
                 case 3: return 20;
+                case 4: return 25;
+                case 5: return 28;
+                case 6: return 30;
                 default: return 1;
             }
         }

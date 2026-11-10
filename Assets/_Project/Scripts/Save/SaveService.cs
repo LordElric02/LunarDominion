@@ -277,10 +277,10 @@ namespace LunarDominion.Save
             {
                 if (unit == null) continue;
                 int id = (int)unit.Id;
-                // Valid UnitIds: 0-8 regular units, 9-11 heroes
-                // (2026-11-10). Anything else is dropped, never a
-                // whole save.
-                if (id < 0 || id > 11)
+                // Valid UnitIds: 0-8 regular units, 9-11 heroes,
+                // 12-20 the tier 4-6 units (2026-11-10). Anything else
+                // is dropped, never a whole save.
+                if (id < 0 || id > 20)
                 {
                     // Phase 6 fix (S4): §9 asks for a warning on drop.
                     Debug.LogWarning($"[Lunar Dominion] Dropped unknown unit ID {id} from save.");

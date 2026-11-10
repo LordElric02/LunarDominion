@@ -33,6 +33,27 @@ namespace LunarDominion.Core
             list.Add(MakeHero(UnitId.HeroReyes, "Commander Elena Reyes", UnitClass.Infantry, 800, 120, 50, 500, 500, 200));
             list.Add(MakeHero(UnitId.HeroVega, "Sergeant Marcus Vega", UnitClass.Ranged, 550, 180, 30, 500, 500, 200));
             list.Add(MakeHero(UnitId.HeroOkafor, "Lieutenant Ada Okafor", UnitClass.Mechanized, 1200, 80, 80, 500, 500, 200));
+            // Tiers 4-6 (2026-11-10): the endgame tiers. Tiers 1-3 grow
+            // ~x1.75 per tier; tiers 4-6 grow ~x2.2 per tier — the jump
+            // is deliberate: a maxed (Lv 20) full Tier 6 squad is the
+            // first army in the game whose damage output reaches the
+            // War Robot boss Level 15 (HP 196,869), and Tier 5 falls
+            // short of it (Patrick: "you need a Tier 6 army to beat the
+            // robot boss on level 15"). Unlocks: barracks 25 / 28 / 30
+            // (barracks cannot exceed the Nexus, so Tier 6 is a Nexus
+            // 30 capstone). Costs stay under the 8,000 storage cap.
+            // Infantry — Marine Foundry (Biomass + Alloy)
+            list.Add(Make(UnitId.BastionMarine, "Bastion Marine", UnitClass.Infantry, 4, BuildingId.MarineFoundry, 700, 121, 53, 900, 220, 0, 900));
+            list.Add(Make(UnitId.AstralKnight, "Astral Knight", UnitClass.Infantry, 5, BuildingId.MarineFoundry, 1540, 266, 117, 2400, 600, 0, 2100));
+            list.Add(Make(UnitId.EternalWarden, "Eternal Warden", UnitClass.Infantry, 6, BuildingId.MarineFoundry, 3390, 640, 257, 5500, 1500, 0, 4800));
+            // Ranged — Nova Arsenal (Alloy + Helium-3)
+            list.Add(Make(UnitId.IonMarksman, "Ion Marksman", UnitClass.Ranged, 4, BuildingId.NovaArsenal, 440, 198, 26, 0, 1000, 450, 1200));
+            list.Add(Make(UnitId.QuasarCannoneer, "Quasar Cannoneer", UnitClass.Ranged, 5, BuildingId.NovaArsenal, 970, 436, 58, 0, 2600, 1100, 2700));
+            list.Add(Make(UnitId.VoidAnnihilator, "Void Annihilator", UnitClass.Ranged, 6, BuildingId.NovaArsenal, 2130, 1050, 128, 0, 6000, 2600, 6000));
+            // Mechanized — Aegis Motor Pool (Alloy + Helium-3)
+            list.Add(Make(UnitId.JuggernautMech, "Juggernaut Mech", UnitClass.Mechanized, 4, BuildingId.AegisMotorPool, 1430, 143, 106, 0, 2200, 750, 1500));
+            list.Add(Make(UnitId.ColossusWalker, "Colossus Walker", UnitClass.Mechanized, 5, BuildingId.AegisMotorPool, 3150, 315, 233, 0, 4800, 1700, 3400));
+            list.Add(Make(UnitId.LeviathanPrime, "Leviathan Prime", UnitClass.Mechanized, 6, BuildingId.AegisMotorPool, 6930, 760, 513, 0, 7000, 3000, 7500));
             return list;
         }
 

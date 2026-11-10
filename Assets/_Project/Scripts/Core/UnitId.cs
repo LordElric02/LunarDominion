@@ -19,6 +19,17 @@ namespace LunarDominion.Core
         // They fight bosses in the lair view, not regular squads.
         HeroReyes,
         HeroVega,
-        HeroOkafor
+        HeroOkafor,
+        // Tiers 4-6 (2026-11-10): appended after the heroes so the
+        // original values never shift. Three per class, one per tier.
+        BastionMarine,
+        AstralKnight,
+        EternalWarden,
+        IonMarksman,
+        QuasarCannoneer,
+        VoidAnnihilator,
+        JuggernautMech,
+        ColossusWalker,
+        LeviathanPrime
     }
 }
