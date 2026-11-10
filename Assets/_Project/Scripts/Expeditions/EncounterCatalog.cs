@@ -4,8 +4,9 @@ using UnityEngine;
 
 namespace LunarDominion.Expeditions
 {
-    /// <summary>Builds the three GDD §5 encounters at runtime when the
-    /// project has no EncounterDefinition assets yet.</summary>
+    /// <summary>Builds the three GDD §5 encounters plus the War Robot
+    /// boss (2026-11-09) at runtime when the project has no
+    /// EncounterDefinition assets yet.</summary>
     public static class EncounterCatalog
     {
         public static List<EncounterDefinition> CreateDefaultEncounters()
@@ -51,6 +52,25 @@ namespace LunarDominion.Expeditions
                 new EnemySpawn { DisplayName = "Brood", Class = UnitClass.Mechanized, Health = 150, Attack = 20, Defense = 10, Count = 3 }
             };
             list.Add(tier3);
+
+            // Boss — War Robot (2026-11-09, Patrick's first boss): a
+            // single giant Mechanized enemy in a lair on the map (not a
+            // camp — see MapExcursionService for the lair flow). Tier 4
+            // keeps it out of the camp tier 1-3 loops. Infantry counters
+            // it (Mechanized is weak to Infantry). Single-phase: one big
+            // enemy, no special attacks yet — those come later.
+            var boss = ScriptableObject.CreateInstance<EncounterDefinition>();
+            boss.Tier = 4;
+            boss.DisplayName = "War Robot";
+            boss.RequiredNexusLevel = 10;
+            boss.EnergyCost = 50;
+            boss.Reward = new ResourceCost(1500, 1200, 400);
+            boss.XpPool = 1000;
+            boss.Spawns = new List<EnemySpawn>
+            {
+                new EnemySpawn { DisplayName = "War Robot", Class = UnitClass.Mechanized, Health = 1500, Attack = 60, Defense = 30, Count = 1 }
+            };
+            list.Add(boss);
 
             return list;
         }

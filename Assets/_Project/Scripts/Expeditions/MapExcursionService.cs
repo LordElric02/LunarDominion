@@ -11,8 +11,9 @@ using UnityEngine;
 namespace LunarDominion.Expeditions
 {
     /// <summary>Map excursions (2026-11-09, Patrick's plan): tap a resource
-    /// node or enemy camp on the exterior map, send the army, and resolve
-    /// the outcome. The player picks the squad in a picker (2026-11-09):
+    /// node, enemy camp, or the boss lair on the exterior map, send the
+    /// army, and resolve the outcome. The player picks the squad in a
+    /// picker (2026-11-09):
     /// it opens pre-filled with the whole army (strongest first, capped
     /// at the squad size) and they trim it; the chosen squad marches
     /// visibly from the castle. Nodes are OCCUPIED, not collected
@@ -29,7 +30,11 @@ namespace LunarDominion.Expeditions
     /// fight are the same fight. A defeated camp vanishes (2026-11-09)
     /// with its creatures, and another of the same tier respawns at a
     /// different spot after CampRespawnHours; losing leaves the camp in
-    /// place. Energy is spent and combat runs at ARRIVAL, not at send, so cancelling an outbound march (leaving
+    /// place. The boss lair (2026-11-09) works like a camp — same march,
+    /// same TryStart fight, same vanish-on-victory — but the boss is a
+    /// single Tier 4 encounter (War Robot) and it respawns at the SAME
+    /// spot after BossRespawnHours (lairs do not move). Energy is spent
+    /// and combat runs at ARRIVAL, not at send, so cancelling an outbound march (leaving
     /// the Map tab) before arrival costs nothing; an active occupation
     /// is never cancelled by leaving the tab — the army keeps farming.
     /// This service owns the rules; the march itself is visual and lives
@@ -45,6 +50,10 @@ namespace LunarDominion.Expeditions
         // Shortened to 1h (2026-11-09, Patrick) so it is quick to see
         // in testing; raise it again for a slower live pace.
         public const float CampRespawnHours = 1f;
+        // Boss respawn (2026-11-09): a defeated War Robot vanishes, and
+        // it respawns at the SAME lair spot after this many real-time
+        // hours. Same 1h as camps for testing.
+        public const float BossRespawnHours = 1f;
 
         // Raised when an excursion resolves (arrival outcome) or cannot
         // start — title + multi-line body for the info panel.
@@ -99,16 +108,18 @@ namespace LunarDominion.Expeditions
             // Restore camp positions/visibility from the save: a camp
             // defeated in a previous session is still vanished (until
             // its respawn time), and a respawned camp sits at its saved
-            // spot, not the original one.
+            // spot, not the original one. Same for the boss lair.
             SyncCamps();
+            SyncBoss();
         }
 
         /// <summary>Can an excursion be sent to this point right now?
         /// Nodes need a non-empty army and must not be depleted; camps
-        /// need a non-empty army and enough energy. The tier gate does
-        /// NOT block a map excursion (2026-11-09): the player may attack
-        /// a camp above their Nexus and the fight proceeds (and likely
-        /// fails) — WarningFor carries the too-strong warning instead.</summary>
+        /// and the boss lair need a non-empty army and enough energy.
+        /// The tier gate does NOT block a map excursion (2026-11-09):
+        /// the player may attack a camp or the boss above their Nexus
+        /// and the fight proceeds (and likely fails) — WarningFor
+        /// carries the too-strong warning instead.</summary>
         public bool CanSend(MapPointData point, out string reason)
         {
             reason = "";
@@ -129,11 +140,35 @@ namespace LunarDominion.Expeditions
                 reason = "Recruit units first — your army is empty.";
                 return false;
             }
-            if (point.Kind != MapPointKind.Camp)
+            if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair)
             {
                 if (IsNodeDepleted(point.Index, out var remaining))
                 {
                     reason = $"Depleted — regenerates in {FormatRemaining(remaining)}.";
+                    return false;
+                }
+                reason = "Ready to send.";
+                return true;
+            }
+            // Boss lair (2026-11-09): same rules as a camp, but the
+            // encounter is the Tier 4 War Robot and the defeated check
+            // is the boss respawn timer, not a camp tier.
+            if (point.Kind == MapPointKind.BossLair)
+            {
+                var boss = EncounterForBoss();
+                if (boss == null)
+                {
+                    reason = "No boss encounter.";
+                    return false;
+                }
+                if (IsBossDefeated())
+                {
+                    reason = "The War Robot was defeated — it will return to its lair soon.";
+                    return false;
+                }
+                if (_state.Energy < boss.EnergyCost)
+                {
+                    reason = $"Not enough energy ({_state.Energy} / {boss.EnergyCost}).";
                     return false;
                 }
                 reason = "Ready to send.";
@@ -159,13 +194,22 @@ namespace LunarDominion.Expeditions
             return true;
         }
 
-        /// <summary>Warning shown in the panel for a camp above the
-        /// player's Nexus (2026-11-09): the fight is allowed, but the
-        /// enemy is far stronger. Null when there is nothing to warn
-        /// about (nodes, or a camp at/below the player's Nexus).</summary>
+        /// <summary>Warning shown in the panel for a camp or the boss
+        /// above the player's Nexus (2026-11-09): the fight is allowed,
+        /// but the enemy is far stronger. Null when there is nothing to
+        /// warn about (nodes, or a camp/boss at/below the player's
+        /// Nexus).</summary>
         public string WarningFor(MapPointData point)
         {
-            if (point == null || point.Kind != MapPointKind.Camp) return null;
+            if (point == null) return null;
+            if (point.Kind == MapPointKind.BossLair)
+            {
+                var boss = EncounterForBoss();
+                if (boss == null) return null;
+                if (_state.NexusLevel >= boss.RequiredNexusLevel) return null;
+                return $"Warning: the War Robot is far stronger than your army — it unlocks at Nexus {boss.RequiredNexusLevel} (you are Nexus {_state.NexusLevel}). Your squad is likely to be wiped out.";
+            }
+            if (point.Kind != MapPointKind.Camp) return null;
             var encounter = EncounterForTier(point.Tier);
             if (encounter == null) return null;
             if (_state.NexusLevel >= encounter.RequiredNexusLevel) return null;
@@ -247,6 +291,11 @@ namespace LunarDominion.Expeditions
                 FinishMarch();
                 return;
             }
+            if (point.Kind == MapPointKind.BossLair)
+            {
+                FightBoss(point);
+                return;
+            }
             if (point.Kind != MapPointKind.Camp)
             {
                 // Node: the army stays and farms it (occupation) instead
@@ -257,8 +306,9 @@ namespace LunarDominion.Expeditions
             }
             FightCamp(point);
             // Nodes start an occupation (the return march waits until it
-            // completes); camps fight — FightCamp plays the animation,
-            // shows the result, and starts the return march itself.
+            // completes); camps and the boss fight — FightCamp/FightBoss
+            // play the animation, show the result, and start the return
+            // march themselves.
         }
 
         private void FinishMarch()
@@ -458,6 +508,64 @@ namespace LunarDominion.Expeditions
             }
         }
 
+        // Boss lair (2026-11-09): the War Robot. Same vanish/respawn
+        // shape as camps, but a single boss (no tier, no spots) — it
+        // respawns at the SAME lair spot after BossRespawnHours.
+
+        /// <summary>True while the War Robot is defeated and waiting to
+        /// respawn (its BossRespawnUtc is set).</summary>
+        public bool IsBossDefeated()
+        {
+            return !string.IsNullOrEmpty(_state.BossRespawnUtc);
+        }
+
+        // Vanish a defeated boss: record its respawn time, hide the
+        // lair and its robot, and save. The boss reappears at the same
+        // spot when CheckBossRespawn runs after the time.
+        private void VanishBoss()
+        {
+            _state.BossRespawnUtc = DateTime.UtcNow.AddHours(BossRespawnHours).ToString("o");
+            _view.SetBossVisible(false);
+            _saveGame?.Invoke();
+            _notifyChanged?.Invoke();
+            OnExcursionStateChanged?.Invoke();
+        }
+
+        /// <summary>Called regularly (Bootstrap RefreshAll, ~once a
+        /// second) and on load: if the defeated boss's respawn time has
+        /// passed, bring it back at the same lair spot. Also completes
+        /// a respawn whose time passed while the app was closed — the
+        /// boss is there on the next load.</summary>
+        public void CheckBossRespawn()
+        {
+            if (string.IsNullOrEmpty(_state.BossRespawnUtc)) return;
+            if (!DateTime.TryParse(_state.BossRespawnUtc, null, DateTimeStyles.RoundtripKind, out var respawnUtc)) return;
+            if (DateTime.UtcNow < respawnUtc) return;
+            _state.BossRespawnUtc = "";
+            _view.SetBossVisible(true);
+            _saveGame?.Invoke();
+            _notifyChanged?.Invoke();
+            OnExcursionStateChanged?.Invoke();
+        }
+
+        /// <summary>Hide the boss lair from the save when it is
+        /// defeated, or show it when active. Called on load
+        /// (constructor) and whenever the Map is shown. No-op for old
+        /// saves (boss active).</summary>
+        public void SyncBoss()
+        {
+            if (_view == null) return;
+            _view.SetBossVisible(!IsBossDefeated());
+        }
+
+        /// <summary>The War Robot encounter (Tier 4). Null when the
+        /// catalog has no Tier 4 encounter.</summary>
+        private EncounterDefinition EncounterForBoss()
+        {
+            if (_encounters == null) return null;
+            return _encounters.Find(e => e != null && e.Tier == 4);
+        }
+
         /// <summary>True while this node is being farmed (occupation
         /// active, in this session or restored from the save).</summary>
         public bool IsNodeOccupied(int nodeIndex)
@@ -547,6 +655,51 @@ namespace LunarDominion.Expeditions
                     // respawns elsewhere after CampRespawnHours. Losing
                     // leaves the camp in place, so the player can retry.
                     if (result.Victory) VanishCamp(point.Tier);
+                    StartReturnMarch(point);
+                });
+            }
+            else
+            {
+                OnExcursionResult?.Invoke(point.Title, reason);
+                StartReturnMarch(point);
+            }
+        }
+
+        // Boss lair (2026-11-09): the War Robot. Same fight as a camp —
+        // energy spent at start, no refund on defeat, rewards only on
+        // victory, casualties injured (hospital) — via TryStart with the
+        // Tier 4 boss encounter. A defeated boss vanishes with its robot,
+        // and it respawns at the SAME lair spot after BossRespawnHours.
+        // Losing leaves the boss in place, so the player can retry.
+        private void FightBoss(MapPointData point)
+        {
+            var encounter = EncounterForBoss();
+            var squad = ActiveSquad();
+            if (encounter == null || squad.Count == 0)
+            {
+                OnExcursionResult?.Invoke(point.Title, "Could not start the fight.");
+                StartReturnMarch(point);
+                return;
+            }
+            // Same fight as the Expeditions menu: energy spent at start,
+            // no refund on defeat, rewards only on victory, casualties
+            // injured. allowLockedTier: map excursions let the player
+            // attack above their Nexus — the fight proceeds and (almost
+            // certainly) fails.
+            if (_expeditions.TryStart(encounter, squad, out var result, out var reason, allowLockedTier: true))
+            {
+                _saveGame?.Invoke();
+                _notifyChanged?.Invoke();
+                // Play the fight animation first (~2s on the map), then
+                // show the result, vanish the boss on victory, and march
+                // back. The combat itself already resolved above — the
+                // animation is purely visual.
+                _view.PlayFightAnimation(point.Index, result.Victory, () =>
+                {
+                    OnExcursionResult?.Invoke(
+                        result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
+                        FormatBattleResult(result));
+                    if (result.Victory) VanishBoss();
                     StartReturnMarch(point);
                 });
             }

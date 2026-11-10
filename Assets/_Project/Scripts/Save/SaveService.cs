@@ -46,6 +46,9 @@ namespace LunarDominion.Save
         public int OccupationAmount;
         public int OccupationKind;
         public int OccupationTroops;
+        // Boss lair (2026-11-09): War Robot respawn timestamp.
+        // Old saves load with "" (boss active).
+        public string BossRespawnUtc = "";
     }
 
     public class SaveService
@@ -99,7 +102,8 @@ namespace LunarDominion.Save
                 OccupationEndUtc = state.OccupationEndUtc ?? "",
                 OccupationAmount = state.OccupationAmount,
                 OccupationKind = state.OccupationKind,
-                OccupationTroops = state.OccupationTroops
+                OccupationTroops = state.OccupationTroops,
+                BossRespawnUtc = state.BossRespawnUtc ?? ""
             };
             string json = JsonUtility.ToJson(data, true);
             string temp = SavePath + ".tmp";
@@ -143,7 +147,8 @@ namespace LunarDominion.Save
                     OccupationEndUtc = data.OccupationEndUtc ?? "",
                     OccupationAmount = Math.Max(0, data.OccupationAmount),
                     OccupationKind = Math.Max(0, Math.Min(data.OccupationKind, 2)),
-                    OccupationTroops = Math.Max(0, Math.Min(data.OccupationTroops, 8))
+                    OccupationTroops = Math.Max(0, Math.Min(data.OccupationTroops, 8)),
+                    BossRespawnUtc = data.BossRespawnUtc ?? ""
                 };
                 if (state.ActiveResearchId < 0)
                 {

@@ -58,6 +58,13 @@ namespace LunarDominion.Core
         public string[] CampRespawnUtc = new string[3];
         public int[] CampSpotIndex = new int[3];
 
+        // Boss lair (2026-11-09): the War Robot boss. One respawn
+        // timestamp; "" = the boss is active at its lair. When the
+        // boss is defeated the lair vanishes, and it respawns at the
+        // SAME spot after the timer (lairs do not move, unlike camps).
+        // Old saves load with "" (active).
+        public string BossRespawnUtc = "";
+
         // Node occupation (2026-11-09): the army farms a node for a
         // real-time duration (120 min / troops sent) instead of
         // collecting instantly. -1 = no occupation in progress.

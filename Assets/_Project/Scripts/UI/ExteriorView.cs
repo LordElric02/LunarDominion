@@ -7,19 +7,22 @@ using UnityEngine.EventSystems;
 namespace LunarDominion.UI
 {
     /// <summary>What a tappable map point is: a resource node (Biomass,
-    /// Alloy, Helium-3) or an enemy camp (one per Expedition tier).</summary>
+    /// Alloy, Helium-3), an enemy camp (one per Expedition tier), or the
+    /// boss lair (War Robot, 2026-11-09).</summary>
     public enum MapPointKind
     {
         Biomass,
         Alloy,
         Helium3,
-        Camp
+        Camp,
+        BossLair
     }
 
     /// <summary>Structured data for one tappable map point — the display
     /// strings plus what the excursion rules need (kind, tier, amount,
     /// position, and the index into the node/camp lists). Nodes are
-    /// indices 0-8 (in NodeDefs order); camps are 9-11.</summary>
+    /// indices 0-8 (in NodeDefs order); camps are 9-11; the boss lair
+    /// is 12.</summary>
     public class MapPointData
     {
         public int Index;
@@ -154,6 +157,10 @@ namespace LunarDominion.UI
             new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(55f, 0f, 15f) },
             new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-85f, 0f, 60f) },
             new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(120f, 0f, -80f) },
+            // Boss lair (2026-11-09): the War Robot lives here, far
+            // southwest corner of the map. Index 12. The lair does not
+            // move on respawn (unlike camps) — it is a fixed place.
+            new NodeDef { ResourcePath = "Models/BossLair", Kind = MapPointKind.BossLair, Title = "War Robot Lair", Info = "BOSS — War Robot\nGiant Mechanized enemy\nUnlocks at Nexus 10", Position = new Vector3(-120f, 0f, -100f) },
         };
 
         // Camp respawn spots (2026-11-09): when a camp is defeated it
@@ -319,6 +326,11 @@ namespace LunarDominion.UI
             new CreatureDef { ResourcePath = "Models/BroodTyrant", CampIndex = 11, Position = new Vector3(113f, 0f, -74f), Scale = 1f },
             new CreatureDef { ResourcePath = "Models/BroodTyrant", CampIndex = 11, Position = new Vector3(113f, 0f, -86f), Scale = 1f },
             new CreatureDef { ResourcePath = "Models/BroodTyrant", CampIndex = 11, Position = new Vector3(122f, 0f, -71f), Scale = 1f },
+            // Boss — War Robot at its lair (-120, -100), lair index 12.
+            // Scale 4x: a GIANT war robot, twice the size of the Brood
+            // Tyrant. Stands 6 units north of the lair structure so the
+            // two do not overlap. Tapping it selects the lair.
+            new CreatureDef { ResourcePath = "Models/WarRobot", CampIndex = 12, Position = new Vector3(-120f, 0f, -94f), Scale = 4f },
         };
 
         private void BuildCreatures()
@@ -676,13 +688,15 @@ namespace LunarDominion.UI
         {
             // The camp's creatures (not the camp marker itself — its
             // name is the camp Title, creatures are "<Title> Creature").
+            // Boss lair (2026-11-09): the War Robot is a BossLair
+            // creature, and it animates the same way as a camp creature.
             var creatures = new List<GameObject>();
             var origPos = new List<Vector3>();
             var origRot = new List<Quaternion>();
             foreach (var point in _mapPoints)
             {
                 if (point.Data == null || point.Data.Index != campIndex) continue;
-                if (point.Data.Kind != MapPointKind.Camp) continue;
+                if (point.Data.Kind != MapPointKind.Camp && point.Data.Kind != MapPointKind.BossLair) continue;
                 if (point.Go == null) continue;
                 if (!point.Go.name.EndsWith(" Creature")) continue;
                 creatures.Add(point.Go);
@@ -836,14 +850,15 @@ namespace LunarDominion.UI
 
         // Mark a resource node as occupied (being farmed): its renderers
         // turn amber. Restoring clears the amber back to the original
-        // colours. Camps never occupy, and creature points carry camp
-        // data (index 9-11), so the index check alone keeps them out.
+        // colours. Camps and the boss lair never occupy, and creature
+        // points carry camp/lair data (index 9-12), so the index check
+        // alone keeps them out.
         public void SetNodeOccupied(int nodeIndex, bool occupied)
         {
             foreach (var point in _mapPoints)
             {
                 if (point.Data == null || point.Data.Index != nodeIndex) continue;
-                if (point.Data.Kind == MapPointKind.Camp) continue;
+                if (point.Data.Kind == MapPointKind.Camp || point.Data.Kind == MapPointKind.BossLair) continue;
                 if (point.Renderers == null) continue;
                 for (int i = 0; i < point.Renderers.Length; i++)
                 {
@@ -864,7 +879,7 @@ namespace LunarDominion.UI
             foreach (var point in _mapPoints)
             {
                 if (point.Data == null || point.Data.Index != nodeIndex) continue;
-                if (point.Data.Kind == MapPointKind.Camp) continue;
+                if (point.Data.Kind == MapPointKind.Camp || point.Data.Kind == MapPointKind.BossLair) continue;
                 if (point.Go != null) point.Go.SetActive(visible);
             }
         }
@@ -881,6 +896,21 @@ namespace LunarDominion.UI
             {
                 if (point.Data == null || point.Data.Index != campIndex) continue;
                 if (point.Data.Kind != MapPointKind.Camp) continue;
+                if (point.Go != null) point.Go.SetActive(visible);
+            }
+        }
+
+        // Show or hide the boss lair (2026-11-09): a defeated boss
+        // vanishes with its robot until it respawns at the SAME spot
+        // after BossRespawnHours. Hiding also hides it from taps. The
+        // lair (index 12) and its robot both carry Data.Index == 12,
+        // so one pass hides the whole lair.
+        public void SetBossVisible(bool visible)
+        {
+            foreach (var point in _mapPoints)
+            {
+                if (point.Data == null || point.Data.Index != 12) continue;
+                if (point.Data.Kind != MapPointKind.BossLair) continue;
                 if (point.Go != null) point.Go.SetActive(visible);
             }
         }

@@ -145,7 +145,7 @@ namespace LunarDominion.Bootstrap
             if (point == null) return;
             string info = point.Info;
             bool showSend = false;
-            if (point.Kind != MapPointKind.Camp && _excursions.IsNodeOccupied(point.Index))
+            if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair && _excursions.IsNodeOccupied(point.Index))
             {
                 if (_excursions.OccupationInfo(point.Index, out int troops, out var remaining))
                 {
@@ -156,7 +156,7 @@ namespace LunarDominion.Bootstrap
                     info = $"{point.Info}\nBeing farmed.";
                 }
             }
-            else if (point.Kind != MapPointKind.Camp && _excursions.IsNodeDepleted(point.Index, out var remaining))
+            else if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair && _excursions.IsNodeDepleted(point.Index, out var remaining))
             {
                 info = $"{point.Info}\nDepleted — regenerates in {MapExcursionService.FormatRemaining(remaining)}.";
             }
@@ -269,6 +269,7 @@ namespace LunarDominion.Bootstrap
         {
             if (_exteriorView == null || _excursions == null) return;
             _excursions.SyncCamps();
+            _excursions.SyncBoss();
             for (int i = 0; i < 9; i++)
             {
                 if (_excursions.IsNodeOccupied(i))
@@ -348,6 +349,7 @@ namespace LunarDominion.Bootstrap
             // also have respawned (its timer is real-time too).
             _excursions?.CheckOccupationDue();
             _excursions?.CheckCampRespawns();
+            _excursions?.CheckBossRespawn();
             if (_exteriorView != null && _exteriorView.IsVisible) RefreshMapNodeStates();
         }
     }
