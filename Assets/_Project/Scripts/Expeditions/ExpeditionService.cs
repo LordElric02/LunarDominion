@@ -35,6 +35,10 @@ namespace LunarDominion.Expeditions
         public ResourceCost RewardEarned;
         public int XpPool;
         public List<string> CasualtyNames = new List<string>();
+        // Fallen heroes are listed separately (2026-11-10): heroes
+        // recover instantly after the fight and are never injured, so
+        // they are not Hospital casualties like regular troops.
+        public List<string> HeroCasualtyNames = new List<string>();
         public List<XpGain> XpGains = new List<XpGain>();
     }
 
@@ -161,8 +165,11 @@ namespace LunarDominion.Expeditions
 
         /// <summary>Hero boss fight (2026-11-10): same fight as TryStart,
         /// but the squad is heroes (positions in State.Heroes, 1-3) and
-        /// the encounter is the boss. Fallen heroes move from Heroes to
-        /// the Injured list (not the Army) and heal back to Heroes.
+        /// the encounter is the boss. Fallen heroes RECOVER INSTANTLY
+        /// after the fight (Patrick 2026-11-10): they stay in
+        /// State.Heroes, are never injured and never go to the Hospital
+        /// — healing applies to troops only. A fallen hero's cost is
+        /// the lost fight and the missed XP (XP splits among survivors).
         /// allowLockedTier: the lair view lets the player attack above
         /// their Nexus, like a map camp — the fight proceeds and
         /// (almost certainly) fails, with a warning shown first.</summary>
@@ -190,24 +197,10 @@ namespace LunarDominion.Expeditions
             }
             if (!ResolveFight(encounter, squad, out result, out var outcome, out reason)) return false;
 
-            // Hospital: fallen heroes are INJURED, not dead. Move them
-            // from Heroes to the Injured list (highest index first so
-            // earlier indices stay valid). They keep level and XP and
-            // heal back to Heroes (HospitalService).
-            var deadHeroIndices = new List<int>();
-            foreach (int deadIndex in outcome.DeadSquadIndices)
-            {
-                deadHeroIndices.Add(squadHeroIndices[deadIndex]);
-            }
-            deadHeroIndices.Sort((a, b) => b.CompareTo(a));
-            foreach (int heroIndex in deadHeroIndices)
-            {
-                if (_state.Heroes != null && heroIndex >= 0 && heroIndex < _state.Heroes.Count)
-                {
-                    _state.Injured.Add(_state.Heroes[heroIndex]);
-                    _state.Heroes.RemoveAt(heroIndex);
-                }
-            }
+            // Heroes recover instantly (Patrick 2026-11-10): fallen
+            // heroes stay in State.Heroes — no Injured move, no Hospital.
+            // They keep their level and XP (and gained none from this
+            // fight: XP splits among survivors only).
 
             reason = outcome.Victory ? "Victory!" : (outcome.Timeout ? "Defeat — 20-round timeout." : "Defeat.");
             return true;
@@ -218,9 +211,9 @@ namespace LunarDominion.Expeditions
         /// from those fights. squadArmyIndices are positions in
         /// State.Army, squadHeroIndices positions in State.Heroes; the
         /// COMBINED squad is capped at MaxSquadSize (8). Fallen army
-        /// units move Army -> Injured, fallen heroes Heroes -> Injured
-        /// (highest index first in each list, so earlier indices stay
-        /// valid). Same combat, energy and reward as TryStart.</summary>
+        /// units move Army -> Injured; fallen heroes recover instantly
+        /// and stay in Heroes (healing applies to troops only).
+        /// Same combat, energy and reward as TryStart.</summary>
         public bool TryStartMixed(EncounterDefinition encounter, List<int> squadArmyIndices, List<int> squadHeroIndices,
             out BattleResult result, out string reason, bool allowLockedTier = false)
         {
@@ -265,34 +258,24 @@ namespace LunarDominion.Expeditions
             }
             if (!ResolveFight(encounter, squad, out result, out var outcome, out reason)) return false;
 
-            // Casualties are INJURED, not dead (Hospital). Army units
-            // move Army -> Injured, heroes Heroes -> Injured. The dead
-            // indices are squad positions; map each back to its own
-            // list (army indices first, then hero indices) and move
-            // highest-first so earlier indices stay valid.
+            // Troop casualties are INJURED, not dead (Hospital): army
+            // units move Army -> Injured. Fallen HEROES recover
+            // instantly and stay in Heroes (Patrick 2026-11-10 —
+            // healing applies to troops only), so only the army dead
+            // are mapped and moved here, highest-first so earlier
+            // indices stay valid.
             var deadArmyIndices = new List<int>();
-            var deadHeroIndices = new List<int>();
             foreach (int deadIndex in outcome.DeadSquadIndices)
             {
                 if (deadIndex < armyInSquad) deadArmyIndices.Add(squadArmyIndices[deadIndex]);
-                else deadHeroIndices.Add(squadHeroIndices[deadIndex - armyInSquad]);
             }
             deadArmyIndices.Sort((a, b) => b.CompareTo(a));
-            deadHeroIndices.Sort((a, b) => b.CompareTo(a));
             foreach (int armyIndex in deadArmyIndices)
             {
                 if (armyIndex >= 0 && armyIndex < _state.Army.Count)
                 {
                     _state.Injured.Add(_state.Army[armyIndex]);
                     _state.Army.RemoveAt(armyIndex);
-                }
-            }
-            foreach (int heroIndex in deadHeroIndices)
-            {
-                if (_state.Heroes != null && heroIndex >= 0 && heroIndex < _state.Heroes.Count)
-                {
-                    _state.Injured.Add(_state.Heroes[heroIndex]);
-                    _state.Heroes.RemoveAt(heroIndex);
                 }
             }
 
@@ -332,9 +315,12 @@ namespace LunarDominion.Expeditions
             };
 
             // Casualty names, in squad order, before any removal.
+            // Heroes are tracked separately: they recover instantly
+            // after the fight (never injured), troops go to the Hospital.
             foreach (int deadIndex in outcome.DeadSquadIndices)
             {
-                result.CasualtyNames.Add(squad[deadIndex].Definition.DisplayName);
+                if (squad[deadIndex].Definition.IsHero) result.HeroCasualtyNames.Add(squad[deadIndex].Definition.DisplayName);
+                else result.CasualtyNames.Add(squad[deadIndex].Definition.DisplayName);
             }
             result.Flawless = outcome.Victory && outcome.DeadSquadIndices.Count == 0;
 

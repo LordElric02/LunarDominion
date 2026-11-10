@@ -164,6 +164,18 @@ namespace LunarDominion.Save
                     state.ActiveResearchTargetLevel = 0;
                     state.ActiveResearchFinishUtc = "";
                 }
+                // Heroes recover instantly after a fight and are never
+                // injured (Patrick 2026-11-10): a hero left in the
+                // Injured list by an older save returns to Heroes here.
+                for (int i = state.Injured.Count - 1; i >= 0; i--)
+                {
+                    var id = state.Injured[i].Id;
+                    if (id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor)
+                    {
+                        state.Heroes.Add(state.Injured[i]);
+                        state.Injured.RemoveAt(i);
+                    }
+                }
                 // Clamp levels: 0-30, and no building above the Nexus.
                 int nexus = Math.Max(1, Math.Min(state.NexusLevel, _balance.MaxBuildingLevel));
                 state.SetLevel(BuildingId.CommandNexus, nexus);

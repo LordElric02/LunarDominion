@@ -855,9 +855,17 @@ namespace LunarDominion.Expeditions
             {
                 body.AppendLine("No reward (defeat). Energy is not refunded.");
             }
-            body.AppendLine(result.CasualtyNames.Count == 0
-                ? "Casualties: none"
-                : "Injured: " + string.Join(", ", result.CasualtyNames) + " — heal them at the Hospital.");
+            if (result.CasualtyNames.Count == 0 && result.HeroCasualtyNames.Count == 0)
+            {
+                body.AppendLine("Casualties: none");
+            }
+            else
+            {
+                if (result.CasualtyNames.Count > 0)
+                    body.AppendLine("Injured: " + string.Join(", ", result.CasualtyNames) + " — heal them at the Hospital.");
+                if (result.HeroCasualtyNames.Count > 0)
+                    body.AppendLine("Heroes down: " + string.Join(", ", result.HeroCasualtyNames) + " — heroes recover after the fight.");
+            }
             body.AppendLine($"XP pool: {result.XpPool}");
             if (result.XpGains.Count == 0)
             {
