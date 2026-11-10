@@ -122,6 +122,100 @@ namespace LunarDominion.Expeditions
                 reason = "Select at least one unit for your squad.";
                 return false;
             }
+            if (!ResolveFight(encounter, squad, out result, out var outcome, out reason)) return false;
+
+            // Hospital (2026-11-09): casualties are INJURED, not dead.
+            // Move the fallen units from the Army to the Injured list
+            // (highest army index first so earlier indices stay valid
+            // while moving). They keep their level and XP and cannot
+            // fight until healed in the Hospital (HospitalService).
+            // Future: a permadeath encounter type (e.g. attacking a
+            // base) will remove its casualties permanently instead —
+            // that branch goes here, gated on an encounter flag.
+            var deadArmyIndices = new List<int>();
+            foreach (int deadIndex in outcome.DeadSquadIndices)
+            {
+                deadArmyIndices.Add(squadArmyIndices[deadIndex]);
+            }
+            deadArmyIndices.Sort((a, b) => b.CompareTo(a));
+            foreach (int armyIndex in deadArmyIndices)
+            {
+                if (armyIndex >= 0 && armyIndex < _state.Army.Count)
+                {
+                    _state.Injured.Add(_state.Army[armyIndex]);
+                    _state.Army.RemoveAt(armyIndex);
+                }
+            }
+
+            reason = outcome.Victory ? "Victory!" : (outcome.Timeout ? "Defeat — 20-round timeout." : "Defeat.");
+            return true;
+        }
+
+        /// <summary>Hero boss fight (2026-11-10): same fight as TryStart,
+        /// but the squad is heroes (positions in State.Heroes, 1-3) and
+        /// the encounter is the boss. Fallen heroes move from Heroes to
+        /// the Injured list (not the Army) and heal back to Heroes.
+        /// allowLockedTier: the lair view lets the player attack above
+        /// their Nexus, like a map camp — the fight proceeds and
+        /// (almost certainly) fails, with a warning shown first.</summary>
+        public bool TryStartHeroes(EncounterDefinition encounter, List<int> squadHeroIndices,
+            out BattleResult result, out string reason, bool allowLockedTier = false)
+        {
+            result = null;
+            var status = CheckExpedition(encounter, squadHeroIndices.Count, out reason, allowLockedTier);
+            if (status != ExpeditionStatus.CanStart) return false;
+
+            var squad = new List<SquadCombatant>();
+            for (int i = 0; i < squadHeroIndices.Count; i++)
+            {
+                int heroIndex = squadHeroIndices[i];
+                if (_state.Heroes == null || heroIndex < 0 || heroIndex >= _state.Heroes.Count) continue;
+                var owned = _state.Heroes[heroIndex];
+                var def = _units.Find(u => u.Id == owned.Id);
+                if (def == null) continue;
+                squad.Add(new SquadCombatant { Unit = owned, Definition = def, SquadIndex = i });
+            }
+            if (squad.Count == 0)
+            {
+                reason = "Select at least one hero for the fight.";
+                return false;
+            }
+            if (!ResolveFight(encounter, squad, out result, out var outcome, out reason)) return false;
+
+            // Hospital: fallen heroes are INJURED, not dead. Move them
+            // from Heroes to the Injured list (highest index first so
+            // earlier indices stay valid). They keep level and XP and
+            // heal back to Heroes (HospitalService).
+            var deadHeroIndices = new List<int>();
+            foreach (int deadIndex in outcome.DeadSquadIndices)
+            {
+                deadHeroIndices.Add(squadHeroIndices[deadIndex]);
+            }
+            deadHeroIndices.Sort((a, b) => b.CompareTo(a));
+            foreach (int heroIndex in deadHeroIndices)
+            {
+                if (_state.Heroes != null && heroIndex >= 0 && heroIndex < _state.Heroes.Count)
+                {
+                    _state.Injured.Add(_state.Heroes[heroIndex]);
+                    _state.Heroes.RemoveAt(heroIndex);
+                }
+            }
+
+            reason = outcome.Victory ? "Victory!" : (outcome.Timeout ? "Defeat — 20-round timeout." : "Defeat.");
+            return true;
+        }
+
+        /// <summary>Shared fight resolution (2026-11-10): spend energy,
+        /// resolve combat, build the result, apply XP to survivors and
+        /// the victory reward. TryStart (army) and TryStartHeroes
+        /// (heroes) both call this; each moves its own casualties after.
+        /// Returns false without spending energy if energy is short.</summary>
+        private bool ResolveFight(EncounterDefinition encounter, List<SquadCombatant> squad,
+            out BattleResult result, out CombatOutcome outcome, out string reason)
+        {
+            result = null;
+            outcome = null;
+            reason = "";
             if (!_energy.Spend(encounter.EnergyCost))
             {
                 reason = $"Not enough energy ({_state.Energy} / {encounter.EnergyCost}).";
@@ -131,7 +225,7 @@ namespace LunarDominion.Expeditions
             // Phase 6: pass the player's Nexus level so enemies scale
             // above their gate (1.0 at the gate itself).
             // Research: pass research so class bonuses apply to players.
-            var outcome = CombatService.Resolve(squad, encounter, _state.NexusLevel, _research);
+            outcome = CombatService.Resolve(squad, encounter, _state.NexusLevel, _research);
 
             result = new BattleResult
             {
@@ -216,30 +310,6 @@ namespace LunarDominion.Expeditions
                     _state.Biomass - beforeB, _state.Alloy - beforeA, _state.Helium3 - beforeH);
             }
 
-            // Hospital (2026-11-09): casualties are INJURED, not dead.
-            // Move the fallen units from the Army to the Injured list
-            // (highest army index first so earlier indices stay valid
-            // while moving). They keep their level and XP and cannot
-            // fight until healed in the Hospital (HospitalService).
-            // Future: a permadeath encounter type (e.g. attacking a
-            // base) will remove its casualties permanently instead —
-            // that branch goes here, gated on an encounter flag.
-            var deadArmyIndices = new List<int>();
-            foreach (int deadIndex in outcome.DeadSquadIndices)
-            {
-                deadArmyIndices.Add(squadArmyIndices[deadIndex]);
-            }
-            deadArmyIndices.Sort((a, b) => b.CompareTo(a));
-            foreach (int armyIndex in deadArmyIndices)
-            {
-                if (armyIndex >= 0 && armyIndex < _state.Army.Count)
-                {
-                    _state.Injured.Add(_state.Army[armyIndex]);
-                    _state.Army.RemoveAt(armyIndex);
-                }
-            }
-
-            reason = outcome.Victory ? "Victory!" : (outcome.Timeout ? "Defeat — 20-round timeout." : "Defeat.");
             return true;
         }
     }

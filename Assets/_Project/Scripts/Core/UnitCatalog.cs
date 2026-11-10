@@ -3,9 +3,10 @@ using UnityEngine;
 
 namespace LunarDominion.Core
 {
-    /// <summary>Builds the nine GDD §5 unit definitions at runtime when the
-    /// project has no UnitDefinition assets yet. Replace with assigned
-    /// ScriptableObject assets later without changing any service code.</summary>
+    /// <summary>Builds the nine GDD §5 unit definitions plus the three
+    /// named heroes (2026-11-10) at runtime when the project has no
+    /// UnitDefinition assets yet. Replace with assigned ScriptableObject
+    /// assets later without changing any service code.</summary>
     public static class UnitCatalog
     {
         public static List<UnitDefinition> CreateDefaultDefinitions()
@@ -23,7 +24,36 @@ namespace LunarDominion.Core
             list.Add(Make(UnitId.ScoutRover, "Scout Rover", UnitClass.Mechanized, 1, BuildingId.AegisMotorPool, 200, 22, 18, 0, 100, 30, 60));
             list.Add(Make(UnitId.AssaultMech, "Assault Mech", UnitClass.Mechanized, 2, BuildingId.AegisMotorPool, 360, 38, 30, 0, 300, 100, 240));
             list.Add(Make(UnitId.TitanWalker, "Titan Walker", UnitClass.Mechanized, 3, BuildingId.AegisMotorPool, 650, 65, 48, 0, 900, 300, 600));
+            // Heroes (2026-11-10): named characters, one of each, max 3.
+            // All recruited from the Marine Foundry (the hero hall for
+            // v1). They fight bosses in the lair view, not regular
+            // squads. Reyes (Infantry) counters the Mechanized War
+            // Robot; Vega (Ranged) is high damage / fragile; Okafor
+            // (Mechanized) is the tank.
+            list.Add(MakeHero(UnitId.HeroReyes, "Commander Elena Reyes", UnitClass.Infantry, 800, 120, 50, 500, 500, 200));
+            list.Add(MakeHero(UnitId.HeroVega, "Sergeant Marcus Vega", UnitClass.Ranged, 550, 180, 30, 500, 500, 200));
+            list.Add(MakeHero(UnitId.HeroOkafor, "Lieutenant Ada Okafor", UnitClass.Mechanized, 1200, 80, 80, 500, 500, 200));
             return list;
+        }
+
+        private static UnitDefinition MakeHero(UnitId id, string name, UnitClass cls,
+            int hp, int atk, int def, int costB, int costA, int costH)
+        {
+            var unit = ScriptableObject.CreateInstance<UnitDefinition>();
+            unit.Id = id;
+            unit.DisplayName = name;
+            unit.Class = cls;
+            unit.Tier = 1;
+            unit.BarracksBuilding = BuildingId.MarineFoundry;
+            unit.BaseHealth = hp;
+            unit.BaseAttack = atk;
+            unit.BaseDefense = def;
+            unit.BaseBiomassCost = costB;
+            unit.BaseAlloyCost = costA;
+            unit.BaseHelium3Cost = costH;
+            unit.RecruitmentTimeSeconds = 0;
+            unit.IsHero = true;
+            return unit;
         }
 
         private static UnitDefinition Make(UnitId id, string name, UnitClass cls, int tier,

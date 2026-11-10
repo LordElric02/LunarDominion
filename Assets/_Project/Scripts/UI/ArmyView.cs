@@ -224,7 +224,9 @@ namespace LunarDominion.UI
                 var rowRt = rowGo.GetComponent<RectTransform>();
                 rowRt.anchorMin = Vector2.zero;
                 rowRt.anchorMax = Vector2.one;
-                UIHelpers.LabelInRect(rowGo, "Name", $"{def.DisplayName} — Tier {def.Tier}", 28, Color.white,
+                UIHelpers.LabelInRect(rowGo, "Name", def.IsHero
+                    ? $"{def.DisplayName}  ★ HERO"
+                    : $"{def.DisplayName} — Tier {def.Tier}", 28, Color.white,
                     new Rect(0.03f, 0.62f, 0.72f, 0.97f));
                 var stats = UIHelpers.LabelInRect(rowGo, "Stats", "", 24, UIHelpers.Hex("#C0C8D0"),
                     new Rect(0.03f, 0.32f, 0.72f, 0.62f));

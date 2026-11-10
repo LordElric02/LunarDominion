@@ -1,7 +1,9 @@
 namespace LunarDominion.Core
 {
     /// <summary>Stable unit IDs, in GDD §5 table order. Never renumber:
-    /// save files store these values, and Phase 4 squads will too.</summary>
+    /// save files store these values, and Phase 4 squads will too.
+    /// Heroes (2026-11-10) are appended after the nine GDD units so
+    /// the original values never shift.</summary>
     public enum UnitId
     {
         ScoutMarine,
@@ -12,6 +14,11 @@ namespace LunarDominion.Core
         NovaSniper,
         ScoutRover,
         AssaultMech,
-        TitanWalker
+        TitanWalker,
+        // Heroes (2026-11-10): named characters, one of each, max 3.
+        // They fight bosses in the lair view, not regular squads.
+        HeroReyes,
+        HeroVega,
+        HeroOkafor
     }
 }

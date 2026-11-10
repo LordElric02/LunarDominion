@@ -28,6 +28,9 @@ namespace LunarDominion.Save
         // Hospital (2026-11-09): injured units waiting to be healed.
         // Old saves without this field load with an empty list.
         public List<OwnedUnit> Injured = new List<OwnedUnit>();
+        // Heroes (2026-11-10): named characters (Reyes, Vega, Okafor).
+        // Old saves without this field load with an empty list.
+        public List<OwnedUnit> Heroes = new List<OwnedUnit>();
         public string LastEnergyDate = "";
         public string LastSaveTimeUtc = "";
         // Fractional production carry (<1 per resource). Phase 6 fix:
@@ -92,6 +95,7 @@ namespace LunarDominion.Save
                 ActiveResearchFinishUtc = state.ActiveResearchFinishUtc ?? "",
                 Army = ValidateArmy(state.Army),
                 Injured = ValidateArmy(state.Injured),
+                Heroes = ValidateArmy(state.Heroes),
                 LastEnergyDate = state.LastEnergyDate,
                 LastSaveTimeUtc = state.LastSaveTimeUtc,
                 ProductionCarryBiomass = state.ProductionCarryBiomass,
@@ -137,6 +141,7 @@ namespace LunarDominion.Save
                     ActiveResearchFinishUtc = data.ActiveResearchFinishUtc ?? "",
                     Army = ValidateArmy(data.Army),
                     Injured = ValidateArmy(data.Injured),
+                    Heroes = ValidateArmy(data.Heroes),
                     LastEnergyDate = data.LastEnergyDate ?? "",
                     LastSaveTimeUtc = data.LastSaveTimeUtc ?? "",
                     ProductionCarryBiomass = Math.Max(0f, data.ProductionCarryBiomass),
@@ -256,7 +261,10 @@ namespace LunarDominion.Save
             {
                 if (unit == null) continue;
                 int id = (int)unit.Id;
-                if (id < 0 || id > 8)
+                // Valid UnitIds: 0-8 regular units, 9-11 heroes
+                // (2026-11-10). Anything else is dropped, never a
+                // whole save.
+                if (id < 0 || id > 11)
                 {
                     // Phase 6 fix (S4): §9 asks for a warning on drop.
                     Debug.LogWarning($"[Lunar Dominion] Dropped unknown unit ID {id} from save.");

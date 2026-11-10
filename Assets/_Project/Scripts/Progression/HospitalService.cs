@@ -68,8 +68,9 @@ namespace LunarDominion.Progression
         }
 
         /// <summary>Heal one injured unit: spend its heal cost, move it
-        /// from Injured back to the Army. Returns false without spending
-        /// or moving if the unit is not injured, the Hospital is locked,
+        /// from Injured back to the Army — or back to Heroes if it is a
+        /// named hero (2026-11-10). Returns false without spending or
+        /// moving if the unit is not injured, the Hospital is locked,
         /// or the player cannot afford it.</summary>
         public bool TryHeal(OwnedUnit unit, out string reason)
         {
@@ -92,11 +93,24 @@ namespace LunarDominion.Progression
             }
             if (!_economy.Spend(cost)) return false;
             _state.Injured.Remove(unit);
-            _state.Army.Add(unit);
+            // Heroes heal back to the Heroes list, regular units to the Army.
             var def = _units.Find(u => u.Id == unit.Id);
-            reason = def != null
-                ? $"{def.DisplayName} healed and back in the army."
-                : "Unit healed and back in the army.";
+            bool isHero = def != null && def.IsHero;
+            if (isHero)
+            {
+                if (_state.Heroes == null) _state.Heroes = new List<OwnedUnit>();
+                _state.Heroes.Add(unit);
+                reason = def != null
+                    ? $"{def.DisplayName} healed and back with the heroes."
+                    : "Hero healed and back with the heroes.";
+            }
+            else
+            {
+                _state.Army.Add(unit);
+                reason = def != null
+                    ? $"{def.DisplayName} healed and back in the army."
+                    : "Unit healed and back in the army.";
+            }
             return true;
         }
     }

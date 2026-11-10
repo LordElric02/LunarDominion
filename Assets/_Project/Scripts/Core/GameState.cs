@@ -39,6 +39,14 @@ namespace LunarDominion.Core
         // branch lives where casualties are applied (ExpeditionService).
         public List<OwnedUnit> Injured = new List<OwnedUnit>();
 
+        // Heroes (2026-11-10): named characters (Reyes, Vega, Okafor),
+        // one of each, max 3. They live here, separate from the Army —
+        // they fight bosses in the lair view, not regular squads. They
+        // keep their level and XP like army units. Old saves load with
+        // an empty list. Injured heroes go to the Injured list (shared
+        // with army units) and heal back here, not to the Army.
+        public List<OwnedUnit> Heroes = new List<OwnedUnit>();
+
         public string LastEnergyDate = "";
         public string LastSaveTimeUtc = "";
 

@@ -531,6 +531,16 @@ namespace LunarDominion.Expeditions
             OnExcursionStateChanged?.Invoke();
         }
 
+        /// <summary>Hero boss fight (2026-11-10): the lair view runs the
+        /// fight itself (TryStartHeroes) and reports the victory here so
+        /// the boss vanishes and respawns after the timer, exactly as a
+        /// map boss victory would. No-op if the boss is already gone.</summary>
+        public void OnBossDefeatedInLair()
+        {
+            if (IsBossDefeated()) return;
+            VanishBoss();
+        }
+
         /// <summary>Called regularly (Bootstrap RefreshAll, ~once a
         /// second) and on load: if the defeated boss's respawn time has
         /// passed, bring it back at the same lair spot. Also completes

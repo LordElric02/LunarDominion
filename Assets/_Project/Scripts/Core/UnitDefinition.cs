@@ -21,6 +21,12 @@ namespace LunarDominion.Core
         public int BaseAttack;
         public int BaseDefense;
 
+        // Hero (2026-11-10): a named character, not a regular troop.
+        // Heroes are recruited once each (one of each, max 3), live in
+        // GameState.Heroes (not the Army), and fight bosses in the lair
+        // view. Regular units have this false.
+        public bool IsHero;
+
         public int BaseBiomassCost;
         public int BaseAlloyCost;
         public int BaseHelium3Cost;

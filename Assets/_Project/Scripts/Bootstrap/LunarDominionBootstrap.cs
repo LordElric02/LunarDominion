@@ -21,6 +21,7 @@ namespace LunarDominion.Bootstrap
         private ExteriorView _exteriorView;
         private MapInfoView _mapInfoView;
         private SquadPickerView _squadPicker;
+        private BossLairView _lairView;
         private MapExcursionService _excursions;
         private MapPointData _selectedPoint;
         private BuildingPanelView _buildingPanel;
@@ -76,6 +77,16 @@ namespace LunarDominion.Bootstrap
             _squadPicker.OnConfirmClicked += OnSquadPickerConfirm;
             _squadPicker.OnCancelClicked += OnSquadPickerCancel;
 
+            // Boss lair interior (2026-11-10): a full-screen view inside
+            // the War Robot's lair, separate from the exterior map.
+            // Tapping the lair on the map opens this view (the map march
+            // is not used for bosses); the fight happens here, with the
+            // player's heroes. Hidden until a lair is tapped.
+            _lairView = new GameObject("BossLairView").AddComponent<BossLairView>();
+            _lairView.Build(canvas, _controller);
+            _lairView.OnFightComplete += OnLairFightComplete;
+            _lairView.OnCloseClicked += OnLairCloseClicked;
+
             // Map excursions (2026-11-09): the rules for sending the
             // army from the map. Built after the controller, exterior
             // view, and info panel exist.
@@ -128,11 +139,57 @@ namespace LunarDominion.Bootstrap
         }
 
         // Tap on a map node or camp shows its info panel, with the Send
-        // Excursion button when the point can take the army.
+        // Excursion button when the point can take the army. A BossLair
+        // tap opens the lair interior view instead (2026-11-10): the
+        // boss fight happens inside the lair, with heroes, not a map
+        // march — so the info panel is not shown for the lair.
         private void OnMapPointSelected(MapPointData point)
         {
             _selectedPoint = point;
+            if (point != null && point.Kind == MapPointKind.BossLair)
+            {
+                OpenLairView();
+                return;
+            }
             ShowMapPoint(point);
+        }
+
+        // Open the lair interior view (full-screen, inside the lair).
+        // The map hides underneath; closing returns to the Map.
+        private void OpenLairView()
+        {
+            if (_excursions != null && _excursions.IsBossDefeated())
+            {
+                _mapInfoView.Show("War Robot Lair", "The War Robot is defeated. It will return in about an hour.", false);
+                return;
+            }
+            _mapInfoView.Hide();
+            _exteriorView.SetVisible(false);
+            _lairView.Show();
+        }
+
+        // A boss fight finished in the lair view. On victory the boss
+        // vanishes (respawns after the timer, at the same spot); the
+        // result is already shown in the lair view, and the player taps
+        // Back to Map to return. On defeat the boss stays.
+        private void OnLairFightComplete(BattleResult result)
+        {
+            if (result != null && result.Victory)
+            {
+                _excursions.OnBossDefeatedInLair();
+            }
+            RefreshMapNodeStates();
+        }
+
+        // Back to Map tapped in the lair view: hide the lair, re-show
+        // the exterior map (which restores the map camera).
+        private void OnLairCloseClicked()
+        {
+            _lairView.Hide();
+            _mapInfoView.Hide();
+            _selectedPoint = null;
+            _exteriorView.SetVisible(true);
+            RefreshMapNodeStates();
         }
 
         // Show the selected point's info + Send button state. An occupied
@@ -300,6 +357,7 @@ namespace LunarDominion.Bootstrap
             _buildingPanel.Hide();
             _mapInfoView.Hide();
             _squadPicker.Hide();
+            _lairView?.Hide();
             _armyView.Hide();
             _researchView.Hide();
             switch (tab)

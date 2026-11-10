@@ -17,9 +17,16 @@ namespace LunarDominion.Units
     /// it never recomputes it. Recruitment is instant in this prototype
     /// (GDD C1: time = 0, not free — costs and prerequisites still apply).
     /// There is no total army cap in the prototype (GDD §5); the squad
-    /// cap of 8 applies to expeditions in Phase 4, not to recruitment.</summary>
+    /// cap of 8 applies to expeditions in Phase 4, not to recruitment.
+    /// Heroes (2026-11-10): named characters, one of each, max 3 total.
+    /// They live in GameState.Heroes, not the Army, and fight bosses in
+    /// the lair view.</summary>
     public class RecruitmentService
     {
+        // Max heroes (2026-11-10): one of each named hero (Reyes,
+        // Vega, Okafor) — 3 total.
+        public const int MaxHeroes = 3;
+
         private readonly GameState _state;
         private readonly EconomyService _economy;
         private readonly List<BuildingDefinition> _buildings;
@@ -29,6 +36,19 @@ namespace LunarDominion.Units
             _state = state;
             _economy = economy;
             _buildings = buildings;
+        }
+
+        /// <summary>True when this unit is a named hero (not a regular
+        /// troop). Heroes live in GameState.Heroes and fight bosses.</summary>
+        public static bool IsHeroUnit(UnitId id)
+        {
+            return id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor;
+        }
+
+        /// <summary>How many heroes the player has recruited (0-3).</summary>
+        public int CountHeroes()
+        {
+            return _state.Heroes != null ? _state.Heroes.Count : 0;
         }
 
         /// <summary>Barracks level required for a tier (GDD §3).</summary>
@@ -55,8 +75,10 @@ namespace LunarDominion.Units
         public int CountOwned(UnitId id)
         {
             int count = 0;
-            if (_state.Army == null) return 0;
-            foreach (var unit in _state.Army)
+            // Heroes live in the Heroes list, regular units in the Army.
+            var list = IsHeroUnit(id) ? _state.Heroes : _state.Army;
+            if (list == null) return 0;
+            foreach (var unit in list)
             {
                 if (unit != null && unit.Id == id) count++;
             }
@@ -79,6 +101,21 @@ namespace LunarDominion.Units
                 reason = $"Requires {BarracksName(def.BarracksBuilding)} level {required} (currently {barracksLevel}).";
                 return RecruitStatus.TierLocked;
             }
+            // Heroes (2026-11-10): one of each named hero, max 3 total.
+            // A hero already recruited cannot be recruited again.
+            if (def.IsHero)
+            {
+                if (CountOwned(def.Id) > 0)
+                {
+                    reason = $"{def.DisplayName} is already recruited.";
+                    return RecruitStatus.TierLocked;
+                }
+                if (CountHeroes() >= MaxHeroes)
+                {
+                    reason = $"Hero limit reached ({MaxHeroes} max).";
+                    return RecruitStatus.TierLocked;
+                }
+            }
             if (!_economy.CanAfford(cost))
             {
                 reason = "Not enough resources.";
@@ -93,8 +130,17 @@ namespace LunarDominion.Units
             var status = CheckRecruit(def, out var cost, out reason);
             if (status != RecruitStatus.CanRecruit) return false;
             if (!_economy.Spend(cost)) { reason = "Not enough resources."; return false; }
-            if (_state.Army == null) _state.Army = new List<OwnedUnit>();
-            _state.Army.Add(new OwnedUnit(def.Id));
+            // Heroes go to the Heroes list, regular units to the Army.
+            if (def.IsHero)
+            {
+                if (_state.Heroes == null) _state.Heroes = new List<OwnedUnit>();
+                _state.Heroes.Add(new OwnedUnit(def.Id));
+            }
+            else
+            {
+                if (_state.Army == null) _state.Army = new List<OwnedUnit>();
+                _state.Army.Add(new OwnedUnit(def.Id));
+            }
             reason = $"{def.DisplayName} recruited at level 1.";
             return true;
         }
