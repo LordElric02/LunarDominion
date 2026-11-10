@@ -506,6 +506,66 @@ namespace LunarDominion.UI
                 groundRenderer.material.SetTexture("_BumpMap", regolithNormal);
                 groundRenderer.material.SetTextureScale("_BumpMap", new Vector2(8f, 7f));
             }
+            BuildPavedInterior();
+        }
+
+        // 2026-11-09 paved interior: the ground inside the base walls
+        // is a paved spaceport floor (concrete plates, Nexus plaza,
+        // painted walkways, gate hazard stripes), while the ground
+        // outside the walls stays the normal moon regolith. A flat
+        // 48x27 plane, child of the layout root (so it rotates with
+        // the base), at local y 0.02 — just above the terrain's flat
+        // interior, so it covers the regolith inside the walls without
+        // z-fighting. The paved texture (GroundPaved.png, from
+        // BuildGroundPaved.py) is one tile stretched across the whole
+        // interior, with the markings positioned to line up with the
+        // building spots. The normal map (GroundPaved_Normal.png)
+        // gives the plate seams real relief. If either PNG is missing
+        // the interior just stays regolith — no error, no crash.
+        // No collider: the plane is visual only; taps go to buildings.
+        private void BuildPavedInterior()
+        {
+            Texture2D paved = null;
+            try
+            {
+                paved = Resources.Load<Texture2D>("Textures/GroundPaved");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Paved interior texture failed to load (Textures/GroundPaved): " + e.Message);
+                return;
+            }
+            if (paved == null) return;
+            try
+            {
+                var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                plane.name = "PavedInterior";
+                plane.transform.SetParent(_layoutRoot.transform, false);
+                plane.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+                // Plane primitive is 10x10; scale to the interior size
+                // (wall x +/-24, z +/-13.5 -> 48 x 27).
+                plane.transform.localScale = new Vector3(4.8f, 1f, 2.7f);
+                var rend = plane.GetComponent<Renderer>();
+                // URP Lit, texture as _BaseMap. The PNG is authored in
+                // sRGB at the paving's colour, so the material colour
+                // goes to white — colour x texture would double-darken.
+                // One tile across the whole plane (no repeat): the
+                // markings are positioned, not tiled.
+                rend.material.mainTexture = paved;
+                rend.material.mainTextureScale = Vector2.one;
+                rend.material.color = Color.white;
+                var pavedNormal = Resources.Load<Texture2D>("Textures/GroundPaved_Normal");
+                if (pavedNormal != null)
+                {
+                    rend.material.SetTexture("_BumpMap", pavedNormal);
+                    rend.material.SetTextureScale("_BumpMap", Vector2.one);
+                }
+                Destroy(plane.GetComponent<Collider>());
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Paved interior failed to place: " + e.Message);
+            }
         }
 
         // 2026-11-06 full-bleed: perimeter wall around the building
