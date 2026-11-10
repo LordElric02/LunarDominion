@@ -150,12 +150,14 @@ namespace LunarDominion.UI
             fillGo.transform.LookAt(Vector3.zero);
 
             // 2026-11-09 lighting upgrade: ambient + bloom.
-            // Ambient: brighten the scene's gradient ambient (sky /
+            // Ambient: brighten the scene's trilight ambient (sky /
             // equator / ground) to a cool moonlight/earthshine so the
             // shadowed faces are lifted without going flat. The scene
-            // (Main.unity) already uses Gradient ambient; these values
-            // replace its dark defaults.
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Gradient;
+            // (Main.unity) already uses Trilight ambient; these values
+            // replace its dark defaults. (AmbientMode.Trilight, not
+            // "Gradient" — Gradient is not an AmbientMode value;
+            // Trilight is the sky/equator/ground mode.)
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = new Color(0.30f, 0.33f, 0.40f);
             RenderSettings.ambientEquatorColor = new Color(0.22f, 0.24f, 0.29f);
             RenderSettings.ambientGroundColor = new Color(0.12f, 0.13f, 0.16f);
