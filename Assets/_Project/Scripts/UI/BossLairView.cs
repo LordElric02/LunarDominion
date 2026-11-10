@@ -297,7 +297,7 @@ namespace LunarDominion.UI
                 _energyText.text = "";
                 return;
             }
-            _bossInfoText.text = $"War Robot  •  HP {boss.Spawns.Count > 0 ? boss.Spawns[0].Health : 0}  ATK {boss.Spawns.Count > 0 ? boss.Spawns[0].Attack : 0}  DEF {boss.Spawns.Count > 0 ? boss.Spawns[0].Defense : 0}  •  Reward {boss.Reward.Biomass}B {boss.Reward.Alloy}A {boss.Reward.Helium3}H  •  {boss.XpPool} XP";
+            _bossInfoText.text = $"War Robot  •  HP {(boss.Spawns.Count > 0 ? boss.Spawns[0].Health : 0)}  ATK {(boss.Spawns.Count > 0 ? boss.Spawns[0].Attack : 0)}  DEF {(boss.Spawns.Count > 0 ? boss.Spawns[0].Defense : 0)}  •  Reward {boss.Reward.Biomass}B {boss.Reward.Alloy}A {boss.Reward.Helium3}H  •  {boss.XpPool} XP";
             _energyText.text = $"Energy: {_controller.State.Energy} / {boss.EnergyCost}  •  Unlocks at Nexus {boss.RequiredNexusLevel} (you are Nexus {_controller.State.NexusLevel})";
             RefreshFightButton();
         }
