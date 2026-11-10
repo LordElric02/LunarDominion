@@ -303,16 +303,16 @@ namespace LunarDominion.UI
             RefreshHeroFigures();
             RefreshBossInfo();
             // Camera: frame the lair interior — the robot large on the
-            // right, the heroes on the left. Same 48.5-degree pitch as
-            // the base/map cameras so the framing feels consistent. The
-            // look-at is low (y 1.8) so the ground-level heroes sit in
-            // the open middle band (above the bottom panel), not hidden
-            // behind it.
+            // right, the heroes on the left. The look-at is LOW (y 0.8,
+            // just below the heroes' centre) so the ground-level heroes
+            // sit near screen centre, in the open middle band above the
+            // bottom panel — not hidden behind it. Pulled back a touch
+            // so the robot and the heroes both fit.
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.transform.position = new Vector3(-2f, 6.5f, -14f);
-                cam.transform.LookAt(new Vector3(0f, 1.8f, 0f));
+                cam.transform.position = new Vector3(-2f, 7f, -16f);
+                cam.transform.LookAt(new Vector3(0f, 0.8f, 0f));
             }
         }
 
@@ -470,7 +470,7 @@ namespace LunarDominion.UI
             _heroFigures.Clear();
             _heroOrigPos.Clear();
             if (_controller == null || _controller.State == null || _controller.State.Heroes == null) return;
-            var zSpots = new float[] { -2.5f, 0f, 2.5f };
+            var zSpots = new float[] { -3f, 0f, 3f };
             for (int s = 0; s < _selectedHeroIndices.Count && s < 3; s++)
             {
                 int heroIndex = _selectedHeroIndices[s];
@@ -480,22 +480,35 @@ namespace LunarDominion.UI
                 var color = HeroColorFor(hero.Id);
                 var fig = new GameObject("HeroFigure");
                 fig.transform.SetParent(_sceneRoot.transform, false);
-                fig.transform.localPosition = new Vector3(-4f, 0f, zSpots[s]);
-                // Body: capsule, 1.8 tall. Head: sphere on top.
+                // Closer to the camera and to centre (x -3.5, not -4) so
+                // the heroes read clearly in the open middle band. The
+                // figures are BIG (~3.5 tall, near-human scale next to
+                // the 5+ tall robot) so the fight is actually visible.
+                fig.transform.localPosition = new Vector3(-3.5f, 0f, zSpots[s]);
+                // Body: capsule, ~2.6 tall. Head: sphere on top.
                 var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 body.name = "HeroBody";
                 body.transform.SetParent(fig.transform, false);
-                body.transform.localPosition = new Vector3(0f, 0.9f, 0f);
-                body.transform.localScale = new Vector3(0.7f, 0.9f, 0.7f);
+                body.transform.localPosition = new Vector3(0f, 1.3f, 0f);
+                body.transform.localScale = new Vector3(1.0f, 1.3f, 1.0f);
                 SetColor(body.GetComponent<Renderer>(), color);
                 Destroy(body.GetComponent<Collider>());
                 var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 head.name = "HeroHead";
                 head.transform.SetParent(fig.transform, false);
-                head.transform.localPosition = new Vector3(0f, 1.9f, 0f);
-                head.transform.localScale = Vector3.one * 0.55f;
+                head.transform.localPosition = new Vector3(0f, 2.9f, 0f);
+                head.transform.localScale = Vector3.one * 0.8f;
                 SetColor(head.GetComponent<Renderer>(), new Color(0.85f, 0.75f, 0.65f));
                 Destroy(head.GetComponent<Collider>());
+                // A flat coloured disc under the hero so it stands out
+                // against the dark cave floor.
+                var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                disc.name = "HeroDisc";
+                disc.transform.SetParent(fig.transform, false);
+                disc.transform.localPosition = new Vector3(0f, 0.05f, 0f);
+                disc.transform.localScale = new Vector3(1.6f, 0.1f, 1.6f);
+                SetColor(disc.GetComponent<Renderer>(), color);
+                Destroy(disc.GetComponent<Collider>());
                 _heroFigures.Add(fig);
                 _heroOrigPos.Add(fig.transform.localPosition);
             }
