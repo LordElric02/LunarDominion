@@ -66,9 +66,16 @@ namespace LunarDominion.Expeditions
             boss.EnergyCost = 50;
             boss.Reward = new ResourceCost(1500, 1200, 400);
             boss.XpPool = 1000;
+            // Boss buff (2026-11-10): a solo Tier 1 hero was beating it
+            // easily (Infantry counters Mechanized, 1.5x, and the robot's
+            // 60 ATK barely scratched a hero's DEF). Now HP 3000 / ATK
+            // 100 / DEF 40: a solo Lv 1 hero loses (dies ~round 16 with
+            // the robot still standing); a 3-hero team wins in ~9 rounds
+            // but likely loses someone (injured); a Lv 10 hero can solo
+            // it — earned, after real progression.
             boss.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "War Robot", Class = UnitClass.Mechanized, Health = 1500, Attack = 60, Defense = 30, Count = 1 }
+                new EnemySpawn { DisplayName = "War Robot", Class = UnitClass.Mechanized, Health = 3000, Attack = 100, Defense = 40, Count = 1 }
             };
             list.Add(boss);
 

@@ -46,6 +46,14 @@ namespace LunarDominion.Expeditions
     /// get no XP. This service owns no UI.</summary>
     public class ExpeditionService
     {
+        // Heroes gain XP at half rate (2026-11-10): a solo hero takes
+        // the whole boss XP pool (1000, +25% flawless = 1250), which
+        // levelled Reyes Lv 1 -> Lv 10 in a few fights. At 0.5x a solo
+        // flawless win gives ~625 XP, so Lv 10 takes ~12 boss wins —
+        // a real progression, not a few fights. Regular units are
+        // unaffected (their squads split the pool 8 ways anyway).
+        public const float HeroXpRate = 0.5f;
+
         private readonly GameState _state;
         private readonly EconomyService _economy;
         private readonly EnergyService _energy;
@@ -275,6 +283,13 @@ namespace LunarDominion.Expeditions
                 {
                     var member = squad[outcome.SurvivingSquadIndices[i]];
                     int gained = share + (i == 0 ? remainder : 0);
+                    // Heroes level at half rate (HeroXpRate): a solo hero
+                    // would otherwise take the whole pool and rocket to
+                    // Lv 10 in a few boss fights.
+                    if (member.Definition.IsHero)
+                    {
+                        gained = (int)Math.Round(gained * HeroXpRate);
+                    }
                     int oldLevel = member.Unit.Level;
                     member.Unit.XP += gained;
                     while (member.Unit.Level < _balance.MaxUnitLevel
