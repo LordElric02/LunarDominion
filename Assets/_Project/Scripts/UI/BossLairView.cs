@@ -96,13 +96,20 @@ namespace LunarDominion.UI
         private void BuildScene()
         {
             _sceneRoot = new GameObject("BossLairScene");
-            // Dark ground (30x20), so the lair reads as a cave floor,
-            // not the bright regolith outside.
+            // The lair lives FAR from the base (x 500): the base's ground
+            // (regolith + paved interior) and mountains are never hidden
+            // by BaseView.SetVisible (it only hides buildings), so a lair
+            // built at the origin would show the bright paved base floor
+            // through/under it. At x 500 the camera sees only the lair —
+            // dark cave floor, rocks, robot, heroes — against dark sky.
+            _sceneRoot.transform.position = new Vector3(500f, 0f, 0f);
+            // Dark ground (60x40, big enough that its edges sit far from
+            // the camera and read as cave floor, not a visible rim).
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "LairGround";
             ground.transform.SetParent(_sceneRoot.transform, false);
             ground.transform.localPosition = new Vector3(0f, 0f, 0f);
-            ground.transform.localScale = new Vector3(3f, 1f, 2f);
+            ground.transform.localScale = new Vector3(6f, 1f, 4f);
             SetColor(ground.GetComponent<Renderer>(), new Color(0.10f, 0.10f, 0.13f));
             Destroy(ground.GetComponent<Collider>());
 
@@ -309,7 +316,9 @@ namespace LunarDominion.UI
             RefreshHeroFigures();
             RefreshBossInfo();
             // Camera: frame the lair interior — the robot large on the
-            // right, the heroes on the left. The look-at is LOW (y 0.8,
+            // right, the heroes on the left. The lair lives at x 500
+            // (far from the base, so the base floor never shows through),
+            // so the camera goes there too. The look-at is LOW (y 0.8,
             // just below the heroes' centre) so the ground-level heroes
             // sit near screen centre, in the open middle band above the
             // bottom panel — not hidden behind it. Pulled back a touch
@@ -317,8 +326,8 @@ namespace LunarDominion.UI
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.transform.position = new Vector3(-2f, 7f, -16f);
-                cam.transform.LookAt(new Vector3(0f, 0.8f, 0f));
+                cam.transform.position = new Vector3(498f, 7f, -16f);
+                cam.transform.LookAt(new Vector3(500f, 0.8f, 0f));
             }
         }
 
