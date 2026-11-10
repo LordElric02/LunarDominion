@@ -15,9 +15,9 @@ namespace LunarDominion.Core
 
         // Indexed by (int)BuildingId. All buildings start at level 1 once unlocked;
         // locked buildings are stored as 0 and shown as locked in the UI.
-        // Research Lab (2026-11-01) is index 7; old saves with 7 entries
-        // load with the Lab at 0.
-        public int[] BuildingLevels = new int[8];
+        // Research Lab (2026-11-01) is index 7; Hospital (2026-11-09) is
+        // index 8. Old saves with fewer entries load the missing ones at 0.
+        public int[] BuildingLevels = new int[9];
 
         // Research (2026-11-01), indexed by (int)ResearchId. One active
         // research at a time: -1 means none in progress.
@@ -29,6 +29,15 @@ namespace LunarDominion.Core
         // One entry per recruited unit instance (Phase 3). Units are
         // tracked individually so Phase 4 XP/levels can differ per unit.
         public List<OwnedUnit> Army = new List<OwnedUnit>();
+
+        // Hospital (2026-11-09): units that fell in battle are injured,
+        // not dead — they move here from the Army and cannot fight until
+        // healed in the Hospital (see HospitalService). They keep their
+        // level and XP. Old saves load with an empty list. Future: a
+        // permadeath encounter type (e.g. attacking a base) will remove
+        // its casualties permanently instead of injuring them — that
+        // branch lives where casualties are applied (ExpeditionService).
+        public List<OwnedUnit> Injured = new List<OwnedUnit>();
 
         public string LastEnergyDate = "";
         public string LastSaveTimeUtc = "";

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace LunarDominion.Core
 {
-    /// <summary>Builds the eight building definitions at runtime when the
+    /// <summary>Builds the nine building definitions at runtime when the
     /// project has no BuildingDefinition assets yet. Bases match GDD §4
     /// (unified formula: base x 1.22^(level-2)). Replace with assigned
     /// ScriptableObject assets later without changing any service code.</summary>
@@ -38,6 +38,14 @@ namespace LunarDominion.Core
             // Its level caps research node levels (see ResearchService).
             list.Add(Make(BuildingId.ResearchLab, "Research Lab",
                 "Unlocks research. Research node levels cannot exceed Lab level.",
+                1, 150, 150, 0, 0, 0f));
+            // Hospital (2026-11-09): units that fall in battle are
+            // injured, not dead — they wait here until healed (see
+            // HospitalService). Higher level = cheaper healing (-2% per
+            // level). Unlocks at Nexus 1, first build free like the
+            // other buildings in the prototype.
+            list.Add(Make(BuildingId.Hospital, "Hospital",
+                "Heals injured units. Fallen soldiers wait here until healed — higher level heals cheaper.",
                 1, 150, 150, 0, 0, 0f));
             return list;
         }

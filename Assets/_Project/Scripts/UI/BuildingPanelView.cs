@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using LunarDominion.Core;
 using LunarDominion.Progression;
 using UnityEngine;
@@ -7,9 +8,21 @@ namespace LunarDominion.UI
 {
     /// <summary>Building selection panel. Display only: it asks
     /// ProgressionService for status/cost/reason and shows the answer.
-    /// The Upgrade button is disabled with a reason whenever it cannot be used.</summary>
+    /// The Upgrade button is disabled with a reason whenever it cannot be used.
+    /// Hospital (2026-11-09): when the Hospital is selected and injured
+    /// units are waiting, the info/status area is replaced by the injured
+    /// list — one row per injured unit (name, level, heal cost) with a
+    /// Heal button that restores it to the army via HospitalService.</summary>
     public class BuildingPanelView : MonoBehaviour
     {
+        private class InjuredRow
+        {
+            public GameObject Root;
+            public OwnedUnit Unit;
+            public Text Label;
+            public Button HealButton;
+        }
+
         private GameObject _root;
         private Text _nameText;
         private Text _levelText;
@@ -19,6 +32,14 @@ namespace LunarDominion.UI
         private Text _upgradeLabel;
         private GameController _controller;
         private BuildingDefinition _current;
+
+        // Hospital injured list (hidden unless the Hospital is selected
+        // and injured units are waiting). Replaces the info/status area.
+        private GameObject _injuredRoot;
+        private Text _injuredTitle;
+        private GameObject _injuredContent;
+        private readonly List<InjuredRow> _injuredRows = new List<InjuredRow>();
+        private string _healFeedback = "";
 
         public void Build(Canvas canvas, GameController controller)
         {
@@ -50,12 +71,83 @@ namespace LunarDominion.UI
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
             _upgradeButton.onClick.AddListener(OnUpgradeClicked);
+
+            BuildInjuredSection();
             _root.SetActive(false);
+        }
+
+        // Hospital injured list: a title + a vertical ScrollRect (same
+        // pattern as ArmyView's rows), occupying the info/status area
+        // (y 0.08-0.50) when the Hospital is selected with injured units.
+        private void BuildInjuredSection()
+        {
+            _injuredRoot = new GameObject("InjuredSection");
+            _injuredRoot.transform.SetParent(_root.transform, false);
+            var rootRt = _injuredRoot.AddComponent<RectTransform>();
+            rootRt.anchorMin = new Vector2(0.04f, 0.08f);
+            rootRt.anchorMax = new Vector2(0.96f, 0.50f);
+            rootRt.offsetMin = Vector2.zero;
+            rootRt.offsetMax = Vector2.zero;
+
+            _injuredTitle = UIHelpers.LabelInRect(_injuredRoot, "InjuredTitle",
+                "INJURED — tap Heal to restore to the army", 24, UIHelpers.Hex("#FF6B6B"),
+                new Rect(0f, 0.82f, 1f, 1f), TextAnchor.MiddleLeft);
+
+            var scrollGo = new GameObject("InjuredScroll");
+            scrollGo.transform.SetParent(_injuredRoot.transform, false);
+            var scrollRt = scrollGo.AddComponent<RectTransform>();
+            scrollRt.anchorMin = new Vector2(0f, 0f);
+            scrollRt.anchorMax = new Vector2(1f, 0.82f);
+            scrollRt.offsetMin = Vector2.zero;
+            scrollRt.offsetMax = Vector2.zero;
+            var scrollBg = scrollGo.AddComponent<Image>();
+            scrollBg.color = UIHelpers.Hex("#0F1724");
+            var scroll = scrollGo.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            var viewportGo = new GameObject("Viewport");
+            viewportGo.transform.SetParent(scrollGo.transform, false);
+            var viewportRt = viewportGo.AddComponent<RectTransform>();
+            viewportRt.anchorMin = Vector2.zero;
+            viewportRt.anchorMax = Vector2.one;
+            viewportRt.offsetMin = Vector2.zero;
+            viewportRt.offsetMax = Vector2.zero;
+            var viewportImg = viewportGo.AddComponent<Image>();
+            viewportImg.color = UIHelpers.Hex("#0F1724");
+            var mask = viewportGo.AddComponent<Mask>();
+            mask.showMaskGraphic = false;
+            scroll.viewport = viewportRt;
+
+            _injuredContent = new GameObject("Content");
+            _injuredContent.transform.SetParent(viewportGo.transform, false);
+            var contentRt = _injuredContent.AddComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(0, 1);
+            contentRt.anchorMax = new Vector2(1, 1);
+            contentRt.pivot = new Vector2(0.5f, 1);
+            contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = Vector2.zero;
+            var layout = _injuredContent.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 8;
+            layout.padding = new RectOffset(8, 8, 8, 8);
+            layout.childAlignment = TextAnchor.UpperCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            var fitter = _injuredContent.AddComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            scroll.content = contentRt;
+            _injuredRoot.SetActive(false);
         }
 
         public void Show(BuildingDefinition def)
         {
             _current = def;
+            _healFeedback = "";
             _root.SetActive(true);
             Refresh();
         }
@@ -97,6 +189,96 @@ namespace LunarDominion.UI
             UIHelpers.SetButtonEnabled(_upgradeButton, canUpgrade);
             var label = _upgradeButton.GetComponentInChildren<Text>();
             if (label != null) label.text = locked ? "Build" : "Upgrade";
+
+            RefreshInjuredSection();
+        }
+
+        // Hospital only: show the injured list when injured units are
+        // waiting, and hide the info/status texts while it is shown (the
+        // list occupies their area). Otherwise the list stays hidden and
+        // the normal info/status show.
+        private void RefreshInjuredSection()
+        {
+            bool isHospital = _current != null && _current.Id == BuildingId.Hospital;
+            bool hasInjured = isHospital && _controller.Hospital != null && _controller.Hospital.HasInjured;
+            _injuredRoot.SetActive(hasInjured);
+            _infoText.gameObject.SetActive(!hasInjured);
+            _statusText.gameObject.SetActive(!hasInjured);
+            if (!hasInjured)
+            {
+                foreach (var row in _injuredRows) row.Root.SetActive(false);
+                return;
+            }
+
+            _injuredTitle.text = string.IsNullOrEmpty(_healFeedback)
+                ? $"INJURED ({_controller.State.Injured.Count}) — tap Heal to restore to the army"
+                : _healFeedback;
+
+            // Rebuild the rows to match the current injured list. The
+            // list is small (squad cap 8), so a full rebuild is cheap.
+            foreach (var row in _injuredRows) Object.Destroy(row.Root);
+            _injuredRows.Clear();
+            foreach (var unit in _controller.State.Injured)
+            {
+                var def = _controller.UnitDefinitions.Find(u => u.Id == unit.Id);
+                string name = def != null ? def.DisplayName : unit.Id.ToString();
+                var healCost = _controller.Hospital.HealCost(unit);
+                string costText = CostText(healCost);
+                var row = new InjuredRow { Unit = unit };
+                row.Root = new GameObject("InjuredRow");
+                row.Root.transform.SetParent(_injuredContent.transform, false);
+                var rowRt = row.Root.AddComponent<RectTransform>();
+                rowRt.anchorMin = Vector2.zero;
+                rowRt.anchorMax = Vector2.one;
+                var le = row.Root.AddComponent<LayoutElement>();
+                le.preferredHeight = 64;
+                le.minHeight = 64;
+                var rowBg = row.Root.AddComponent<Image>();
+                rowBg.color = UIHelpers.Hex("#1A2436");
+
+                row.Label = UIHelpers.LabelInRect(row.Root, "Label",
+                    $"{name}  Lv {unit.Level}  •  Heal: {costText}", 24, Color.white,
+                    new Rect(0.03f, 0.05f, 0.68f, 0.95f), TextAnchor.MiddleLeft);
+
+                row.HealButton = UIHelpers.Button(row.Root, "HealBtn", "Heal", 26,
+                    UIHelpers.Hex("#2E7D32"), Color.white);
+                var btnRt = row.HealButton.GetComponent<RectTransform>();
+                btnRt.anchorMin = new Vector2(0.70f, 0.10f);
+                btnRt.anchorMax = new Vector2(0.97f, 0.90f);
+                btnRt.offsetMin = Vector2.zero;
+                btnRt.offsetMax = Vector2.zero;
+                var captured = unit;
+                row.HealButton.onClick.AddListener(() => OnHealClicked(captured));
+                // Disable the Heal button when the player cannot afford it.
+                UIHelpers.SetButtonEnabled(row.HealButton,
+                    _controller.Economy.CanAfford(healCost) && _controller.State.GetLevel(BuildingId.Hospital) > 0);
+                _injuredRows.Add(row);
+            }
+        }
+
+        private static string CostText(ResourceCost cost)
+        {
+            var parts = new List<string>();
+            if (cost.Biomass > 0) parts.Add($"{cost.Biomass}B");
+            if (cost.Alloy > 0) parts.Add($"{cost.Alloy}A");
+            if (cost.Helium3 > 0) parts.Add($"{cost.Helium3}H");
+            return parts.Count == 0 ? "Free" : string.Join(" + ", parts);
+        }
+
+        private void OnHealClicked(OwnedUnit unit)
+        {
+            if (_controller.Hospital == null) return;
+            if (_controller.Hospital.TryHeal(unit, out var reason))
+            {
+                _healFeedback = reason;
+                _controller.SaveGame();
+            }
+            else
+            {
+                _healFeedback = reason;
+            }
+            _controller.NotifyChanged();
+            Refresh();
         }
 
         private void OnUpgradeClicked()

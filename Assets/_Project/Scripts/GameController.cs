@@ -33,6 +33,7 @@ namespace LunarDominion
         public PlayerLevelService PlayerLevel { get; private set; }
         public RecruitmentService Recruitment { get; private set; }
         public ExpeditionService Expeditions { get; private set; }
+        public HospitalService Hospital { get; private set; }
         public ResearchService Research { get; private set; }
         public SaveService Save { get; private set; }
 
@@ -73,6 +74,7 @@ namespace LunarDominion
             PlayerLevel = new PlayerLevelService(State);
             Recruitment = new RecruitmentService(State, Economy, BuildingDefinitions);
             Expeditions = new ExpeditionService(State, Economy, Energy, Balance, UnitDefinitions, Research);
+            Hospital = new HospitalService(State, Economy, UnitDefinitions);
 
             // A research timer may have finished while the game was closed.
             Research.TryComplete(DateTime.UtcNow, out _);
@@ -157,6 +159,7 @@ namespace LunarDominion
             PlayerLevel = new PlayerLevelService(State);
             Recruitment = new RecruitmentService(State, Economy, BuildingDefinitions);
             Expeditions = new ExpeditionService(State, Economy, Energy, Balance, UnitDefinitions, Research);
+            Hospital = new HospitalService(State, Economy, UnitDefinitions);
             NotifyChanged();
         }
     }

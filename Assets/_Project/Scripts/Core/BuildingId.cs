@@ -12,6 +12,9 @@ namespace LunarDominion.Core
         HydroponicsDome = 4,
         AlloyExtractor = 5,
         HeliumHarvester = 6,
-        ResearchLab = 7
+        ResearchLab = 7,
+        // Hospital (2026-11-09): injured units are healed here.
+        // Index 8; old saves with 8 entries load with it at 0 (locked).
+        Hospital = 8
     }
 }

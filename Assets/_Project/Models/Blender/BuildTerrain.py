@@ -152,6 +152,8 @@ BUILDINGS = [
     ("Nova", 4.42, -13.61, 1.0),
     ("Aegis", -7.25, -7.25, 1.0),
     ("Lab", -14.68, 14.68, 1.1),
+    # Hospital (2026-11-09): layout (20.75, 0) -> world (14.68, -14.68).
+    ("Hospital", 14.68, -14.68, 1.1),
 ]
 # Rocks (world, radius ~0.25) — only the 8 outside the wall need pads.
 ROCKS = [

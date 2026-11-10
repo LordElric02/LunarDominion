@@ -216,8 +216,14 @@ namespace LunarDominion.Expeditions
                     _state.Biomass - beforeB, _state.Alloy - beforeA, _state.Helium3 - beforeH);
             }
 
-            // Remove casualties permanently, highest army index first
-            // so earlier indices stay valid while removing.
+            // Hospital (2026-11-09): casualties are INJURED, not dead.
+            // Move the fallen units from the Army to the Injured list
+            // (highest army index first so earlier indices stay valid
+            // while moving). They keep their level and XP and cannot
+            // fight until healed in the Hospital (HospitalService).
+            // Future: a permadeath encounter type (e.g. attacking a
+            // base) will remove its casualties permanently instead —
+            // that branch goes here, gated on an encounter flag.
             var deadArmyIndices = new List<int>();
             foreach (int deadIndex in outcome.DeadSquadIndices)
             {
@@ -226,7 +232,11 @@ namespace LunarDominion.Expeditions
             deadArmyIndices.Sort((a, b) => b.CompareTo(a));
             foreach (int armyIndex in deadArmyIndices)
             {
-                if (armyIndex >= 0 && armyIndex < _state.Army.Count) _state.Army.RemoveAt(armyIndex);
+                if (armyIndex >= 0 && armyIndex < _state.Army.Count)
+                {
+                    _state.Injured.Add(_state.Army[armyIndex]);
+                    _state.Army.RemoveAt(armyIndex);
+                }
             }
 
             reason = outcome.Victory ? "Victory!" : (outcome.Timeout ? "Defeat — 20-round timeout." : "Defeat.");

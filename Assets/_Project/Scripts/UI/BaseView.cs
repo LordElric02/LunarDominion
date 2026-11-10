@@ -48,6 +48,15 @@ namespace LunarDominion.UI
         private readonly List<float> _reactorRingSpeeds = new List<float>();
         private float _reactorAnimTime;
 
+        // Hospital alert (2026-11-09): a red pulsing sphere above the
+        // Hospital when injured units are waiting to be healed. Created
+        // lazily (the Hospital may be the FBX model or the primitive
+        // fallback, which have different scales) and hidden when there
+        // are no injured units. The white marker stays as-is; the red
+        // alert sits above it.
+        private GameObject _hospitalAlert;
+        private Vector3 _hospitalAlertBaseScale = new Vector3(0.5f, 0.5f, 0.5f);
+
         // Base camera pan (2026-11-09, expanded base): the base is now
         // wider than the screen, so the camera can be panned across it
         // — arrow keys on PC, touch/mouse drag on the phone (and in the
@@ -833,6 +842,14 @@ namespace LunarDominion.UI
             // so it stays tappable at phone size.)
             if (!TryAddModelResearchLab())
                 AddBuilding(BuildingId.ResearchLab, new Vector3(-20.75f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
+            // Hospital (2026-11-09): east side at (20.75, 0), mirroring
+            // the Research Lab on the west, clear of the other buildings
+            // so it stays tappable at phone size. Use the FBX model if
+            // it loads, otherwise fall back to a white cube so the base
+            // still builds when the model file is missing (the Blender
+            // model is built separately, like the other v5 buildings).
+            if (!TryAddModelHospital())
+                AddBuilding(BuildingId.Hospital, new Vector3(20.75f, 0f, 0f), PrimitiveType.Cube, new Vector3(2f, 1.8f, 2f), new Color(0.95f, 0.95f, 0.95f), "Hospital");
         }
 
         private void AddBuilding(BuildingId id, Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, string shortName)
@@ -999,6 +1016,59 @@ namespace LunarDominion.UI
             {
                 float s = 1f + 0.03f * Mathf.Sin(_reactorAnimTime * 1.5f);
                 _reactorCore.localScale = _reactorCoreBaseScale * s;
+            }
+        }
+
+        /// <summary>Hospital alert (2026-11-09): when injured units are
+        /// waiting to be healed, a red sphere above the Hospital pulses
+        /// (the hospital "lights up"); when none are injured it is
+        /// hidden. Created lazily as a child of the Hospital building
+        /// object, so it sits above the building whether the building is
+        /// the FBX model (scale 1, top ~2.24) or the primitive fallback
+        /// (scale 2/1.8/2, top 1.8). Runs every frame, like AnimateReactor.</summary>
+        private void UpdateHospitalAlert()
+        {
+            if (_controller == null || _controller.Hospital == null) return;
+            bool hasInjured = _controller.Hospital.HasInjured;
+            if (_hospitalAlert == null)
+            {
+                if (!_buildingObjects.TryGetValue(BuildingId.Hospital, out var hospital) || hospital == null) return;
+                _hospitalAlert = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                _hospitalAlert.name = "HospitalAlert";
+                _hospitalAlert.transform.SetParent(hospital.transform, false);
+                // Remove the collider the primitive comes with — the alert
+                // is visual only and must never block a building tap.
+                var col = _hospitalAlert.GetComponent<Collider>();
+                if (col != null) Destroy(col);
+                bool isModel = _modelRenderers.ContainsKey(BuildingId.Hospital);
+                if (isModel)
+                {
+                    _hospitalAlert.transform.localPosition = new Vector3(0f, 3.3f, 0f);
+                    _hospitalAlertBaseScale = new Vector3(0.5f, 0.5f, 0.5f);
+                }
+                else
+                {
+                    // Primitive fallback: the parent is scaled (2, 1.8, 2),
+                    // so the local position/scale are divided to land at the
+                    // same world spot/size as the model case (y 2.97, 0.5 wide).
+                    _hospitalAlert.transform.localPosition = new Vector3(0f, 1.15f, 0f);
+                    _hospitalAlertBaseScale = new Vector3(0.25f, 0.28f, 0.25f);
+                }
+                _hospitalAlert.transform.localScale = _hospitalAlertBaseScale;
+                var rend = _hospitalAlert.GetComponent<Renderer>();
+                SetPrimitiveColor(rend, new Color(1f, 0.15f, 0.15f));
+                // Bright red that blooms (the lighting pass gives emissive
+                // materials a glow); the material colour is set above, and
+                // the pulse below scales it. Keep it simple: colour only.
+                var mat = rend != null ? rend.material : null;
+                if (mat != null && mat.HasProperty("_EmissionColor"))
+                    mat.SetColor("_EmissionColor", new Color(1f, 0.1f, 0.1f));
+            }
+            _hospitalAlert.SetActive(hasInjured);
+            if (hasInjured)
+            {
+                float pulse = 1f + 0.35f * Mathf.Sin(Time.time * 4f);
+                _hospitalAlert.transform.localScale = _hospitalAlertBaseScale * pulse;
             }
         }
 
@@ -1666,6 +1736,85 @@ namespace LunarDominion.UI
 #endif
         }
 
+        // Hospital (2026-11-09): same pattern as the Research Lab.
+        // The model position (8.3, 0, 0) is the layout position
+        // (20.75, 0) / 2.5, matching the other buildings' model
+        // positions (see TryAddModelResearchLab). The marker is white
+        // like the other buildings; the hospital's injured alert is a
+        // separate pulsing red marker (see UpdateHospitalAlert), so the
+        // two never conflict.
+        private bool TryAddModelHospital()
+        {
+            var prefab = LoadHospitalModelPrefab();
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "HospitalBuilding";
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = new Vector3(8.3f, 0f, 0f);
+                go.transform.localScale = Vector3.one;
+
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    partColors[rend] = rend.material.color;
+                }
+
+                if (go.GetComponentInChildren<Collider>() == null)
+                {
+                    var box = go.AddComponent<BoxCollider>();
+                    box.center = new Vector3(0f, 1f, 0f);
+                    box.size = new Vector3(2.2f, 2.1f, 2.2f);
+                }
+
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "HospitalMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(0f, 2.5f, 0f);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.Hospital] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.Hospital] = go;
+                _baseColors[BuildingId.Hospital] = new Color(0.95f, 0.95f, 0.95f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Hospital model failed to load, using primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Load the Hospital FBX as a prefab. Same Resources /
+        /// Editor pattern as the other buildings: in a built player the
+        /// FBX lives at Assets/_Project/Resources/Models/Hospital.fbx.</summary>
+        private static GameObject LoadHospitalModelPrefab()
+        {
+            var fromResources = Resources.Load<GameObject>("Models/Hospital");
+            if (fromResources != null) return fromResources;
+#if UNITY_EDITOR
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/_Project/Resources/Models/Hospital.fbx");
+#else
+            return null;
+#endif
+        }
+
         // Android magenta fix (2026-11-02): CreatePrimitive's default
         // material rendered as Unity's missing-shader magenta on the
         // phone, even though it looked coloured in the Editor. Assign an
@@ -1701,6 +1850,9 @@ namespace LunarDominion.UI
             // The reactor animation runs every frame, unlike the tap
             // handling below, which returns early when nothing is tapped.
             AnimateReactor();
+            // Hospital alert (2026-11-09): the red pulsing sphere above
+            // the Hospital when injured units are waiting to be healed.
+            UpdateHospitalAlert();
             // Arrow keys pan the base camera (PC). Same pattern as the
             // Map view: Keyboard when the Input System is enabled,
             // legacy Input otherwise.

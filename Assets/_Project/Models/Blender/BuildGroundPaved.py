@@ -103,6 +103,7 @@ BUILDINGS = [
     (12.75, -6.5),    # Nova Arsenal
     (0.0, -10.25),    # Aegis Motor Pool
     (-20.75, 0.0),    # Research Lab
+    (20.75, 0.0),     # Hospital (2026-11-09)
 ]
 PLAZA_RADIUS = 4.5
 PLAZA_INNER_RADIUS = 2.2

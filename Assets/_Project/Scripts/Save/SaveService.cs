@@ -17,7 +17,7 @@ namespace LunarDominion.Save
         public int Alloy;
         public int Helium3;
         public int Energy;
-        public int[] BuildingLevels = new int[8];
+        public int[] BuildingLevels = new int[9];
         // Research (2026-11-01). Old saves without these fields load
         // as unresearched with no research in progress, which is correct.
         public int[] ResearchLevels = new int[10];
@@ -25,6 +25,9 @@ namespace LunarDominion.Save
         public int ActiveResearchTargetLevel;
         public string ActiveResearchFinishUtc = "";
         public List<OwnedUnit> Army = new List<OwnedUnit>();
+        // Hospital (2026-11-09): injured units waiting to be healed.
+        // Old saves without this field load with an empty list.
+        public List<OwnedUnit> Injured = new List<OwnedUnit>();
         public string LastEnergyDate = "";
         public string LastSaveTimeUtc = "";
         // Fractional production carry (<1 per resource). Phase 6 fix:
@@ -85,6 +88,7 @@ namespace LunarDominion.Save
                 ActiveResearchTargetLevel = state.ActiveResearchTargetLevel,
                 ActiveResearchFinishUtc = state.ActiveResearchFinishUtc ?? "",
                 Army = ValidateArmy(state.Army),
+                Injured = ValidateArmy(state.Injured),
                 LastEnergyDate = state.LastEnergyDate,
                 LastSaveTimeUtc = state.LastSaveTimeUtc,
                 ProductionCarryBiomass = state.ProductionCarryBiomass,
@@ -128,6 +132,7 @@ namespace LunarDominion.Save
                     ActiveResearchTargetLevel = data.ActiveResearchTargetLevel,
                     ActiveResearchFinishUtc = data.ActiveResearchFinishUtc ?? "",
                     Army = ValidateArmy(data.Army),
+                    Injured = ValidateArmy(data.Injured),
                     LastEnergyDate = data.LastEnergyDate ?? "",
                     LastSaveTimeUtc = data.LastSaveTimeUtc ?? "",
                     ProductionCarryBiomass = Math.Max(0f, data.ProductionCarryBiomass),
@@ -148,7 +153,7 @@ namespace LunarDominion.Save
                 // Clamp levels: 0-30, and no building above the Nexus.
                 int nexus = Math.Max(1, Math.Min(state.NexusLevel, _balance.MaxBuildingLevel));
                 state.SetLevel(BuildingId.CommandNexus, nexus);
-                for (int i = 0; i < 8; i++)
+                for (int i = 0; i < 9; i++)
                 {
                     int level = Math.Max(0, Math.Min(state.BuildingLevels[i], _balance.MaxBuildingLevel));
                     if (i != (int)BuildingId.CommandNexus) level = Math.Min(level, nexus);
@@ -172,13 +177,14 @@ namespace LunarDominion.Save
             }
         }
 
-        // Research Lab (2026-11-01) grew the array 7 -> 8. Old saves
-        // copy their 7 entries and load with the Lab at 0 (locked).
+        // Research Lab (2026-11-01) grew the array 7 -> 8; Hospital
+        // (2026-11-09) grew it 8 -> 9. Old saves copy their entries and
+        // load with the new building at 0 (locked).
         private int[] ExpandBuildingLevels(int[] saved)
         {
-            var result = new int[8];
+            var result = new int[9];
             if (saved == null) return result;
-            int count = Math.Min(saved.Length, 8);
+            int count = Math.Min(saved.Length, 9);
             for (int i = 0; i < count; i++) result[i] = saved[i];
             return result;
         }

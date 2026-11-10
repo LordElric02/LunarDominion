@@ -645,7 +645,7 @@ namespace LunarDominion.Expeditions
             }
             body.AppendLine(result.CasualtyNames.Count == 0
                 ? "Casualties: none"
-                : "Casualties: " + string.Join(", ", result.CasualtyNames));
+                : "Injured: " + string.Join(", ", result.CasualtyNames) + " — heal them at the Hospital.");
             body.AppendLine($"XP pool: {result.XpPool}");
             if (result.XpGains.Count == 0)
             {
