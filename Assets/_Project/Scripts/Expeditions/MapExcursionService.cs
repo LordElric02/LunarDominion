@@ -241,9 +241,10 @@ namespace LunarDominion.Expeditions
         }
 
         /// <summary>Default squad for the picker: the whole army +
-        /// heroes, strongest first, capped — as per-type counts. Heroes
-        /// are included (they are the strongest) and share the cap.
-        /// The picker opens pre-filled with this and the player trims it.</summary>
+        /// strongest hero, strongest first, capped — as per-type
+        /// counts. At most one hero is included (one hero per
+        /// excursion); the picker opens pre-filled with this and the
+        /// player trims it.</summary>
         public Dictionary<UnitId, int> DefaultSquadCounts()
         {
             var counts = new Dictionary<UnitId, int>();
@@ -773,11 +774,18 @@ namespace LunarDominion.Expeditions
             scored.Sort((a, b) => b.power.CompareTo(a.power));
             armyIndices = new List<int>();
             heroIndices = new List<int>();
-            int count = Math.Min(scored.Count, _balance.MaxSquadSize);
-            for (int i = 0; i < count; i++)
+            // Strongest first, up to the squad cap — but at most ONE
+            // hero per excursion (Patrick 2026-11-10): extra heroes are
+            // skipped and the next-strongest army units fill the squad.
+            foreach (var s in scored)
             {
-                if (scored[i].isHero) heroIndices.Add(scored[i].index);
-                else armyIndices.Add(scored[i].index);
+                if (armyIndices.Count + heroIndices.Count >= _balance.MaxSquadSize) break;
+                if (s.isHero)
+                {
+                    if (heroIndices.Count >= 1) continue;
+                    heroIndices.Add(s.index);
+                }
+                else armyIndices.Add(s.index);
             }
         }
 

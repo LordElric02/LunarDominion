@@ -136,6 +136,7 @@ namespace LunarDominion.UI
         public void Show(string targetTitle, Dictionary<UnitId, int> initialCounts)
         {
             _counts = initialCounts != null ? new Dictionary<UnitId, int>(initialCounts) : new Dictionary<UnitId, int>();
+            ClampToOneHero();
             _targetTitle = targetTitle;
             _titleText.text = "CHOOSE SQUAD";
             _root.SetActive(true);
@@ -217,7 +218,9 @@ namespace LunarDominion.UI
 
             // Heroes (2026-11-10): heroes march with the army now. One
             // row per owned hero (each is unique, so Owned is 1 and the
-            // pick is 0 or 1). They share the squad cap with the army.
+            // pick is 0 or 1). At most ONE hero may join an excursion
+            // (Patrick 2026-11-10) — enforced in OnAdd/Refresh and by
+            // the clamp in BuildRows. Heroes share the squad cap.
             if (_controller.State.Heroes != null)
             {
                 foreach (var hero in _controller.State.Heroes)
@@ -229,6 +232,39 @@ namespace LunarDominion.UI
                     AddRow(hero.Id, name, 1);
                 }
             }
+        }
+
+        // At most one hero per excursion (Patrick 2026-11-10): if the
+        // opening counts somehow carry more than one hero, keep the
+        // first (in Heroes order) and clear the rest.
+        private void ClampToOneHero()
+        {
+            if (_controller == null || _controller.State == null || _controller.State.Heroes == null) return;
+            bool heroKept = false;
+            foreach (var hero in _controller.State.Heroes)
+            {
+                if (hero == null) continue;
+                if (!_counts.ContainsKey(hero.Id) || _counts[hero.Id] <= 0) continue;
+                if (!heroKept) { heroKept = true; _counts[hero.Id] = 1; }
+                else _counts[hero.Id] = 0;
+            }
+        }
+
+        private bool IsHeroType(UnitId type)
+        {
+            if (_controller == null || _controller.UnitDefinitions == null) return false;
+            var def = _controller.UnitDefinitions.Find(u => u.Id == type);
+            return def != null && def.IsHero;
+        }
+
+        private int HeroesSelected()
+        {
+            int total = 0;
+            foreach (var pair in _counts)
+            {
+                if (pair.Value > 0 && IsHeroType(pair.Key)) total += pair.Value;
+            }
+            return total;
         }
 
         private void AddRow(UnitId type, string name, int owned)
@@ -280,6 +316,8 @@ namespace LunarDominion.UI
             int owned = 0;
             foreach (var row in _rows) if (row.Type == type) owned = row.Owned;
             if (_counts[type] >= owned) return;
+            // At most one hero per excursion (Patrick 2026-11-10).
+            if (IsHeroType(type) && HeroesSelected() >= 1) return;
             _counts[type]++;
             Refresh();
         }
@@ -307,7 +345,10 @@ namespace LunarDominion.UI
             {
                 int selected = _counts.ContainsKey(row.Type) ? _counts[row.Type] : 0;
                 row.CountText.text = $"Squad: {selected} / {row.Owned}";
-                UIHelpers.SetButtonEnabled(row.AddButton, Total() < _controller.Balance.MaxSquadSize && selected < row.Owned);
+                // A hero row's + is also disabled once any hero is
+                // picked (one hero per excursion).
+                bool heroBlocked = IsHeroType(row.Type) && HeroesSelected() >= 1 && selected == 0;
+                UIHelpers.SetButtonEnabled(row.AddButton, Total() < _controller.Balance.MaxSquadSize && selected < row.Owned && !heroBlocked);
                 UIHelpers.SetButtonEnabled(row.RemoveButton, selected > 0);
             }
             UIHelpers.SetButtonEnabled(_sendButton, Total() > 0);
