@@ -58,15 +58,16 @@ namespace LunarDominion.Core
         // ActiveResearchFinishUtc. Old saves load with all "" (available).
         public string[] NodeRegenUtc = new string[9];
 
-        // Enemy camps (2026-11-09): a camp defeated in battle vanishes,
-        // and another of the same tier respawns elsewhere after
-        // CampRespawnHours. One respawn timestamp per tier (index
-        // tier-1); "" = the camp is active. One spot index per tier
-        // (index tier-1) into ExteriorView.CampSpots; 0 = the original
-        // position. Old saves load with all "" / 0 (active at the
-        // original spots).
-        public string[] CampRespawnUtc = new string[3];
-        public int[] CampSpotIndex = new int[3];
+        // Enemy camp field (2026-11-10, replaces the 3-camp system):
+        // 15 camp slots spread across the map. CampSlotTier[i] is the
+        // tier of the camp in slot i (0 = empty, waiting to respawn);
+        // CampSlotRespawnUtc[i] is when an empty slot refills ("" =
+        // not waiting). A slot's tier is rolled fresh on every spawn,
+        // weighted by Nexus level (see MapExcursionService), so the
+        // field grows with the player. Old saves load with all 0/""
+        // and the whole field is populated on first sync.
+        public int[] CampSlotTier = new int[15];
+        public string[] CampSlotRespawnUtc = new string[15];
 
         // Boss lair (2026-11-09, redesigned 2026-11-10): the War Robot
         // boss. BossLevelDefeated = the highest boss level beaten

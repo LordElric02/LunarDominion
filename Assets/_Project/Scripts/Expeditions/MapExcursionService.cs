@@ -27,9 +27,11 @@ namespace LunarDominion.Expeditions
     /// ExpeditionService.TryStart exactly — same tier gate (bypassed on
     /// the map with a warning), energy cost, no-refund-on-defeat rule,
     /// rewards, XP, and permanent casualties — so a map fight and a menu
-    /// fight are the same fight. A defeated camp vanishes (2026-11-09)
-    /// with its creatures, and another of the same tier respawns at a
-    /// different spot after CampRespawnHours; losing leaves the camp in
+    /// fight are the same fight. A defeated camp vanishes (2026-11-09;
+    /// camp field 2026-11-10) with its creatures, and its slot refills
+    /// after CampRespawnMinutes with a fresh tier rolled by Nexus
+    /// level — 15 slots across the map, so there is (energy aside)
+    /// always something to attack; losing leaves the camp in
     /// place. The boss lair (2026-11-09; ladder 2026-11-10) is a single
     /// Tier 4 encounter (War Robot) that never vanishes — the player
     /// fights it in the lair view (heroes, 15-level ladder) at will,
@@ -45,11 +47,11 @@ namespace LunarDominion.Expeditions
         public const float NodeRegenHours = 8f;
         // Occupation: 120 min / troops sent (8 troops = 15 min).
         public const float OccupationMinutesPerTroop = 120f;
-        // Camp respawn: a defeated camp vanishes, and another of the
-        // same tier respawns elsewhere after this many real-time hours.
-        // Shortened to 1h (2026-11-09, Patrick) so it is quick to see
-        // in testing; raise it again for a slower live pace.
-        public const float CampRespawnHours = 1f;
+        // Camp respawn (camp field, 2026-11-10, Patrick): a defeated
+        // camp's slot refills after this many real-time minutes, with
+        // a fresh tier rolled by Nexus level (RollCampTier). With 15
+        // slots the field stays populated; energy is the only gate.
+        public const float CampRespawnMinutes = 10f;
 
         // Raised when an excursion resolves (arrival outcome) or cannot
         // start — title + multi-line body for the info panel.
@@ -173,9 +175,9 @@ namespace LunarDominion.Expeditions
                 reason = "No encounter for this camp.";
                 return false;
             }
-            if (IsCampDefeated(point.Tier))
+            if (IsCampSlotEmpty(point))
             {
-                reason = "This camp was defeated — a new one will appear elsewhere.";
+                reason = "This camp was defeated — a new one will appear soon.";
                 return false;
             }
             if (_state.Energy < encounter.EnergyCost)
@@ -420,68 +422,117 @@ namespace LunarDominion.Expeditions
             _state.OccupationTroops = 0;
         }
 
-        // Enemy camps (2026-11-09): a camp defeated in battle vanishes,
-        // and another of the same tier respawns elsewhere after
-        // CampRespawnHours. The camp and its creatures disappear
-        // immediately; the respawn is a real-time timestamp in the save,
-        // so it survives an app restart and can complete while closed.
+        // Enemy camp field (2026-11-10, replaces the 3 fixed camps):
+        // 15 slots across the map (ExteriorView.CampSlotPositions). A
+        // defeated camp's slot empties and refills after
+        // CampRespawnMinutes with a tier rolled fresh from the Nexus-
+        // weighted table (RollCampTier), so the field grows with the
+        // player and there is always something to attack. Slot state
+        // (tier + respawn time per slot) lives in the save, so timers
+        // survive an app restart and complete while the app is closed.
 
-        /// <summary>NodeDefs index for a camp tier (tier 1 → 9, 2 → 10,
-        /// 3 → 11). Camps are indices 9-11 in ExteriorView.NodeDefs.</summary>
-        private static int CampIndexForTier(int tier)
+        /// <summary>The camp slot (0-14) a map point belongs to, or
+        /// -1 when the point is not a camp slot point.</summary>
+        private static int SlotForPoint(MapPointData point)
         {
-            return 8 + tier;
+            if (point == null || point.Kind != MapPointKind.Camp) return -1;
+            int slot = point.Index - ExteriorView.CampSlotIndexBase;
+            return slot >= 0 && slot < ExteriorView.CampSlotCount ? slot : -1;
         }
 
-        /// <summary>True while this tier's camp is defeated and waiting
-        /// to respawn (its CampRespawnUtc is set).</summary>
-        public bool IsCampDefeated(int tier)
+        /// <summary>True while this point's camp slot is empty (its
+        /// camp was defeated and the slot is waiting to refill).</summary>
+        public bool IsCampSlotEmpty(MapPointData point)
         {
-            if (tier < 1 || tier > 3) return false;
-            if (_state.CampRespawnUtc == null || _state.CampRespawnUtc.Length != 3) return false;
-            return !string.IsNullOrEmpty(_state.CampRespawnUtc[tier - 1]);
+            int slot = SlotForPoint(point);
+            if (slot < 0) return false;
+            if (_state.CampSlotTier == null || _state.CampSlotTier.Length != ExteriorView.CampSlotCount) return false;
+            return _state.CampSlotTier[slot] == 0;
         }
 
-        // Vanish a defeated camp: record its respawn time, hide the
-        // camp and its creatures, and save. The camp reappears at a
-        // different spot when CheckCampRespawns runs after the time.
-        private void VanishCamp(int tier)
+        /// <summary>Tier for a newly spawning camp, weighted by Nexus
+        /// level (Patrick's design, 2026-11-10): Tier 2 camps join
+        /// once a Tier 2 army is possible (Nexus 10), Tier 3 at
+        /// Nexus 15, and Tier 1 is always sprinkled in — never gone.</summary>
+        private int RollCampTier()
         {
-            if (tier < 1 || tier > 3) return;
-            if (_state.CampRespawnUtc == null || _state.CampRespawnUtc.Length != 3)
-                _state.CampRespawnUtc = new string[3];
-            _state.CampRespawnUtc[tier - 1] = DateTime.UtcNow.AddHours(CampRespawnHours).ToString("o");
-            _view.SetCampVisible(CampIndexForTier(tier), false);
+            int nexus = _state.NexusLevel;
+            if (nexus < 10) return 1;
+            float roll = UnityEngine.Random.value;
+            if (nexus < 15) return roll < 0.65f ? 1 : 2;
+            if (nexus < 20) return roll < 0.45f ? 1 : (roll < 0.75f ? 2 : 3);
+            return roll < 0.30f ? 1 : (roll < 0.65f ? 2 : 3);
+        }
+
+        // Normalize the slot arrays, and populate a FRESH field: when
+        // every slot is empty AND no respawn is pending, this save has
+        // never had the camp field (new game, or a save from before
+        // it) — fill all 15 slots now. A field with every camp beaten
+        // at once is NOT fresh: all its respawn timers are set.
+        private void EnsureCampSlots()
+        {
+            if (_state.CampSlotTier == null || _state.CampSlotTier.Length != ExteriorView.CampSlotCount)
+                _state.CampSlotTier = new int[ExteriorView.CampSlotCount];
+            if (_state.CampSlotRespawnUtc == null || _state.CampSlotRespawnUtc.Length != ExteriorView.CampSlotCount)
+                _state.CampSlotRespawnUtc = new string[ExteriorView.CampSlotCount];
+            bool anyTier = false;
+            bool anyTimer = false;
+            for (int i = 0; i < ExteriorView.CampSlotCount; i++)
+            {
+                if (_state.CampSlotTier[i] != 0) anyTier = true;
+                if (!string.IsNullOrEmpty(_state.CampSlotRespawnUtc[i])) anyTimer = true;
+            }
+            if (anyTier || anyTimer) return;
+            for (int i = 0; i < ExteriorView.CampSlotCount; i++)
+            {
+                _state.CampSlotTier[i] = RollCampTier();
+            }
+            _saveGame?.Invoke();
+            _notifyChanged?.Invoke();
+        }
+
+        // Vanish a defeated camp's slot: record the refill time, clear
+        // the slot in the view, and save. The slot refills when
+        // CheckCampRespawns runs after the time.
+        private void VanishCampSlot(int slot)
+        {
+            if (slot < 0 || slot >= ExteriorView.CampSlotCount) return;
+            EnsureCampSlots();
+            _state.CampSlotTier[slot] = 0;
+            _state.CampSlotRespawnUtc[slot] = DateTime.UtcNow.AddMinutes(CampRespawnMinutes).ToString("o");
+            if (_view != null)
+            {
+                _view.SetCampSlot(slot, 0);
+                _view.SetCampSlotVisible(slot, false);
+            }
             _saveGame?.Invoke();
             _notifyChanged?.Invoke();
             OnExcursionStateChanged?.Invoke();
         }
 
         /// <summary>Called regularly (Bootstrap RefreshAll, ~once a
-        /// second) and on load: if a defeated camp's respawn time has
-        /// passed, bring another of the same tier back at a different
-        /// spot. Also completes a respawn whose time passed while the
-        /// app was closed — the new camp is there on the next load.</summary>
+        /// second) and on load: refill every empty slot whose respawn
+        /// time has passed, with a freshly rolled tier. Also completes
+        /// respawns whose time passed while the app was closed — the
+        /// new camps are there on the next load.</summary>
         public void CheckCampRespawns()
         {
-            if (_state.CampRespawnUtc == null || _state.CampRespawnUtc.Length != 3) return;
+            EnsureCampSlots();
             bool changed = false;
-            for (int tier = 1; tier <= 3; tier++)
+            for (int slot = 0; slot < ExteriorView.CampSlotCount; slot++)
             {
-                string s = _state.CampRespawnUtc[tier - 1];
+                if (_state.CampSlotTier[slot] != 0) continue;
+                string s = _state.CampSlotRespawnUtc[slot];
                 if (string.IsNullOrEmpty(s)) continue;
                 if (!DateTime.TryParse(s, null, DateTimeStyles.RoundtripKind, out var respawnUtc)) continue;
                 if (DateTime.UtcNow < respawnUtc) continue;
-                // Pick a different spot than the one the camp just left.
-                if (_state.CampSpotIndex == null || _state.CampSpotIndex.Length != 3)
-                    _state.CampSpotIndex = new int[3];
-                int current = _state.CampSpotIndex[tier - 1];
-                int next = current;
-                while (next == current) next = UnityEngine.Random.Range(0, 3);
-                _state.CampSpotIndex[tier - 1] = next;
-                _state.CampRespawnUtc[tier - 1] = "";
-                _view.MoveCampToSpot(CampIndexForTier(tier), next);
-                _view.SetCampVisible(CampIndexForTier(tier), true);
+                _state.CampSlotTier[slot] = RollCampTier();
+                _state.CampSlotRespawnUtc[slot] = "";
+                if (_view != null)
+                {
+                    _view.SetCampSlot(slot, _state.CampSlotTier[slot]);
+                    _view.SetCampSlotVisible(slot, true);
+                }
                 changed = true;
             }
             if (changed)
@@ -492,29 +543,21 @@ namespace LunarDominion.Expeditions
             }
         }
 
-        /// <summary>Position active camps at their saved spots and hide
-        /// defeated ones, from the save. Called on load (constructor)
-        /// and whenever the Map is shown (the view's SetVisible re-shows
-        /// every point, so a defeated camp must be re-hidden and a
-        /// respawned camp re-placed). No-op for old saves (all active
-        /// at spot 0, the original positions).</summary>
+        /// <summary>Mirror the saved slot state into the view: each
+        /// slot shows its saved tier (SetCampSlot is a no-op when the
+        /// slot already shows it) and empty slots stay hidden. Called
+        /// on load and whenever the Map is shown (the view's
+        /// SetVisible re-shows static points, so slot visibility is
+        /// re-applied here).</summary>
         public void SyncCamps()
         {
             if (_view == null) return;
-            if (_state.CampSpotIndex == null || _state.CampSpotIndex.Length != 3)
-                _state.CampSpotIndex = new int[3];
-            for (int tier = 1; tier <= 3; tier++)
+            EnsureCampSlots();
+            for (int slot = 0; slot < ExteriorView.CampSlotCount; slot++)
             {
-                int campIndex = CampIndexForTier(tier);
-                if (IsCampDefeated(tier))
-                {
-                    _view.SetCampVisible(campIndex, false);
-                }
-                else
-                {
-                    _view.MoveCampToSpot(campIndex, _state.CampSpotIndex[tier - 1]);
-                    _view.SetCampVisible(campIndex, true);
-                }
+                int tier = _state.CampSlotTier[slot];
+                _view.SetCampSlot(slot, tier);
+                _view.SetCampSlotVisible(slot, tier > 0);
             }
         }
 
@@ -661,11 +704,12 @@ namespace LunarDominion.Expeditions
                     OnExcursionResult?.Invoke(
                         result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
                         FormatBattleResult(result));
-                    // A defeated camp vanishes (2026-11-09): the camp and
-                    // its creatures disappear, and another of the same tier
-                    // respawns elsewhere after CampRespawnHours. Losing
-                    // leaves the camp in place, so the player can retry.
-                    if (result.Victory) VanishCamp(point.Tier);
+                    // A defeated camp vanishes (camp field, 2026-11-10):
+                    // the camp and its creatures disappear, and the slot
+                    // refills after CampRespawnMinutes with a fresh tier
+                    // rolled by Nexus level. Losing leaves the camp in
+                    // place, so the player can retry.
+                    if (result.Victory) VanishCampSlot(SlotForPoint(point));
                     StartReturnMarch(point);
                 });
             }

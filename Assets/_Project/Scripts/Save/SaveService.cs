@@ -54,6 +54,12 @@ namespace LunarDominion.Save
         // defeated (0 = none yet, up to 15). Old saves load as 0.
         public string BossRespawnUtc = "";
         public int BossLevelDefeated = 0;
+        // Enemy camp field (2026-11-10): 15 slots. CampSlotTier[i] =
+        // the tier in slot i (0 = empty); CampSlotRespawnUtc[i] = when
+        // an empty slot refills ("" = not waiting). Old saves load
+        // with all 0/"" and the field is populated on first sync.
+        public int[] CampSlotTier = new int[15];
+        public string[] CampSlotRespawnUtc = new string[15];
     }
 
     public class SaveService
@@ -110,7 +116,9 @@ namespace LunarDominion.Save
                 OccupationKind = state.OccupationKind,
                 OccupationTroops = state.OccupationTroops,
                 BossRespawnUtc = state.BossRespawnUtc ?? "",
-                BossLevelDefeated = Math.Max(0, Math.Min(state.BossLevelDefeated, EncounterCatalog.MaxBossLevel))
+                BossLevelDefeated = Math.Max(0, Math.Min(state.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
+                CampSlotTier = ValidateCampSlotTiers(state.CampSlotTier),
+                CampSlotRespawnUtc = ValidateCampSlotRespawns(state.CampSlotRespawnUtc)
             };
             string json = JsonUtility.ToJson(data, true);
             string temp = SavePath + ".tmp";
@@ -157,7 +165,9 @@ namespace LunarDominion.Save
                     OccupationKind = Math.Max(0, Math.Min(data.OccupationKind, 2)),
                     OccupationTroops = Math.Max(0, Math.Min(data.OccupationTroops, 8)),
                     BossRespawnUtc = data.BossRespawnUtc ?? "",
-                    BossLevelDefeated = Math.Max(0, Math.Min(data.BossLevelDefeated, EncounterCatalog.MaxBossLevel))
+                    BossLevelDefeated = Math.Max(0, Math.Min(data.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
+                    CampSlotTier = ValidateCampSlotTiers(data.CampSlotTier),
+                    CampSlotRespawnUtc = ValidateCampSlotRespawns(data.CampSlotRespawnUtc)
                 };
                 if (state.ActiveResearchId < 0)
                 {
@@ -212,6 +222,27 @@ namespace LunarDominion.Save
             if (saved == null) return result;
             int count = Math.Min(saved.Length, 9);
             for (int i = 0; i < count; i++) result[i] = saved[i];
+            return result;
+        }
+
+        private int[] ValidateCampSlotTiers(int[] saved)
+        {
+            var result = new int[15];
+            if (saved == null) return result;
+            for (int i = 0; i < result.Length && i < saved.Length; i++)
+            {
+                result[i] = Math.Max(0, Math.Min(saved[i], 3));
+            }
+            return result;
+        }
+
+        private string[] ValidateCampSlotRespawns(string[] saved)
+        {
+            var result = new string[15];
+            for (int i = 0; i < result.Length; i++)
+            {
+                result[i] = saved != null && i < saved.Length && saved[i] != null ? saved[i] : "";
+            }
             return result;
         }
 
