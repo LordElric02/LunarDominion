@@ -238,9 +238,10 @@ namespace LunarDominion.UI
             // shards), placed in world space like the ground plane.
             AddDebris();
 
-            // 2026-11-07: Blender roads + props, placed in world space
+            // 2026-11-07: Blender props, placed in world space
             // like the debris. The gate needs the wall gap (BuildWall).
-            AddRoadsAndProps();
+            // (Roads removed 2026-11-09 — see AddProps.)
+            AddProps();
 
             BuildWall();
             BuildMountains();
@@ -325,60 +326,24 @@ namespace LunarDominion.UI
             }
         }
 
-        // 2026-11-07: roads + props — Blender road pieces (RoadStraight /
-        // RoadJunction / RoadTee) and prop models (PropSolarPanel /
+        // 2026-11-07: props — Blender prop models (PropSolarPanel /
         // PropCrates / PropStorageTank / PropRover / PropGate) in
-        // Resources/Models/. Placed in world space (like the debris, not
-        // under the rotated layout root) at fixed positions from the
-        // layout plan. Roads sit at y 0.015 so the slab base clears the
-        // ground plane. No colliders and no tap registration: roads and
-        // props are scenery. If an FBX is missing, that spot stays empty.
-        // 2026-11-09 expanded base: the road network is re-laid for the
-        // 2.5x spread — a rectangular ring (local x +-10.75, z +-4.5)
-        // inset 2.0 from the buildings, with junctions at the corners
-        // and where the spurs meet it, a north/south spine on local
-        // x=0 (He-3 to Nexus edge, Nexus edge to Aegis), and a west
-        // spur on local z=0 (ring to the Lab). Straights are 4 long,
-        // placed 4.0 apart so they butt end-to-end (no gaps, no
-        // overlap / z-fighting); a straight whose centre falls inside
-        // a junction or a building footprint is omitted (the junction
-        // or building covers that spot). The old spine/NW-street split
-        // is gone — the ring connects everything. The tee is built but
-        // unused. Positions below are world space, converted from the
-        // local layout (world = ((lx+lz)/sqrt2, (lz-lx)/sqrt2)).
-        private void AddRoadsAndProps()
+        // Resources/Models/. Placed in world space (like the debris,
+        // not under the rotated layout root) at fixed positions from
+        // the layout plan. No colliders and no tap registration:
+        // props are scenery. If an FBX is missing, that spot stays
+        // empty. 2026-11-09 expanded base: props re-spread for the
+        // 2.5x spread, clear of the buildings; the gate moves to the
+        // new north wall gap (local (0,13.5) -> world (9.55,9.55)).
+        // 2026-11-09: the ROADS are gone (removed at Patrick's
+        // request — the black low-res road ring/spine/spur clashed
+        // with the new paved interior, and the painted walkways in
+        // the paving already connect the buildings; the outer wall
+        // is the boundary now). Only the props remain.
+        private void AddProps()
         {
-            // Ring corners + spur junctions.
-            AddSceneryAt("Models/RoadJunction", new Vector3(-4.42f, 0.015f, 10.78f), -45f, "Road");
-            AddSceneryAt("Models/RoadJunction", new Vector3(10.78f, 0.015f, -4.42f), -45f, "Road");
-            AddSceneryAt("Models/RoadJunction", new Vector3(-10.78f, 0.015f, 4.42f), -45f, "Road");
-            AddSceneryAt("Models/RoadJunction", new Vector3(4.42f, 0.015f, -10.78f), -45f, "Road");
-            AddSceneryAt("Models/RoadJunction", new Vector3(3.18f, 0.015f, 3.18f), -45f, "Road");
-            AddSceneryAt("Models/RoadJunction", new Vector3(-3.18f, 0.015f, -3.18f), -45f, "Road");
-            AddSceneryAt("Models/RoadJunction", new Vector3(-7.60f, 0.015f, 7.60f), -45f, "Road");
-            // Ring top edge (local z=4.5) and bottom edge (local z=-4.5).
-            AddSceneryAt("Models/RoadStraight", new Vector3(-3.01f, 0.015f, 9.37f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-0.18f, 0.015f, 6.54f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(5.48f, 0.015f, 0.88f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(8.31f, 0.015f, -1.94f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-9.37f, 0.015f, 3.01f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-6.54f, 0.015f, 0.18f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-0.88f, 0.015f, -5.48f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(1.94f, 0.015f, -8.31f), 45f, "Road");
-            // Ring west edge (local x=-10.75) and east edge (local x=10.75).
-            AddSceneryAt("Models/RoadStraight", new Vector3(-9.37f, 0.015f, 5.83f), -45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-6.54f, 0.015f, 8.66f), -45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(5.83f, 0.015f, -9.37f), -45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(8.66f, 0.015f, -6.54f), -45f, "Road");
-            // North/south spine (local x=0): Nexus edge to He-3 / Aegis.
-            AddSceneryAt("Models/RoadStraight", new Vector3(5.48f, 0.015f, 5.48f), -45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-5.83f, 0.015f, -5.83f), -45f, "Road");
-            // West spur (local z=0): ring to the Lab.
-            AddSceneryAt("Models/RoadStraight", new Vector3(-9.02f, 0.015f, 9.02f), 45f, "Road");
-            AddSceneryAt("Models/RoadStraight", new Vector3(-11.84f, 0.015f, 11.84f), 45f, "Road");
-
             // Props, re-spread for the expanded base (world space, clear
-            // of the roads and the buildings). The gate moves to the new
+            // of the buildings). The gate moves to the new
             // north wall gap (local (0,13.5) -> world (9.55,9.55)).
             AddSceneryAt("Models/PropSolarPanel", new Vector3(5.66f, 0f, -2.83f), 30f, "Prop");
             AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.66f, 0f, 2.83f), -20f, "Prop");
