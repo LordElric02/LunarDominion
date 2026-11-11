@@ -964,6 +964,21 @@ namespace LunarDominion.Boss
 
         // ================= Finish =================
 
+        // Player surrender (2026-11-10): stops whatever is
+        // mid-flight and ends the fight as a defeat through
+        // the normal finish path — fallen heroes are the ones
+        // already down; the view applies the defeat completion
+        // (no rewards, energy not refunded).
+        private bool _surrendered;
+
+        public void Surrender()
+        {
+            if (Finished) return;
+            _surrendered = true;
+            StopAllCoroutines();
+            StartCoroutine(FinishRoutine(false, false));
+        }
+
         private IEnumerator FinishRoutine(bool victory, bool timeout)
         {
             if (Finished) yield break;
@@ -971,7 +986,7 @@ namespace LunarDominion.Boss
             Busy = true;
             AwaitingTarget = false;
             if (_slamRing != null) _slamRing.Hide();
-            AddLog(victory ? "A.R.E.S.-09 DESTROYED!" : (timeout ? "Out of time — the boss still stands." : "Squad down."));
+            AddLog(victory ? "A.R.E.S.-09 DESTROYED!" : (timeout ? "Out of time — the boss still stands." : (_surrendered ? "Squad retreats — surrendered." : "Squad down.")));
             OnChanged?.Invoke();
             if (victory && _bossVisual != null)
             {

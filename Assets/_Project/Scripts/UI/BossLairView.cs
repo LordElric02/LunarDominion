@@ -119,6 +119,9 @@ namespace LunarDominion.UI
         private GameObject _actionBar;
         private bool _actionBarOpen;
         private int _barForHero = -1;
+        private Button _surrenderButton;
+        private Text _surrenderLabel;
+        private float _surrenderArmUntil;
         private readonly List<Button> _turnActionButtons = new List<Button>();
         private readonly List<Text> _turnActionLabels = new List<Text>();
         private readonly List<Button> _turnChipButtons = new List<Button>();
@@ -1570,9 +1573,37 @@ namespace LunarDominion.UI
                 _turnTargetLabels.Add(label);
             }
 
+            // Surrender: bottom-right beside the chips. The
+            // first tap arms it ("Sure?"); a second tap inside
+            // the window ends the fight as a defeat.
+            _surrenderButton = MakePanelButton(_turnHud, "SurrenderButton", "Surrender", 20,
+                UIHelpers.Hex("#4A1420"), out _surrenderLabel);
+            var surrenderRt = _surrenderButton.GetComponent<RectTransform>();
+            surrenderRt.anchorMin = new Vector2(0.775f, 0.015f);
+            surrenderRt.anchorMax = new Vector2(0.985f, 0.115f);
+            surrenderRt.offsetMin = Vector2.zero;
+            surrenderRt.offsetMax = Vector2.zero;
+            _surrenderButton.onClick.AddListener(OnSurrenderClicked);
+
             _turnHud.SetActive(false);
             _actionBar.SetActive(false);
             _turnTargetRow.SetActive(false);
+        }
+
+        private void OnSurrenderClicked()
+        {
+            if (_turnFight == null || _turnFight.Finished) return;
+            if (Time.time <= _surrenderArmUntil)
+            {
+                _surrenderArmUntil = 0f;
+                if (_surrenderLabel != null) _surrenderLabel.text = "Surrender";
+                _turnFight.Surrender();
+            }
+            else
+            {
+                _surrenderArmUntil = Time.time + 4f;
+                if (_surrenderLabel != null) _surrenderLabel.text = "Sure?";
+            }
         }
 
         private void StartTurnBasedFight(EncounterDefinition boss)
@@ -1634,6 +1665,8 @@ namespace LunarDominion.UI
             if (_turnHud != null) _turnHud.SetActive(true);
             _actionBarOpen = false;
             _barForHero = -1;
+            _surrenderArmUntil = 0f;
+            if (_surrenderLabel != null) _surrenderLabel.text = "Surrender";
             if (_turnHudRoutine != null) StopCoroutine(_turnHudRoutine);
             _turnHudRoutine = StartCoroutine(TurnHudRoutine());
             _turnFight.Begin(heroes, bossHp, bossAtk, bossDef, _selectedBossLevel, scale,
@@ -1942,6 +1975,13 @@ namespace LunarDominion.UI
             else hintText = "";
             if (_turnHintText != null) _turnHintText.text = hintText;
 
+            // An armed surrender lapses back to its idle label.
+            if (_surrenderLabel != null && _surrenderArmUntil > 0f && Time.time > _surrenderArmUntil)
+            {
+                _surrenderArmUntil = 0f;
+                _surrenderLabel.text = "Surrender";
+            }
+
             // Hero chips.
             for (int i = 0; i < _turnChipButtons.Count; i++)
             {
@@ -2124,6 +2164,8 @@ namespace LunarDominion.UI
             _turnActive = false;
             _actionBarOpen = false;
             _barForHero = -1;
+            _surrenderArmUntil = 0f;
+            if (_surrenderLabel != null) _surrenderLabel.text = "Surrender";
             if (_turnHudRoutine != null) { StopCoroutine(_turnHudRoutine); _turnHudRoutine = null; }
             if (_hudRoot != null) _hudRoot.SetActive(false);
             if (_turnHud != null) _turnHud.SetActive(false);
