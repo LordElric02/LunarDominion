@@ -724,21 +724,30 @@ namespace LunarDominion.UI
                 return;
             }
             int highest = HighestUnlockedBossLevel();
-            bool realtime = UseTurnBased();
-            _titleText.text = realtime
+            bool turnBased = UseTurnBased();
+            _titleText.text = turnBased
                 ? $"A.R.E.S.-09 — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}"
                 : $"WAR ROBOT — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}";
-            if (realtime && boss.Spawns.Count > 0)
+            if (turnBased && boss.Spawns.Count > 0)
             {
-                var stats = AresStats.FromLadder(boss.Spawns[0].Health, boss.Spawns[0].Attack, boss.Spawns[0].Defense,
-                    CombatService.EnemyScale(_controller.State.NexusLevel, boss.RequiredNexusLevel));
-                _bossInfoText.text = $"REAL-TIME FIGHT  •  HP {(int)stats.MaxHealth}  ATK {boss.Spawns[0].Attack}  DEF {(int)stats.Defense}  •  Reward {boss.Reward.Biomass}B {boss.Reward.Alloy}A {boss.Reward.Helium3}H  •  {boss.XpPool} XP";
+                // The numbers the turn fight actually uses:
+                // ladder stats x the Nexus scale, no real-time
+                // inflation (the header still showed the dormant
+                // real-time x8 HP until 2026-11-10).
+                float scale = CombatService.EnemyScale(_controller.State.NexusLevel, boss.RequiredNexusLevel);
+                int hp = Mathf.RoundToInt(boss.Spawns[0].Health * scale);
+                int atk = Mathf.RoundToInt(boss.Spawns[0].Attack * scale);
+                int def = Mathf.RoundToInt(boss.Spawns[0].Defense * scale);
+                _bossInfoText.text = $"TURN-BASED FIGHT  •  HP {hp}  ATK {atk}  DEF {def}  •  Reward {boss.Reward.Biomass}B {boss.Reward.Alloy}A {boss.Reward.Helium3}H  •  {boss.XpPool} XP";
             }
             else
             {
                 _bossInfoText.text = $"HP {(boss.Spawns.Count > 0 ? boss.Spawns[0].Health : 0)}  ATK {(boss.Spawns.Count > 0 ? boss.Spawns[0].Attack : 0)}  DEF {(boss.Spawns.Count > 0 ? boss.Spawns[0].Defense : 0)}  •  Reward {boss.Reward.Biomass}B {boss.Reward.Alloy}A {boss.Reward.Helium3}H  •  {boss.XpPool} XP";
             }
-            _energyText.text = $"Energy: {_controller.State.Energy} / {boss.EnergyCost}  •  Unlocks at Nexus {boss.RequiredNexusLevel} (you are Nexus {_controller.State.NexusLevel})";
+            bool energyShort = _controller.State.Energy < boss.EnergyCost;
+            _energyText.text = $"Energy: {_controller.State.Energy} / {boss.EnergyCost}  •  Unlocks at Nexus {boss.RequiredNexusLevel} (you are Nexus {_controller.State.NexusLevel})"
+                + (energyShort ? "  •  NOT ENOUGH ENERGY" : "");
+            _energyText.color = energyShort ? UIHelpers.Hex("#FF7043") : UIHelpers.Hex("#C0C8D0");
             UIHelpers.SetButtonEnabled(_prevLevelButton, _selectedBossLevel > 1);
             UIHelpers.SetButtonEnabled(_nextLevelButton, _selectedBossLevel < highest);
             RefreshFightButton();
@@ -876,11 +885,15 @@ namespace LunarDominion.UI
         {
             if (_fightButton == null) return;
             var boss = BossEncounter();
+            // Energy is deliberately NOT a gate here: a
+            // disabled button click says nothing (Patrick hit
+            // exactly that at 90/110 energy, 2026-11-10). The
+            // button stays live and the failed start shows
+            // "Not enough energy (90 / 110)." as the reason.
             bool canFight = !_fighting && boss != null
                 && _selectedHeroIndices.Count >= 1
                 && _selectedHeroIndices.Count <= 3
-                && _controller != null && _controller.State != null
-                && _controller.State.Energy >= boss.EnergyCost;
+                && _controller != null && _controller.State != null;
             UIHelpers.SetButtonEnabled(_fightButton, canFight);
         }
 
