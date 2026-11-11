@@ -585,6 +585,13 @@ namespace LunarDominion.UI
             _bottomRt = _bottomGo.GetComponent<RectTransform>();
             _resultText = UIHelpers.LabelInRect(_bottomGo, "Result", "", 24, Color.white,
                 new Rect(0.04f, 0.72f, 0.96f, 0.98f), TextAnchor.UpperLeft);
+            // The full result (outcome + reward + XP pool + a
+            // line per hero) runs ~10 lines — more than the
+            // rect fits at 24px, which clipped the XP lines
+            // (spotted 2026-11-10). Best-fit shrinks as needed.
+            _resultText.resizeTextForBestFit = true;
+            _resultText.resizeTextMinSize = 14;
+            _resultText.resizeTextMaxSize = 24;
             BuildHeroRowsScroll(_bottomGo);
             _fightButton = UIHelpers.Button(_bottomGo, "FightButton", "FIGHT", 28,
                 UIHelpers.Hex("#B71C1C"), Color.white);

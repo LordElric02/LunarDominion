@@ -32,7 +32,7 @@ namespace LunarDominion.Expeditions
             level = Math.Max(1, Math.Min(level, MaxBossLevel));
             var boss = ScriptableObject.CreateInstance<EncounterDefinition>();
             boss.Tier = 4;
-            boss.DisplayName = $"War Robot Lv {level}";
+            boss.DisplayName = $"A.R.E.S.-09 Lv {level}";
             boss.RequiredNexusLevel = 10;
             boss.EnergyCost = 50 + 15 * (level - 1);
             boss.Reward = new ResourceCost(1500 * level, 1200 * level, 400 * level);
@@ -42,7 +42,7 @@ namespace LunarDominion.Expeditions
             int def = (int)Math.Round(50 * Math.Pow(1.12, level - 1));
             boss.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "War Robot", Class = UnitClass.Mechanized, Health = hp, Attack = atk, Defense = def, Count = 1 }
+                new EnemySpawn { DisplayName = "A.R.E.S.-09", Class = UnitClass.Mechanized, Health = hp, Attack = atk, Defense = def, Count = 1 }
             };
             return boss;
         }
