@@ -1586,8 +1586,8 @@ namespace LunarDominion.UI
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.transform.position = new Vector3(500f, 11.5f, -25f);
-                cam.transform.LookAt(new Vector3(500f, 1.0f, 7f));
+                cam.transform.position = new Vector3(500f, 13f, -26f);
+                cam.transform.LookAt(new Vector3(500f, 0.5f, 9f));
             }
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
             if (_bossHpFill != null) _bossHpFill.fillAmount = 1f;
@@ -1614,10 +1614,11 @@ namespace LunarDominion.UI
                 var color = HeroColorFor(member.Definition.Id);
                 var fig = BuildCombatFigure(member.Definition, color);
                 fig.transform.SetParent(_sceneRoot.transform, false);
-                // Closer to the boss than the realtime gate (-14):
-                // with the turn panel at the bottom of the screen,
-                // the squad must stand well inside the frame.
-                fig.transform.position = new Vector3(500f + xSpots[s], 0f, -7f);
+                // Close to the boss: with the turn panel at the
+                // bottom of the screen, the squad must stand well
+                // inside the frame (the realtime gate at -14 and
+                // even -7 both projected behind the panel).
+                fig.transform.position = new Vector3(500f + xSpots[s], 0f, -2f);
                 _turnFigures.Add(fig);
                 float hpMult = 1f, atkMult = 1f, defMult = 1f;
                 if (_controller.Research != null)
