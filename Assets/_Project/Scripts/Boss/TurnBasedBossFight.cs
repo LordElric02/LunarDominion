@@ -433,8 +433,14 @@ namespace LunarDominion.Boss
         public void ChooseTarget(int target)
         {
             if (!AwaitingTarget) return;
-            var hero = CurrentHero();
-            if (hero == null) return;
+            // Not CurrentHero(): that guard returns null while
+            // AwaitingTarget is set, which deadlocked this
+            // method — target clicks silently did nothing and
+            // the target row never closed (Patrick, 2026-11-10).
+            // Resolve the acting hero directly.
+            if (SelectedHero < 0 || SelectedHero >= Heroes.Count) return;
+            var hero = Heroes[SelectedHero];
+            if (!hero.Alive) return;
             TurnDroneState drone = null;
             if (target > 0)
             {
