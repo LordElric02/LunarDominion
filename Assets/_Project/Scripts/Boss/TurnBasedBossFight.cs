@@ -49,6 +49,8 @@ namespace LunarDominion.Boss
     public class TurnDroneState
     {
         public GameObject Figure;
+        public GameObject BarRoot;
+        public Transform BarFill;
         public Vector3 Home;
         public int MaxHp;
         public int Hp;
@@ -677,14 +679,68 @@ namespace LunarDominion.Boss
         private void ApplyDroneDamage(TurnHeroState hero, TurnDroneState drone, int dmg, string label)
         {
             drone.Hp = Mathf.Max(0, drone.Hp - dmg);
+            RefreshDroneBar(drone);
             AddLog($"{hero.Name} — {label} {drone.Name}: {dmg} dmg.");
             if (drone.Hp <= 0 && drone.Alive)
             {
                 drone.Alive = false;
+                if (drone.BarRoot != null) drone.BarRoot.SetActive(false);
                 AddLog($"{drone.Name} destroyed!");
                 StartCoroutine(DroneFallRoutine(drone));
             }
             OnChanged?.Invoke();
+        }
+
+        // ================= Drone health bars =================
+
+        // A small bar riding above each drone (Patrick,
+        // 2026-11-10): dark backing + a red fill that shrinks
+        // from the right as the drone takes damage. Built here
+        // in the controller because drones spawn mid-fight;
+        // the heroes' bars live in the view. The bar is a
+        // child of the drone figure, so it follows the hover
+        // and the flight in; it hides when the drone falls.
+        private void BuildDroneBar(TurnDroneState drone)
+        {
+            var root = new GameObject("DroneBar");
+            root.transform.SetParent(drone.Figure.transform, false);
+            root.transform.localPosition = new Vector3(0f, 0.85f, 0f);
+            BarBox(root, "DroneBarBg", new Vector3(1.6f, 0.22f, 0.06f), Vector3.zero,
+                new Color(0.05f, 0.08f, 0.13f));
+            var fill = BarBox(root, "DroneBarFill", new Vector3(1.46f, 0.14f, 0.08f),
+                new Vector3(0f, 0f, -0.02f), new Color(0.90f, 0.22f, 0.21f));
+            drone.BarRoot = root;
+            drone.BarFill = fill.transform;
+        }
+
+        private static GameObject BarBox(GameObject parent, string name, Vector3 scale, Vector3 pos, Color color)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            go.transform.SetParent(parent.transform, false);
+            go.transform.localPosition = pos;
+            go.transform.localScale = scale;
+            var col = go.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+            var rend = go.GetComponent<Renderer>();
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit != null)
+            {
+                var mat = new Material(lit);
+                mat.color = color;
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+                rend.material = mat;
+            }
+            return go;
+        }
+
+        private void RefreshDroneBar(TurnDroneState drone)
+        {
+            if (drone.BarFill == null) return;
+            float frac = drone.MaxHp > 0 ? Mathf.Clamp01((float)drone.Hp / drone.MaxHp) : 0f;
+            float w = 1.46f * frac;
+            drone.BarFill.localScale = new Vector3(Mathf.Max(0.001f, w), 0.14f, 0.08f);
+            drone.BarFill.localPosition = new Vector3(-(1.46f - w) / 2f, 0f, -0.02f);
         }
 
         private void ApplyHeroDamage(TurnHeroState hero, int dmg, string source)
@@ -908,6 +964,7 @@ namespace LunarDominion.Boss
                 };
                 drone.Hp = drone.MaxHp;
                 Drones.Add(drone);
+                BuildDroneBar(drone);
                 StartCoroutine(MoveRoutine(fig.transform, fig.transform.position, home, 0.55f));
             }
             yield return new WaitForSeconds(0.6f);
