@@ -92,10 +92,13 @@ namespace LunarDominion.UI
         // Pure visual — the rules live in MapExcursionService. The march
         // only runs while the Map is visible; leaving the Map tab cancels
         // it (the service calls CancelMarch before any outcome applies).
-        private GameObject _marchMarker;
-        private bool _marching;
-        private Vector3 _marchTarget;
-        private Action _marchCallback;
+        // Excursion march markers, one per army slot (two armies,
+        // 2026-11-11): slot 0 = Army 1 (cyan), slot 1 = Army 2
+        // (orange). Each slot marches independently.
+        private readonly GameObject[] _marchMarkers = new GameObject[2];
+        private readonly bool[] _marching = new bool[2];
+        private readonly Vector3[] _marchTargets = new Vector3[2];
+        private readonly Action[] _marchCallbacks = new Action[2];
         // Slow, deliberate march (2026-11-09, Patrick): 10 u/s, so a
         // far node takes ~13s to reach instead of ~5s at the old 25.
         private static readonly float MarchSpeed = 10f; // units/second
@@ -505,15 +508,23 @@ namespace LunarDominion.UI
             BuildMarchMarker();
         }
 
-        // Excursion march marker (2026-11-09): a bright cyan capsule,
-        // big enough to read from the far exterior camera. No collider —
-        // the tap raycast only checks map points, so the marker can never
-        // be tapped by mistake. Hidden until a march starts.
+        // Excursion march markers (2026-11-09; two armies 2026-11-11):
+        // a bright capsule per army slot, big enough to read from the
+        // far exterior camera — cyan for Army 1, orange for Army 2.
+        // No collider — the tap raycast only checks map points, so a
+        // marker can never be tapped by mistake. Hidden until a march
+        // starts.
         private void BuildMarchMarker()
         {
-            _marchMarker = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            _marchMarker.name = "ExcursionMarker";
-            var renderer = _marchMarker.GetComponent<Renderer>();
+            _marchMarkers[0] = MakeMarchMarker("ExcursionMarker", new Color(0.2f, 0.9f, 1.0f));
+            _marchMarkers[1] = MakeMarchMarker("ExcursionMarker2", new Color(1.0f, 0.55f, 0.15f));
+        }
+
+        private GameObject MakeMarchMarker(string markerName, Color color)
+        {
+            var marker = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            marker.name = markerName;
+            var renderer = marker.GetComponent<Renderer>();
             if (renderer != null)
             {
                 // URP Lit (the project's pipeline) so the marker never
@@ -521,10 +532,11 @@ namespace LunarDominion.UI
                 // material if the shader lookup fails.
                 var lit = Shader.Find("Universal Render Pipeline/Lit");
                 if (lit != null) renderer.material = new Material(lit);
-                renderer.material.color = new Color(0.2f, 0.9f, 1.0f);
+                renderer.material.color = color;
             }
-            _marchMarker.transform.localScale = Vector3.one * 2f;
-            _marchMarker.SetActive(false);
+            marker.transform.localScale = Vector3.one * 2f;
+            marker.SetActive(false);
+            return marker;
         }
 
         // Fixed creatures on the map: only the War Robot at the boss
@@ -667,20 +679,22 @@ namespace LunarDominion.UI
         private void Update()
         {
             if (!_visible) return;
-            // Excursion march: the marker walks from its start to the
-            // target at a steady speed, then fires the arrival callback
-            // (the service resolves the outcome and starts the return
-            // march). Only runs while the Map is visible — leaving the
-            // Map tab cancels the march before any outcome applies.
-            if (_marching && _marchMarker != null)
+            // Excursion marches: each army slot's marker walks from its
+            // start to its target at a steady speed, then fires the
+            // arrival callback (the service resolves the outcome and
+            // starts the return march). Only runs while the Map is
+            // visible — leaving the Map tab cancels the march before
+            // any outcome applies.
+            for (int slot = 0; slot < _marchMarkers.Length; slot++)
             {
-                Vector3 next = Vector3.MoveTowards(_marchMarker.transform.position, _marchTarget, MarchSpeed * Time.deltaTime);
-                _marchMarker.transform.position = next;
-                if (Vector3.Distance(next, _marchTarget) < 0.1f)
+                if (!_marching[slot] || _marchMarkers[slot] == null) continue;
+                Vector3 next = Vector3.MoveTowards(_marchMarkers[slot].transform.position, _marchTargets[slot], MarchSpeed * Time.deltaTime);
+                _marchMarkers[slot].transform.position = next;
+                if (Vector3.Distance(next, _marchTargets[slot]) < 0.1f)
                 {
-                    _marching = false;
-                    var callback = _marchCallback;
-                    _marchCallback = null;
+                    _marching[slot] = false;
+                    var callback = _marchCallbacks[slot];
+                    _marchCallbacks[slot] = null;
                     callback?.Invoke();
                 }
             }
@@ -863,28 +877,40 @@ namespace LunarDominion.UI
             if (!hitPoint) OnEmptyMapTapped?.Invoke();
         }
 
-        // Start the march marker at `from`, walking to `to`, then fire
-        // `onArrive`. The marker rides 1 unit above the ground so it
-        // never clips the terrain. The caller (MapExcursionService)
-        // chains outbound and return marches through the callback.
-        public void StartMarch(Vector3 from, Vector3 to, Action onArrive)
+        // Start the march marker for an army slot at `from`, walking
+        // to `to`, then fire `onArrive`. The marker rides 1 unit above
+        // the ground so it never clips the terrain. The caller
+        // (MapExcursionService) chains outbound and return marches
+        // through the callback.
+        public void StartMarch(int slot, Vector3 from, Vector3 to, Action onArrive)
         {
-            if (_marchMarker == null) return;
-            _marchMarker.transform.position = from;
-            _marchMarker.SetActive(true);
-            _marchTarget = to;
-            _marchCallback = onArrive;
-            _marching = true;
+            if (slot < 0 || slot >= _marchMarkers.Length) return;
+            var marker = _marchMarkers[slot];
+            if (marker == null) return;
+            marker.transform.position = from;
+            marker.SetActive(true);
+            _marchTargets[slot] = to;
+            _marchCallbacks[slot] = onArrive;
+            _marching[slot] = true;
         }
 
-        // Stop the march and hide the marker. Called when the player
-        // leaves the Map tab mid-excursion, or when a march completes.
-        // Cancelling before arrival means no outcome was applied.
-        public void CancelMarch()
+        // Stop one slot's march and hide its marker. Called when the
+        // player leaves the Map tab mid-excursion, or when a march
+        // completes. Cancelling before arrival means no outcome was
+        // applied.
+        public void CancelMarch(int slot)
         {
-            _marching = false;
-            _marchCallback = null;
-            if (_marchMarker != null) _marchMarker.SetActive(false);
+            if (slot < 0 || slot >= _marchMarkers.Length) return;
+            _marching[slot] = false;
+            _marchCallbacks[slot] = null;
+            if (_marchMarkers[slot] != null) _marchMarkers[slot].SetActive(false);
+        }
+
+        // Stop every slot's march and hide every marker (the Map is
+        // closing, so no marker may linger in another view).
+        public void CancelAllMarches()
+        {
+            for (int slot = 0; slot < _marchMarkers.Length; slot++) CancelMarch(slot);
         }
 
         // Fight animation (2026-11-09, last feature of the phase): a
@@ -899,12 +925,12 @@ namespace LunarDominion.UI
         // panel, vanishes the camp on victory, and starts the return
         // march. The restore + hide happen in the same frame, so the
         // player never sees the creatures pop back upright.
-        public void PlayFightAnimation(int campIndex, bool victory, Action onComplete)
+        public void PlayFightAnimation(int slot, int campIndex, bool victory, Action onComplete)
         {
-            StartCoroutine(FightAnimationRoutine(campIndex, victory, onComplete));
+            StartCoroutine(FightAnimationRoutine(slot, campIndex, victory, onComplete));
         }
 
-        private IEnumerator FightAnimationRoutine(int campIndex, bool victory, Action onComplete)
+        private IEnumerator FightAnimationRoutine(int slot, int campIndex, bool victory, Action onComplete)
         {
             // The camp's creatures (not the camp marker itself — its
             // name is the camp Title, creatures are "<Title> Creature").
@@ -923,7 +949,7 @@ namespace LunarDominion.UI
                 origPos.Add(point.Go.transform.position);
                 origRot.Add(point.Go.transform.rotation);
             }
-            var marker = _marchMarker;
+            var marker = slot >= 0 && slot < _marchMarkers.Length ? _marchMarkers[slot] : null;
             Vector3 markerPos = marker != null ? marker.transform.position : Vector3.zero;
             Vector3 markerScale = marker != null ? marker.transform.localScale : Vector3.one;
 
@@ -1045,14 +1071,16 @@ namespace LunarDominion.UI
             return true;
         }
 
-        // Park the marker at a position without marching (2026-11-09):
-        // restores it at an occupied node when the Map reopens, so the
-        // army is visibly farming there. Never overrides an active march.
-        public void ShowMarkerAt(Vector3 position)
+        // Park a slot's marker at a position without marching
+        // (2026-11-09): restores it at an occupied node when the Map
+        // reopens, so the army is visibly farming there. Never
+        // overrides that slot's active march.
+        public void ShowMarkerAt(int slot, Vector3 position)
         {
-            if (_marchMarker == null || _marching) return;
-            _marchMarker.transform.position = position;
-            _marchMarker.SetActive(true);
+            if (slot < 0 || slot >= _marchMarkers.Length) return;
+            if (_marchMarkers[slot] == null || _marching[slot]) return;
+            _marchMarkers[slot].transform.position = position;
+            _marchMarkers[slot].SetActive(true);
         }
 
         // Mark a resource node as occupied (being farmed): its renderers
@@ -1122,8 +1150,8 @@ namespace LunarDominion.UI
             for (int slot = 0; slot < CampSlotCount; slot++) ApplySlotVisibility(slot);
             // Hiding the Map also stops any march in progress — the
             // service cancels the excursion on tab switch, and this is
-            // the backstop so the marker never lingers in the Base view.
-            if (!visible) CancelMarch();
+            // the backstop so the markers never linger in the Base view.
+            if (!visible) CancelAllMarches();
             var cam = Camera.main;
             if (cam == null) return;
             if (visible)

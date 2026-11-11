@@ -40,7 +40,21 @@ namespace LunarDominion.Expeditions
     /// tab) before arrival costs nothing; an active occupation is never
     /// cancelled by leaving the tab — the army keeps farming.
     /// This service owns the rules; the march itself is visual and lives
-    /// in ExteriorView. It owns no UI — results go out as events.</summary>
+    /// in ExteriorView. It owns no UI — results go out as events.
+    /// Two armies (2026-11-11, Patrick; the second army is gated at
+    /// Nexus SecondArmyNexusGate): the service runs TWO excursion
+    /// slots — slot 0 is Army 1, slot 1 is Army 2 — and each slot
+    /// marches, fights, and farms independently with its own marker,
+    /// with both occupations persisted per slot. A slot snapshots its
+    /// squad as unit REFERENCES at send time, so the other army's
+    /// fight (which injures units and shifts Army indices) can never
+    /// corrupt this slot's squad; indices are re-derived at arrival.
+    /// Units out with either army are deployed and cannot be picked
+    /// for the other. Known simplification: an occupation restored
+    /// from a save knows only its troop count, not which units, so a
+    /// restored farm does not exclude units from the other army's
+    /// picker (farming itself touches no per-unit state, so nothing
+    /// can corrupt — the harvest lands regardless).</summary>
     public class MapExcursionService
     {
         // Node regen time after collection (Patrick-approved default).
@@ -53,6 +67,27 @@ namespace LunarDominion.Expeditions
         // slots the field stays populated; energy is the only gate.
         public const float CampRespawnMinutes = 10f;
 
+        // Two armies (2026-11-11): excursion slots. Slot 0 = Army 1,
+        // slot 1 = Army 2. The second army is gated at this Nexus
+        // level (Patrick's pick) — below it the game plays exactly
+        // as the single-army version.
+        public const int ArmySlotCount = 2;
+        public const int SecondArmyNexusGate = 10;
+
+        /// <summary>One army's excursion: its target, its squad
+        /// (unit references snapshotted at send time), and whether it
+        /// is marching or farming. A slot is busy while either flag
+        /// is set.</summary>
+        private class ExcursionSlot
+        {
+            public MapPointData Point;
+            public List<OwnedUnit> Squad;
+            public List<OwnedUnit> HeroSquad;
+            public bool Marching;
+            public bool Occupying;
+            public bool Busy => Marching || Occupying;
+        }
+
         // Raised when an excursion resolves (arrival outcome) or cannot
         // start — title + multi-line body for the info panel.
         public event Action<string, string> OnExcursionResult;
@@ -60,10 +95,15 @@ namespace LunarDominion.Expeditions
         // panel can refresh its Send button.
         public event Action OnExcursionStateChanged;
 
-        public bool IsMarching => _marching;
-        // True while the army is out — marching or farming a node.
-        // CanSend refuses while busy; the Expeditions menu is untouched.
-        public bool IsBusy => _marching || _occupying;
+        public bool IsMarching => _slots[0].Marching || _slots[1].Marching;
+        // True while any army is out — marching or farming a node.
+        // CanSend refuses a send with no free slot; the Expeditions
+        // menu is untouched.
+        public bool IsBusy => _slots[0].Busy || _slots[1].Busy;
+
+        /// <summary>True once the second army is unlocked (the Nexus
+        /// gate, Patrick 2026-11-11).</summary>
+        public bool SecondArmyUnlocked => _state.NexusLevel >= SecondArmyNexusGate;
 
         private readonly GameState _state;
         private readonly EconomyService _economy;
@@ -75,11 +115,7 @@ namespace LunarDominion.Expeditions
         private readonly Action _saveGame;
         private readonly Action _notifyChanged;
 
-        private MapPointData _activePoint;
-        private List<int> _activeSquad;
-        private List<int> _activeHeroSquad;
-        private bool _marching;
-        private bool _occupying;
+        private readonly ExcursionSlot[] _slots = { new ExcursionSlot(), new ExcursionSlot() };
 
         public MapExcursionService(GameState state, EconomyService economy, ExpeditionService expeditions,
             BalanceData balance, List<UnitDefinition> units, List<EncounterDefinition> encounters,
@@ -94,15 +130,20 @@ namespace LunarDominion.Expeditions
             _view = view;
             _saveGame = saveGame;
             _notifyChanged = notifyChanged;
-            // Restore an occupation from the save (previous session):
-            // the army is still farming, so the service is busy until
-            // it completes (CheckOccupationDue runs on the next refresh).
-            if (state.OccupiedNodeIndex >= 0 && state.OccupiedNodeIndex <= 8
-                && !string.IsNullOrEmpty(state.OccupationEndUtc)
-                && DateTime.TryParse(state.OccupationEndUtc, null, DateTimeStyles.RoundtripKind, out _))
+            // Restore occupations from the save (previous session):
+            // those armies are still farming, so their slots are busy
+            // until they complete (CheckOccupationDue runs on the
+            // next refresh).
+            EnsureOccupationArrays();
+            for (int slot = 0; slot < ArmySlotCount; slot++)
             {
-                _occupying = true;
-                _activePoint = view != null ? view.NodeData(state.OccupiedNodeIndex) : null;
+                if (state.OccupiedNodeIndex[slot] >= 0 && state.OccupiedNodeIndex[slot] <= 8
+                    && !string.IsNullOrEmpty(state.OccupationEndUtc[slot])
+                    && DateTime.TryParse(state.OccupationEndUtc[slot], null, DateTimeStyles.RoundtripKind, out _))
+                {
+                    _slots[slot].Occupying = true;
+                    _slots[slot].Point = view != null ? view.NodeData(state.OccupiedNodeIndex[slot]) : null;
+                }
             }
             // Restore camp positions/visibility from the save: a camp
             // defeated in a previous session is still vanished (until
@@ -110,6 +151,36 @@ namespace LunarDominion.Expeditions
             // spot, not the original one. Same for the boss lair.
             SyncCamps();
             SyncBoss();
+        }
+
+        // The occupation arrays are per army slot; normalize their
+        // lengths defensively (a state object carrying another length
+        // would break every per-slot access below).
+        private void EnsureOccupationArrays()
+        {
+            _state.OccupiedNodeIndex = NormalizeIntSlots(_state.OccupiedNodeIndex, -1);
+            _state.OccupationEndUtc = NormalizeStringSlots(_state.OccupationEndUtc);
+            _state.OccupationAmount = NormalizeIntSlots(_state.OccupationAmount, 0);
+            _state.OccupationKind = NormalizeIntSlots(_state.OccupationKind, 0);
+            _state.OccupationTroops = NormalizeIntSlots(_state.OccupationTroops, 0);
+        }
+
+        private static int[] NormalizeIntSlots(int[] source, int emptyValue)
+        {
+            if (source != null && source.Length == ArmySlotCount) return source;
+            var result = new int[ArmySlotCount];
+            for (int i = 0; i < ArmySlotCount; i++)
+                result[i] = source != null && i < source.Length ? source[i] : emptyValue;
+            return result;
+        }
+
+        private static string[] NormalizeStringSlots(string[] source)
+        {
+            if (source != null && source.Length == ArmySlotCount) return source;
+            var result = new string[ArmySlotCount];
+            for (int i = 0; i < ArmySlotCount; i++)
+                result[i] = source != null && i < source.Length && source[i] != null ? source[i] : "";
+            return result;
         }
 
         /// <summary>Can an excursion be sent to this point right now?
@@ -127,17 +198,37 @@ namespace LunarDominion.Expeditions
                 reason = "No target selected.";
                 return false;
             }
-            if (_marching || _occupying)
+            // Target conflicts (two armies): a node being farmed, or a
+            // point an army is already marching to, cannot be
+            // double-booked by the other army.
+            if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair
+                && IsNodeOccupied(point.Index))
             {
-                reason = _occupying
-                    ? "Your army is busy farming a node."
-                    : "An excursion is already underway.";
+                reason = "That node is already being farmed.";
                 return false;
             }
-            if ((_state.Army == null || _state.Army.Count == 0)
-                && (_state.Heroes == null || _state.Heroes.Count == 0))
+            for (int slot = 0; slot < ArmySlotCount; slot++)
             {
-                reason = "Recruit units first — your army is empty.";
+                var s = _slots[slot];
+                if (s.Marching && s.Point != null && s.Point.Kind == point.Kind && s.Point.Index == point.Index)
+                {
+                    reason = $"Army {slot + 1} is already headed there.";
+                    return false;
+                }
+            }
+            if (FreeSlot() < 0)
+            {
+                reason = !SecondArmyUnlocked
+                    ? $"Your army is deployed — a second army unlocks at Nexus {SecondArmyNexusGate} (you are Nexus {_state.NexusLevel})."
+                    : "Both armies are deployed.";
+                return false;
+            }
+            if (!HasAvailableUnits())
+            {
+                reason = (_state.Army == null || _state.Army.Count == 0)
+                    && (_state.Heroes == null || _state.Heroes.Count == 0)
+                    ? "Recruit units first — your army is empty."
+                    : "All your units are already deployed.";
                 return false;
             }
             if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair)
@@ -216,12 +307,15 @@ namespace LunarDominion.Expeditions
             StartExcursion(point, null);
         }
 
-        /// <summary>Send a chosen squad (army indices + hero indices).
-        /// Null or empty falls back to the whole army + heroes, strongest
-        /// first, capped — the previous default. The squad is stored for
-        /// arrival, so the farming duration and the fight both use the
-        /// units the player picked, not the whole army. Heroes march
-        /// with the army now (2026-11-10) and gain XP from camp fights.</summary>
+        /// <summary>Send a chosen squad (army indices + hero indices)
+        /// with the first free army slot. Null or empty falls back to
+        /// the whole army + heroes, strongest first, capped — the
+        /// previous default. The squad is snapshotted as unit
+        /// references for arrival, so the farming duration and the
+        /// fight both use the units the player picked, not the whole
+        /// army — and the other army's fight cannot shift this
+        /// squad's indices while it is out. Heroes march with the
+        /// army now (2026-11-10) and gain XP from camp fights.</summary>
         public void StartExcursion(MapPointData point, List<int> squadIndices, List<int> heroIndices = null)
         {
             if (!CanSend(point, out var reason))
@@ -229,17 +323,100 @@ namespace LunarDominion.Expeditions
                 OnExcursionResult?.Invoke(point != null ? point.Title : "Excursion", reason);
                 return;
             }
-            _activePoint = point;
-            _activeSquad = squadIndices != null && squadIndices.Count > 0
-                ? new List<int>(squadIndices)
+            int slotIndex = FreeSlot();
+            var slot = _slots[slotIndex];
+            slot.Point = point;
+            var armyIndices = squadIndices != null && squadIndices.Count > 0
+                ? squadIndices
                 : BuildSquadIndices();
-            _activeHeroSquad = heroIndices != null && heroIndices.Count > 0
-                ? new List<int>(heroIndices)
+            var heroIdx = heroIndices != null && heroIndices.Count > 0
+                ? heroIndices
                 : BuildSquadHeroIndices();
-            _marching = true;
+            slot.Squad = UnitsAt(_state.Army, armyIndices);
+            slot.HeroSquad = UnitsAt(_state.Heroes, heroIdx);
+            slot.Marching = true;
             OnExcursionStateChanged?.Invoke();
             // Outbound: castle (origin) to the point, 1 unit above ground.
-            _view.StartMarch(new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), OnArrivedAtTarget);
+            _view.StartMarch(slotIndex, new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), () => OnArrivedAtTarget(slotIndex));
+        }
+
+        /// <summary>The first slot that can take an excursion, or -1.
+        /// Slot 1 (Army 2) only counts once the Nexus gate is met.</summary>
+        private int FreeSlot()
+        {
+            if (!_slots[0].Busy) return 0;
+            if (SecondArmyUnlocked && !_slots[1].Busy) return 1;
+            return -1;
+        }
+
+        /// <summary>True while this unit is out with either army
+        /// (marching, fighting, or farming an occupation started this
+        /// session). Deployed units cannot be picked for the other
+        /// army. An occupation restored from a save knows only its
+        /// troop count, so its units are not excluded — see the class
+        /// comment.</summary>
+        public bool IsDeployed(OwnedUnit unit)
+        {
+            if (unit == null) return false;
+            for (int slot = 0; slot < ArmySlotCount; slot++)
+            {
+                var s = _slots[slot];
+                if (!s.Busy) continue;
+                if (s.Squad != null && s.Squad.Contains(unit)) return true;
+                if (s.HeroSquad != null && s.HeroSquad.Contains(unit)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Every unit currently out with an army (for the
+        /// squad picker's availability counts).</summary>
+        public HashSet<OwnedUnit> DeployedUnits()
+        {
+            var set = new HashSet<OwnedUnit>();
+            for (int slot = 0; slot < ArmySlotCount; slot++)
+            {
+                var s = _slots[slot];
+                if (!s.Busy) continue;
+                if (s.Squad != null) foreach (var u in s.Squad) if (u != null) set.Add(u);
+                if (s.HeroSquad != null) foreach (var u in s.HeroSquad) if (u != null) set.Add(u);
+            }
+            return set;
+        }
+
+        private bool HasAvailableUnits()
+        {
+            if (_state.Army != null)
+                foreach (var u in _state.Army) if (u != null && !IsDeployed(u)) return true;
+            if (_state.Heroes != null)
+                foreach (var u in _state.Heroes) if (u != null && !IsDeployed(u)) return true;
+            return false;
+        }
+
+        // Snapshot unit references for a list of indices into a unit
+        // list (invalid indices and nulls are skipped).
+        private static List<OwnedUnit> UnitsAt(List<OwnedUnit> units, List<int> indices)
+        {
+            var result = new List<OwnedUnit>();
+            if (units == null || indices == null) return result;
+            foreach (int i in indices)
+            {
+                if (i >= 0 && i < units.Count && units[i] != null) result.Add(units[i]);
+            }
+            return result;
+        }
+
+        // Current indices of a slot's snapshotted units, re-derived
+        // at arrival (the other army's fight may have shifted them).
+        private static List<int> IndicesOf(List<OwnedUnit> units, List<OwnedUnit> squad)
+        {
+            var result = new List<int>();
+            if (units == null || squad == null) return result;
+            foreach (var unit in squad)
+            {
+                int i = units.IndexOf(unit);
+                if (i >= 0) result.Add(i);
+            }
+            return result;
         }
 
         /// <summary>Default squad for the picker: the whole army +
@@ -269,41 +446,49 @@ namespace LunarDominion.Expeditions
             return counts;
         }
 
-        /// <summary>Cancel an in-flight excursion (leaving the Map tab).
+        /// <summary>Cancel in-flight excursions (leaving the Map tab).
         /// An outbound march (before arrival) is cancelled with no
         /// outcome — energy is only spent and combat only runs at
         /// arrival, so cancelling before then costs nothing. An active
         /// OCCUPATION is never cancelled: the army keeps farming in
-        /// real time, and only the marker hides (it reappears at the
+        /// real time, and only its marker hides (it reappears at the
         /// node when the Map reopens). A return march is cosmetic (the
-        /// outcome already landed), so it just stops.</summary>
+        /// outcome already landed), so it just stops. Applies to both
+        /// army slots.</summary>
         public void Cancel()
         {
-            if (_occupying)
+            bool changed = false;
+            for (int slot = 0; slot < ArmySlotCount; slot++)
             {
-                _view.CancelMarch();
-                return;
+                var s = _slots[slot];
+                if (s.Occupying)
+                {
+                    _view.CancelMarch(slot);
+                    continue;
+                }
+                if (!s.Marching) continue;
+                _view.CancelMarch(slot);
+                s.Marching = false;
+                s.Point = null;
+                s.Squad = null;
+                s.HeroSquad = null;
+                changed = true;
             }
-            if (!_marching) return;
-            _view.CancelMarch();
-            _marching = false;
-            _activePoint = null;
-            _activeSquad = null;
-            _activeHeroSquad = null;
-            OnExcursionStateChanged?.Invoke();
+            if (changed) OnExcursionStateChanged?.Invoke();
         }
 
-        private void OnArrivedAtTarget()
+        private void OnArrivedAtTarget(int slotIndex)
         {
-            var point = _activePoint;
+            var slot = _slots[slotIndex];
+            var point = slot.Point;
             if (point == null)
             {
-                FinishMarch();
+                FinishMarch(slotIndex);
                 return;
             }
             if (point.Kind == MapPointKind.BossLair)
             {
-                FightBoss(point);
+                FightBoss(slotIndex, point);
                 return;
             }
             if (point.Kind != MapPointKind.Camp)
@@ -311,71 +496,79 @@ namespace LunarDominion.Expeditions
                 // Node: the army stays and farms it (occupation) instead
                 // of collecting instantly. The return march starts when
                 // the occupation completes.
-                BeginOccupation(point);
+                BeginOccupation(slotIndex, point);
                 return;
             }
-            FightCamp(point);
+            FightCamp(slotIndex, point);
             // Nodes start an occupation (the return march waits until it
             // completes); camps and the boss fight — FightCamp/FightBoss
             // play the animation, show the result, and start the return
             // march themselves.
         }
 
-        private void FinishMarch()
+        private void FinishMarch(int slotIndex)
         {
-            _marching = false;
-            _activePoint = null;
-            _activeSquad = null;
-            _activeHeroSquad = null;
-            _view.CancelMarch();
+            var slot = _slots[slotIndex];
+            slot.Marching = false;
+            slot.Point = null;
+            slot.Squad = null;
+            slot.HeroSquad = null;
+            _view.CancelMarch(slotIndex);
             OnExcursionStateChanged?.Invoke();
         }
 
-        // Node occupation (2026-11-09): on arrival the army stays and
-        // farms the node for 120 min / troops sent (8 troops = 15 min).
-        // The marker stays at the node, the node turns amber, and the
-        // harvest lands when the time is up (CompleteOccupation). The
-        // occupation is saved immediately, so it survives an app restart.
-        private void BeginOccupation(MapPointData point)
+        // Node occupation (2026-11-09; per army slot 2026-11-11): on
+        // arrival the army stays and farms the node for 120 min /
+        // troops sent (8 troops = 15 min). The slot's marker stays at
+        // the node, the node turns amber, and the harvest lands when
+        // the time is up (CompleteOccupation). The occupation is saved
+        // immediately, so it survives an app restart.
+        private void BeginOccupation(int slotIndex, MapPointData point)
         {
-            var squad = ActiveSquad();
-            var heroSquad = ActiveHeroSquad();
-            int troops = Math.Max(1, squad.Count + heroSquad.Count);
+            var slot = _slots[slotIndex];
+            int troops = Math.Max(1, (slot.Squad != null ? slot.Squad.Count : 0) + (slot.HeroSquad != null ? slot.HeroSquad.Count : 0));
             float minutes = OccupationMinutesPerTroop / troops;
-            _state.OccupiedNodeIndex = point.Index;
-            _state.OccupationEndUtc = DateTime.UtcNow.AddMinutes(minutes).ToString("o");
-            _state.OccupationAmount = point.Amount;
-            _state.OccupationKind = (int)point.Kind;
-            _state.OccupationTroops = troops;
+            EnsureOccupationArrays();
+            _state.OccupiedNodeIndex[slotIndex] = point.Index;
+            _state.OccupationEndUtc[slotIndex] = DateTime.UtcNow.AddMinutes(minutes).ToString("o");
+            _state.OccupationAmount[slotIndex] = point.Amount;
+            _state.OccupationKind[slotIndex] = (int)point.Kind;
+            _state.OccupationTroops[slotIndex] = troops;
             _saveGame?.Invoke();
-            _marching = false;
-            _occupying = true;
+            slot.Marching = false;
+            slot.Occupying = true;
             _notifyChanged?.Invoke();
             OnExcursionStateChanged?.Invoke();
             string resourceName = ResourceName(point.Kind);
             OnExcursionResult?.Invoke(point.Title,
-                $"Farming {resourceName} — {troops} troop{(troops == 1 ? "" : "s")}, about {FormatMinutes(minutes)}.\nThe army returns with the harvest when done.");
+                $"Army {slotIndex + 1} — farming {resourceName}: {troops} troop{(troops == 1 ? "" : "s")}, about {FormatMinutes(minutes)}.\nThe army returns with the harvest when done.");
         }
 
         /// <summary>Called regularly (Bootstrap RefreshAll, ~once a
         /// second) and on load: if an occupation's end time has passed,
-        /// complete it. Also completes an occupation that ended while
-        /// the app was closed — the harvest is granted on the next load.</summary>
+        /// complete it (per army slot). Also completes an occupation
+        /// that ended while the app was closed — the harvest is
+        /// granted on the next load.</summary>
         public void CheckOccupationDue()
         {
-            if (!_occupying && _state.OccupiedNodeIndex < 0) return;
-            if (_state.OccupiedNodeIndex < 0 || _state.OccupiedNodeIndex > 8) return;
-            if (string.IsNullOrEmpty(_state.OccupationEndUtc)) return;
-            if (!DateTime.TryParse(_state.OccupationEndUtc, null, DateTimeStyles.RoundtripKind, out var endUtc)) return;
-            if (DateTime.UtcNow < endUtc) return;
-            CompleteOccupation();
+            EnsureOccupationArrays();
+            for (int slot = 0; slot < ArmySlotCount; slot++)
+            {
+                if (!_slots[slot].Occupying && _state.OccupiedNodeIndex[slot] < 0) continue;
+                if (_state.OccupiedNodeIndex[slot] < 0 || _state.OccupiedNodeIndex[slot] > 8) continue;
+                if (string.IsNullOrEmpty(_state.OccupationEndUtc[slot])) continue;
+                if (!DateTime.TryParse(_state.OccupationEndUtc[slot], null, DateTimeStyles.RoundtripKind, out var endUtc)) continue;
+                if (DateTime.UtcNow < endUtc) continue;
+                CompleteOccupation(slot);
+            }
         }
 
-        private void CompleteOccupation()
+        private void CompleteOccupation(int slotIndex)
         {
-            int nodeIndex = _state.OccupiedNodeIndex;
-            int amount = _state.OccupationAmount;
-            var kind = (MapPointKind)Math.Max(0, Math.Min(_state.OccupationKind, 2));
+            var slot = _slots[slotIndex];
+            int nodeIndex = _state.OccupiedNodeIndex[slotIndex];
+            int amount = _state.OccupationAmount[slotIndex];
+            var kind = (MapPointKind)Math.Max(0, Math.Min(_state.OccupationKind[slotIndex], 2));
             string resourceName = ResourceName(kind);
             var grant = new ResourceCost(
                 kind == MapPointKind.Biomass ? amount : 0,
@@ -389,7 +582,7 @@ namespace LunarDominion.Expeditions
             if (_state.NodeRegenUtc == null || _state.NodeRegenUtc.Length != 9)
                 _state.NodeRegenUtc = new string[9];
             _state.NodeRegenUtc[nodeIndex] = DateTime.UtcNow.AddHours(NodeRegenHours).ToString("o");
-            ClearOccupation();
+            ClearOccupation(slotIndex);
             _saveGame?.Invoke();
             _notifyChanged?.Invoke();
             var body = new StringBuilder();
@@ -397,29 +590,34 @@ namespace LunarDominion.Expeditions
                 ? $"Collected +{gained} {resourceName}."
                 : $"Storage full — no {resourceName} collected.");
             body.Append("Node depleted — it vanished and regenerates in 8h.");
-            OnExcursionResult?.Invoke("Harvest complete", body.ToString());
-            // Return march if the Map is open; otherwise the marker just
-            // hides (the harvest already landed).
-            _occupying = false;
-            if (_view.IsVisible && _activePoint != null)
+            OnExcursionResult?.Invoke($"Harvest complete — Army {slotIndex + 1}", body.ToString());
+            // The farming army is home: release its units, then the
+            // return march (if the Map is open) is purely cosmetic.
+            slot.Occupying = false;
+            slot.Squad = null;
+            slot.HeroSquad = null;
+            if (_view.IsVisible && slot.Point != null)
             {
-                _view.StartMarch(_activePoint.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), FinishMarch);
+                var from = slot.Point;
+                slot.Point = null;
+                _view.StartMarch(slotIndex, from.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), () => FinishMarch(slotIndex));
             }
             else
             {
-                _activePoint = null;
-                _view.CancelMarch();
+                slot.Point = null;
+                _view.CancelMarch(slotIndex);
                 OnExcursionStateChanged?.Invoke();
             }
         }
 
-        private void ClearOccupation()
+        private void ClearOccupation(int slotIndex)
         {
-            _state.OccupiedNodeIndex = -1;
-            _state.OccupationEndUtc = "";
-            _state.OccupationAmount = 0;
-            _state.OccupationKind = 0;
-            _state.OccupationTroops = 0;
+            EnsureOccupationArrays();
+            _state.OccupiedNodeIndex[slotIndex] = -1;
+            _state.OccupationEndUtc[slotIndex] = "";
+            _state.OccupationAmount[slotIndex] = 0;
+            _state.OccupationKind[slotIndex] = 0;
+            _state.OccupationTroops[slotIndex] = 0;
         }
 
         // Enemy camp field (2026-11-10, replaces the 3 fixed camps):
@@ -617,47 +815,71 @@ namespace LunarDominion.Expeditions
             return _encounters.Find(e => e != null && e.Tier == 4);
         }
 
-        /// <summary>True while this node is being farmed (occupation
-        /// active, in this session or restored from the save).</summary>
+        /// <summary>True while this node is being farmed by either
+        /// army (occupation active, in this session or restored from
+        /// the save).</summary>
         public bool IsNodeOccupied(int nodeIndex)
         {
-            return _state.OccupiedNodeIndex == nodeIndex && !string.IsNullOrEmpty(_state.OccupationEndUtc);
+            EnsureOccupationArrays();
+            for (int slot = 0; slot < ArmySlotCount; slot++)
+            {
+                if (_state.OccupiedNodeIndex[slot] == nodeIndex
+                    && !string.IsNullOrEmpty(_state.OccupationEndUtc[slot]))
+                    return true;
+            }
+            return false;
         }
 
-        /// <summary>Occupation detail for the panel: troops farming and
-        /// time left. False when the node is not occupied.</summary>
-        public bool OccupationInfo(int nodeIndex, out int troops, out TimeSpan remaining)
+        /// <summary>Occupation detail for the panel: which army is
+        /// farming the node, with how many troops, and the time left.
+        /// False when the node is not occupied.</summary>
+        public bool OccupationInfo(int nodeIndex, out int army, out int troops, out TimeSpan remaining)
         {
+            army = 0;
             troops = 0;
             remaining = TimeSpan.Zero;
-            if (!IsNodeOccupied(nodeIndex)) return false;
-            if (!DateTime.TryParse(_state.OccupationEndUtc, null, DateTimeStyles.RoundtripKind, out var endUtc)) return false;
-            troops = _state.OccupationTroops;
-            remaining = endUtc - DateTime.UtcNow;
-            return true;
+            EnsureOccupationArrays();
+            for (int slot = 0; slot < ArmySlotCount; slot++)
+            {
+                if (_state.OccupiedNodeIndex[slot] != nodeIndex) continue;
+                if (string.IsNullOrEmpty(_state.OccupationEndUtc[slot])) continue;
+                if (!DateTime.TryParse(_state.OccupationEndUtc[slot], null, DateTimeStyles.RoundtripKind, out var endUtc)) continue;
+                army = slot + 1;
+                troops = _state.OccupationTroops[slot];
+                remaining = endUtc - DateTime.UtcNow;
+                return true;
+            }
+            return false;
         }
 
-        /// <summary>Restore the marker at the occupied node when the Map
-        /// reopens (or on a refresh) so the army is visibly farming
-        /// there. No-op when nothing is occupied or the Map is hidden.</summary>
+        /// <summary>Restore each farming army's marker at its occupied
+        /// node when the Map reopens (or on a refresh) so the army is
+        /// visibly farming there. No-op for slots that are not
+        /// occupying or while the Map is hidden.</summary>
         public void RefreshMarkerVisual()
         {
-            if (!_occupying && _state.OccupiedNodeIndex < 0) return;
-            if (_state.OccupiedNodeIndex < 0 || _state.OccupiedNodeIndex > 8) return;
-            if (!_view.IsVisible || _marching) return;
-            // The occupied node is found by index; its position comes
-            // from the active point when this session started it, or
-            // from the saved index via the view's node positions.
-            Vector3 pos;
-            if (_activePoint != null && _activePoint.Index == _state.OccupiedNodeIndex)
+            if (!_view.IsVisible) return;
+            EnsureOccupationArrays();
+            for (int slot = 0; slot < ArmySlotCount; slot++)
             {
-                pos = _activePoint.Position;
+                if (!_slots[slot].Occupying) continue;
+                int nodeIndex = _state.OccupiedNodeIndex[slot];
+                if (nodeIndex < 0 || nodeIndex > 8) continue;
+                // The occupied node is found by index; its position
+                // comes from the slot's point when this session started
+                // it, or from the saved index via the view's node
+                // positions (restored occupation).
+                Vector3 pos;
+                if (_slots[slot].Point != null && _slots[slot].Point.Index == nodeIndex)
+                {
+                    pos = _slots[slot].Point.Position;
+                }
+                else if (!_view.NodePosition(nodeIndex, out pos))
+                {
+                    continue;
+                }
+                _view.ShowMarkerAt(slot, pos + new Vector3(0f, 1f, 0f));
             }
-            else if (!_view.NodePosition(_state.OccupiedNodeIndex, out pos))
-            {
-                return;
-            }
-            _view.ShowMarkerAt(pos + new Vector3(0f, 1f, 0f));
         }
 
         private static string ResourceName(MapPointKind kind)
@@ -673,15 +895,19 @@ namespace LunarDominion.Expeditions
             return $"{Math.Max(1, m)} min";
         }
 
-        private void FightCamp(MapPointData point)
+        private void FightCamp(int slotIndex, MapPointData point)
         {
+            var slot = _slots[slotIndex];
             var encounter = EncounterForTier(point.Tier);
-            var squad = ActiveSquad();
-            var heroSquad = ActiveHeroSquad();
+            // Re-derive the squad's indices from its snapshotted
+            // references — the other army's fight may have shifted
+            // them while this army marched.
+            var squad = IndicesOf(_state.Army, slot.Squad);
+            var heroSquad = IndicesOf(_state.Heroes, slot.HeroSquad);
             if (encounter == null || (squad.Count == 0 && heroSquad.Count == 0))
             {
                 OnExcursionResult?.Invoke(point.Title, "Could not start the fight.");
-                StartReturnMarch(point);
+                StartReturnMarch(slotIndex, point);
                 return;
             }
             // Same fight as the Expeditions menu: energy spent at start,
@@ -699,7 +925,7 @@ namespace LunarDominion.Expeditions
                 // show the result, vanish the camp on victory, and march
                 // back. The combat itself already resolved above — the
                 // animation is purely visual.
-                _view.PlayFightAnimation(point.Index, result.Victory, () =>
+                _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, () =>
                 {
                     OnExcursionResult?.Invoke(
                         result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
@@ -710,13 +936,13 @@ namespace LunarDominion.Expeditions
                     // rolled by Nexus level. Losing leaves the camp in
                     // place, so the player can retry.
                     if (result.Victory) VanishCampSlot(SlotForPoint(point));
-                    StartReturnMarch(point);
+                    StartReturnMarch(slotIndex, point);
                 });
             }
             else
             {
                 OnExcursionResult?.Invoke(point.Title, reason);
-                StartReturnMarch(point);
+                StartReturnMarch(slotIndex, point);
             }
         }
 
@@ -724,14 +950,14 @@ namespace LunarDominion.Expeditions
         // old map-march fight is now unreachable — tapping the lair opens
         // the lair view (heroes, 15-level ladder) instead. Kept so the
         // class still compiles if anything references it.
-        private void FightBoss(MapPointData point)
+        private void FightBoss(int slotIndex, MapPointData point)
         {
             var encounter = EncounterForBoss();
-            var squad = ActiveSquad();
+            var squad = IndicesOf(_state.Army, _slots[slotIndex].Squad);
             if (encounter == null || squad.Count == 0)
             {
                 OnExcursionResult?.Invoke(point.Title, "Could not start the fight.");
-                StartReturnMarch(point);
+                StartReturnMarch(slotIndex, point);
                 return;
             }
             // Same fight as the Expeditions menu: energy spent at start,
@@ -747,45 +973,33 @@ namespace LunarDominion.Expeditions
                 // show the result, vanish the boss on victory, and march
                 // back. The combat itself already resolved above — the
                 // animation is purely visual.
-                _view.PlayFightAnimation(point.Index, result.Victory, () =>
+                _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, () =>
                 {
                     OnExcursionResult?.Invoke(
                         result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
                         FormatBattleResult(result));
-                    StartReturnMarch(point);
+                    StartReturnMarch(slotIndex, point);
                 });
             }
             else
             {
                 OnExcursionResult?.Invoke(point.Title, reason);
-                StartReturnMarch(point);
+                StartReturnMarch(slotIndex, point);
             }
         }
 
         // Return march: back to the castle, then the excursion ends.
-        private void StartReturnMarch(MapPointData point)
+        private void StartReturnMarch(int slotIndex, MapPointData point)
         {
-            _view.StartMarch(point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), FinishMarch);
+            _view.StartMarch(slotIndex, point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), () => FinishMarch(slotIndex));
         }
 
-        /// <summary>The squad chosen for this excursion, or the whole
-        /// army (strongest first, capped) when none was chosen.</summary>
-        private List<int> ActiveSquad()
-        {
-            if (_activeSquad != null && _activeSquad.Count > 0) return _activeSquad;
-            return BuildSquadIndices();
-        }
-
-        private List<int> ActiveHeroSquad()
-        {
-            if (_activeHeroSquad != null && _activeHeroSquad.Count > 0) return _activeHeroSquad;
-            return BuildSquadHeroIndices();
-        }
-
-        // Default squad (army + heroes combined, strongest first,
-        // capped): scores every Army unit and Hero by power and takes
-        // the top MaxSquadSize, split back into army / hero index lists.
-        // Per-unit power is the same formula as PowerService.
+        // Default squad (available army + heroes combined, strongest
+        // first, capped): scores every non-deployed Army unit and
+        // Hero by power and takes the top MaxSquadSize, split back
+        // into army / hero index lists. Units out with the other army
+        // are skipped (two armies, 2026-11-11). Per-unit power is the
+        // same formula as PowerService.
         private void BuildDefaultSquad(out List<int> armyIndices, out List<int> heroIndices)
         {
             var scored = new List<(bool isHero, int index, long power)>();
@@ -795,6 +1009,7 @@ namespace LunarDominion.Expeditions
                 {
                     var unit = _state.Army[i];
                     if (unit == null) continue;
+                    if (IsDeployed(unit)) continue;
                     var def = _units != null ? _units.Find(u => u.Id == unit.Id) : null;
                     if (def == null) continue;
                     long basePower = def.BaseHealth + 8L * def.BaseAttack + 4L * def.BaseDefense;
@@ -808,6 +1023,7 @@ namespace LunarDominion.Expeditions
                 {
                     var hero = _state.Heroes[i];
                     if (hero == null) continue;
+                    if (IsDeployed(hero)) continue;
                     var def = _units != null ? _units.Find(u => u.Id == hero.Id) : null;
                     if (def == null) continue;
                     long basePower = def.BaseHealth + 8L * def.BaseAttack + 4L * def.BaseDefense;

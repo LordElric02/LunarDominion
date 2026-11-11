@@ -44,12 +44,21 @@ namespace LunarDominion.Save
         // resource node. Old saves without this field load as all "".
         public string[] NodeRegenUtc = new string[9];
         // Node occupation (2026-11-09): the army farming a node.
-        // Old saves load with no occupation (-1).
+        // Old saves load with no occupation (-1). LEGACY singular
+        // fields (pre two-armies): still read on load and migrated
+        // into slot 0; no longer written.
         public int OccupiedNodeIndex = -1;
         public string OccupationEndUtc = "";
         public int OccupationAmount;
         public int OccupationKind;
         public int OccupationTroops;
+        // Node occupations per army slot (two armies, 2026-11-11):
+        // slot 0 = Army 1, slot 1 = Army 2.
+        public int[] OccupiedNodeIndices;
+        public string[] OccupationEndUtcs;
+        public int[] OccupationAmounts;
+        public int[] OccupationKinds;
+        public int[] OccupationTroopCounts;
         // Boss lair (2026-11-09, ladder 2026-11-10): highest boss level
         // defeated (0 = none yet, up to 15). Old saves load as 0.
         public string BossRespawnUtc = "";
@@ -110,11 +119,11 @@ namespace LunarDominion.Save
                 ProductionCarryAlloy = state.ProductionCarryAlloy,
                 ProductionCarryHelium3 = state.ProductionCarryHelium3,
                 NodeRegenUtc = state.NodeRegenUtc != null ? (string[])state.NodeRegenUtc.Clone() : new string[9],
-                OccupiedNodeIndex = state.OccupiedNodeIndex,
-                OccupationEndUtc = state.OccupationEndUtc ?? "",
-                OccupationAmount = state.OccupationAmount,
-                OccupationKind = state.OccupationKind,
-                OccupationTroops = state.OccupationTroops,
+                OccupiedNodeIndices = CopyIntSlots(state.OccupiedNodeIndex, -1),
+                OccupationEndUtcs = CopyStringSlots(state.OccupationEndUtc),
+                OccupationAmounts = CopyIntSlots(state.OccupationAmount, 0),
+                OccupationKinds = CopyIntSlots(state.OccupationKind, 0),
+                OccupationTroopCounts = CopyIntSlots(state.OccupationTroops, 0),
                 BossRespawnUtc = state.BossRespawnUtc ?? "",
                 BossLevelDefeated = Math.Max(0, Math.Min(state.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
                 CampSlotTier = ValidateCampSlotTiers(state.CampSlotTier),
@@ -159,16 +168,12 @@ namespace LunarDominion.Save
                     ProductionCarryAlloy = Math.Max(0f, data.ProductionCarryAlloy),
                     ProductionCarryHelium3 = Math.Max(0f, data.ProductionCarryHelium3),
                     NodeRegenUtc = ValidateNodeRegenUtc(data.NodeRegenUtc),
-                    OccupiedNodeIndex = ValidateOccupiedNode(data),
-                    OccupationEndUtc = data.OccupationEndUtc ?? "",
-                    OccupationAmount = Math.Max(0, data.OccupationAmount),
-                    OccupationKind = Math.Max(0, Math.Min(data.OccupationKind, 2)),
-                    OccupationTroops = Math.Max(0, Math.Min(data.OccupationTroops, 8)),
                     BossRespawnUtc = data.BossRespawnUtc ?? "",
                     BossLevelDefeated = Math.Max(0, Math.Min(data.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
                     CampSlotTier = ValidateCampSlotTiers(data.CampSlotTier),
                     CampSlotRespawnUtc = ValidateCampSlotRespawns(data.CampSlotRespawnUtc)
                 };
+                ApplyOccupations(data, state);
                 if (state.ActiveResearchId < 0)
                 {
                     state.ActiveResearchTargetLevel = 0;
@@ -277,13 +282,64 @@ namespace LunarDominion.Save
         // Node occupation (2026-11-09): -1 means no occupation. A
         // claimed node needs a parseable UTC end time, otherwise the
         // occupation is dropped (the node reads as available).
-        private int ValidateOccupiedNode(SaveData data)
+        private int ValidateOccupiedNode(int index, string endUtc)
         {
-            int index = data.OccupiedNodeIndex;
             if (index < 0 || index > 8) return -1;
-            if (string.IsNullOrEmpty(data.OccupationEndUtc)) return -1;
-            if (!DateTime.TryParse(data.OccupationEndUtc, null, DateTimeStyles.RoundtripKind, out _)) return -1;
+            if (string.IsNullOrEmpty(endUtc)) return -1;
+            if (!DateTime.TryParse(endUtc, null, DateTimeStyles.RoundtripKind, out _)) return -1;
             return index;
+        }
+
+        // Per-slot occupation arrays (two armies, 2026-11-11): copy a
+        // GameState array into a SaveData array of exactly 2 slots,
+        // padding with the slot's empty value.
+        private static int[] CopyIntSlots(int[] source, int emptyValue)
+        {
+            var result = new int[2];
+            for (int i = 0; i < 2; i++)
+                result[i] = source != null && i < source.Length ? source[i] : emptyValue;
+            return result;
+        }
+
+        private static string[] CopyStringSlots(string[] source)
+        {
+            var result = new string[2];
+            for (int i = 0; i < 2; i++)
+                result[i] = source != null && i < source.Length && source[i] != null ? source[i] : "";
+            return result;
+        }
+
+        private static int SlotValue(int[] values, int slot, int fallback)
+        {
+            return values != null && slot < values.Length ? values[slot] : fallback;
+        }
+
+        private static string SlotValue(string[] values, int slot, string fallback)
+        {
+            return values != null && slot < values.Length && values[slot] != null
+                ? values[slot]
+                : (fallback ?? "");
+        }
+
+        // Fill the state's per-slot occupations from a save: prefer
+        // the two-armies arrays; slot 0 falls back to the legacy
+        // singular fields so a farm in progress in an older save is
+        // migrated, not lost.
+        private void ApplyOccupations(SaveData data, GameState state)
+        {
+            for (int slot = 0; slot < 2; slot++)
+            {
+                int index = SlotValue(data.OccupiedNodeIndices, slot, slot == 0 ? data.OccupiedNodeIndex : -1);
+                string end = SlotValue(data.OccupationEndUtcs, slot, slot == 0 ? data.OccupationEndUtc : "");
+                int amount = SlotValue(data.OccupationAmounts, slot, slot == 0 ? data.OccupationAmount : 0);
+                int kind = SlotValue(data.OccupationKinds, slot, slot == 0 ? data.OccupationKind : 0);
+                int troops = SlotValue(data.OccupationTroopCounts, slot, slot == 0 ? data.OccupationTroops : 0);
+                state.OccupiedNodeIndex[slot] = ValidateOccupiedNode(index, end);
+                state.OccupationEndUtc[slot] = end ?? "";
+                state.OccupationAmount[slot] = Math.Max(0, amount);
+                state.OccupationKind[slot] = Math.Max(0, Math.Min(kind, 2));
+                state.OccupationTroops[slot] = Math.Max(0, Math.Min(troops, 8));
+            }
         }
 
         private int ValidateActiveResearch(SaveData data)

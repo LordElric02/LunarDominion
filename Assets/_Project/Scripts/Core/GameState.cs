@@ -79,19 +79,21 @@ namespace LunarDominion.Core
         public string BossRespawnUtc = "";
         public int BossLevelDefeated = 0;
 
-        // Node occupation (2026-11-09): the army farms a node for a
-        // real-time duration (120 min / troops sent) instead of
-        // collecting instantly. -1 = no occupation in progress.
-        // Kind is the resource (0 Biomass, 1 Alloy, 2 Helium-3 — the
-        // MapPointKind order without Camp). End is UTC round-trip.
-        // Persisted so an occupation survives an app restart; if the
-        // end time passes while the app is closed, the harvest is
-        // granted on the next load.
-        public int OccupiedNodeIndex = -1;
-        public string OccupationEndUtc = "";
-        public int OccupationAmount;
-        public int OccupationKind;
-        public int OccupationTroops;
+        // Node occupation (2026-11-09; per army slot 2026-11-11): an
+        // army farms a node for a real-time duration (120 min / troops
+        // sent) instead of collecting instantly. Arrays are per army
+        // slot (0 = Army 1, 1 = Army 2 — two armies, gated at Nexus
+        // 10). -1 = that army is not farming. Kind is the resource
+        // (0 Biomass, 1 Alloy, 2 Helium-3 — the MapPointKind order
+        // without Camp). End is UTC round-trip. Persisted so an
+        // occupation survives an app restart; if the end time passes
+        // while the app is closed, the harvest is granted on the
+        // next load.
+        public int[] OccupiedNodeIndex = { -1, -1 };
+        public string[] OccupationEndUtc = { "", "" };
+        public int[] OccupationAmount = new int[2];
+        public int[] OccupationKind = new int[2];
+        public int[] OccupationTroops = new int[2];
         public float ProductionCarryBiomass;
         public float ProductionCarryAlloy;
         public float ProductionCarryHelium3;

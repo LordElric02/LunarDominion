@@ -42,6 +42,10 @@ namespace LunarDominion.UI
         private Button _cancelButton;
         private GameController _controller;
         private string _targetTitle;
+        // Units out with another army (two armies, 2026-11-11): they
+        // are not pickable for this send, so rows count only available
+        // units. Null when nothing is deployed.
+        private HashSet<OwnedUnit> _unavailable;
         private Dictionary<UnitId, int> _counts = new Dictionary<UnitId, int>();
         private List<SquadRow> _rows = new List<SquadRow>();
 
@@ -133,8 +137,9 @@ namespace LunarDominion.UI
             scroll.content = contentRt;
         }
 
-        public void Show(string targetTitle, Dictionary<UnitId, int> initialCounts)
+        public void Show(string targetTitle, Dictionary<UnitId, int> initialCounts, HashSet<OwnedUnit> unavailable = null)
         {
+            _unavailable = unavailable;
             _counts = initialCounts != null ? new Dictionary<UnitId, int>(initialCounts) : new Dictionary<UnitId, int>();
             ClampToOneHero();
             _targetTitle = targetTitle;
@@ -159,6 +164,8 @@ namespace LunarDominion.UI
             if (_rowsContent == null || _controller == null) return;
 
             // Distinct owned types, in army order, with owned counts.
+            // Units deployed with another army are not counted (and a
+            // type whose units are all deployed gets no row).
             var types = new List<UnitId>();
             var ownedCounts = new Dictionary<UnitId, int>();
             if (_controller.State.Army != null)
@@ -166,6 +173,7 @@ namespace LunarDominion.UI
                 foreach (var unit in _controller.State.Army)
                 {
                     if (unit == null) continue;
+                    if (_unavailable != null && _unavailable.Contains(unit)) continue;
                     if (!ownedCounts.ContainsKey(unit.Id))
                     {
                         ownedCounts[unit.Id] = 0;
@@ -182,7 +190,9 @@ namespace LunarDominion.UI
             {
                 foreach (var hero in _controller.State.Heroes)
                 {
-                    if (hero != null) ownedIds.Add(hero.Id);
+                    if (hero == null) continue;
+                    if (_unavailable != null && _unavailable.Contains(hero)) continue;
+                    ownedIds.Add(hero.Id);
                 }
             }
             var keys = new List<UnitId>(_counts.Keys);
@@ -226,6 +236,8 @@ namespace LunarDominion.UI
                 foreach (var hero in _controller.State.Heroes)
                 {
                     if (hero == null) continue;
+                    // A hero deployed with the other army gets no row.
+                    if (_unavailable != null && _unavailable.Contains(hero)) continue;
                     var def = _controller.UnitDefinitions.Find(u => u.Id == hero.Id);
                     string name = def != null ? $"{def.DisplayName}  ★ HERO" : hero.Id.ToString();
                     if (!_counts.ContainsKey(hero.Id)) _counts[hero.Id] = 0;

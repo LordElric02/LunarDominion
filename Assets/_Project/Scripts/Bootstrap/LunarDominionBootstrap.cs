@@ -200,9 +200,9 @@ namespace LunarDominion.Bootstrap
             bool showSend = false;
             if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair && _excursions.IsNodeOccupied(point.Index))
             {
-                if (_excursions.OccupationInfo(point.Index, out int troops, out var remaining))
+                if (_excursions.OccupationInfo(point.Index, out int army, out int troops, out var remaining))
                 {
-                    info = $"{point.Info}\nBeing farmed by {troops} troop{(troops == 1 ? "" : "s")} — {MapExcursionService.FormatRemaining(remaining)} left.";
+                    info = $"{point.Info}\nBeing farmed by Army {army} — {troops} troop{(troops == 1 ? "" : "s")} — {MapExcursionService.FormatRemaining(remaining)} left.";
                 }
                 else
                 {
@@ -230,7 +230,7 @@ namespace LunarDominion.Bootstrap
                 info = $"{info}\n{warning}";
             }
             _mapInfoView.Show(point.Title, info, showSend);
-            _mapInfoView.SetSendEnabled(!_excursions.IsMarching);
+            _mapInfoView.SetSendEnabled(showSend);
         }
 
         // Tap on empty map ground hides the info panel.
@@ -241,12 +241,14 @@ namespace LunarDominion.Bootstrap
         }
 
         // Send Excursion tapped in the info panel: show the squad
-        // picker (pre-filled with the whole army) instead of sending
-        // immediately, so the player chooses which units go.
+        // picker (pre-filled with the strongest available units)
+        // instead of sending immediately, so the player chooses which
+        // units go. Units already out with the other army (two
+        // armies, 2026-11-11) are excluded from the picker.
         private void OnSendExcursionClicked()
         {
             if (_selectedPoint == null) return;
-            _squadPicker.Show(_selectedPoint.Title, _excursions.DefaultSquadCounts());
+            _squadPicker.Show(_selectedPoint.Title, _excursions.DefaultSquadCounts(), _excursions.DeployedUnits());
         }
 
         // Squad picker confirmed: convert the chosen counts to army
@@ -278,6 +280,8 @@ namespace LunarDominion.Bootstrap
             {
                 var unit = _controller.State.Army[i];
                 if (unit == null) continue;
+                // Units out with the other army cannot be picked again.
+                if (_excursions != null && _excursions.IsDeployed(unit)) continue;
                 if (remaining.ContainsKey(unit.Id) && remaining[unit.Id] > 0)
                 {
                     remaining[unit.Id]--;
@@ -298,6 +302,8 @@ namespace LunarDominion.Bootstrap
             {
                 var hero = _controller.State.Heroes[i];
                 if (hero == null) continue;
+                // A hero out with the other army cannot be picked again.
+                if (_excursions != null && _excursions.IsDeployed(hero)) continue;
                 if (counts.ContainsKey(hero.Id) && counts[hero.Id] > 0)
                 {
                     indices.Add(i);
