@@ -130,6 +130,7 @@ namespace LunarDominion.UI
         private EncounterDefinition _turnEncounter;
         private List<SquadCombatant> _turnSquad;
         private readonly List<GameObject> _turnFigures = new List<GameObject>();
+        private readonly List<TurnHeroBar> _turnBars = new List<TurnHeroBar>();
         private Coroutine _turnHudRoutine;
 
         private class HeroChip
@@ -138,6 +139,16 @@ namespace LunarDominion.UI
             public Image HpFill;
             public Image DashFill;
             public Text NameText;
+        }
+
+        // A turn hero's floating health bar (scene objects).
+        private class TurnHeroBar
+        {
+            public GameObject Root;
+            public GameObject Figure;
+            public Transform Fill;
+            public Material FillMaterial;
+            public GameObject Shield;
         }
 
         private class HeroRow
@@ -375,7 +386,7 @@ namespace LunarDominion.UI
             // Controller events -> HUD / ambience (subscribed once).
             _aresController.OnHealthChanged += (current, max) =>
             {
-                if (_bossHpFill != null) _bossHpFill.fillAmount = max > 0f ? current / max : 0f;
+                SetBossBarFraction(max > 0f ? current / max : 0f);
                 if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {(int)current} / {(int)max}";
             };
             _aresController.OnTelegraph += (attackName) =>
@@ -1194,7 +1205,7 @@ namespace LunarDominion.UI
             _aresController.Setup(stats, fighters, _droneTemplate, _aresVisual.transform,
                 _slamRing, _ventRing, _coverSpheres);
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {(int)stats.MaxHealth} / {(int)stats.MaxHealth}";
-            if (_bossHpFill != null) _bossHpFill.fillAmount = 1f;
+            SetBossBarFraction(1f);
             _fightStartTime = Time.time;
             _realtimeActive = true;
             foreach (var combatant in _combatants) combatant.SetActive(true);
@@ -1618,7 +1629,7 @@ namespace LunarDominion.UI
                 cam.transform.LookAt(new Vector3(500f, 0.5f, 9f));
             }
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
-            if (_bossHpFill != null) _bossHpFill.fillAmount = 1f;
+            SetBossBarFraction(1f);
             if (_hudRoot != null) _hudRoot.SetActive(true);
             if (_turnHud != null) _turnHud.SetActive(true);
             _actionBarOpen = false;
@@ -1656,6 +1667,7 @@ namespace LunarDominion.UI
                 hitArea.transform.localPosition = new Vector3(0f, 1.6f, 0f);
                 var hitCollider = hitArea.AddComponent<BoxCollider>();
                 hitCollider.size = new Vector3(2.4f, 3.4f, 2.4f);
+                BuildTurnBar(fig);
                 float hpMult = 1f, atkMult = 1f, defMult = 1f;
                 if (_controller.Research != null)
                     _controller.Research.ClassMultipliers(member.Definition.Class, out hpMult, out atkMult, out defMult);
@@ -1673,6 +1685,83 @@ namespace LunarDominion.UI
             return heroes;
         }
 
+        // Floating health bar above a turn hero (Patrick,
+        // 2026-11-10): a dark backing box + a fill that shrinks
+        // from the right as HP drops (green -> yellow -> red),
+        // plus a pale shield segment while a shield is up.
+        // Parented to the scene, not the figure, so it stays
+        // level when a hero lunges or falls; Update() keeps it
+        // hovering over the figure.
+        private void BuildTurnBar(GameObject fig)
+        {
+            var root = new GameObject("HeroBar");
+            root.transform.SetParent(_sceneRoot.transform, false);
+            root.transform.position = fig.transform.position + new Vector3(0f, 3.55f, 0f);
+
+            var bg = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            bg.name = "BarBg";
+            bg.transform.SetParent(root.transform, false);
+            bg.transform.localScale = new Vector3(2.2f, 0.30f, 0.08f);
+            var bgCol = bg.GetComponent<Collider>();
+            if (bgCol != null) Destroy(bgCol);
+            SetColor(bg.GetComponent<Renderer>(), UIHelpers.Hex("#0D1420"));
+
+            var fill = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            fill.name = "BarFill";
+            fill.transform.SetParent(root.transform, false);
+            fill.transform.localPosition = new Vector3(0f, 0f, -0.03f);
+            fill.transform.localScale = new Vector3(2.04f, 0.20f, 0.10f);
+            var fillCol = fill.GetComponent<Collider>();
+            if (fillCol != null) Destroy(fillCol);
+            var fillRenderer = fill.GetComponent<Renderer>();
+            SetColor(fillRenderer, UIHelpers.Hex("#4CAF50"));
+
+            var shield = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            shield.name = "BarShield";
+            shield.transform.SetParent(root.transform, false);
+            shield.transform.localPosition = new Vector3(0f, 0f, -0.07f);
+            shield.transform.localScale = new Vector3(2.04f, 0.20f, 0.04f);
+            var shieldCol = shield.GetComponent<Collider>();
+            if (shieldCol != null) Destroy(shieldCol);
+            SetColor(shield.GetComponent<Renderer>(), UIHelpers.Hex("#B3E5FC"));
+            shield.SetActive(false);
+
+            _turnBars.Add(new TurnHeroBar
+            {
+                Root = root,
+                Figure = fig,
+                Fill = fill.transform,
+                FillMaterial = fillRenderer.material,
+                Shield = shield,
+            });
+        }
+
+        private void RefreshTurnBar(int index, TurnHeroState hero)
+        {
+            if (index < 0 || index >= _turnBars.Count || hero == null) return;
+            var bar = _turnBars[index];
+            float frac = hero.MaxHp > 0 ? Mathf.Clamp01((float)hero.Hp / hero.MaxHp) : 0f;
+            float w = 2.04f * frac;
+            bar.Fill.localScale = new Vector3(Mathf.Max(0.001f, w), 0.20f, 0.10f);
+            bar.Fill.localPosition = new Vector3(-(2.04f - w) / 2f, 0f, -0.03f);
+            if (bar.FillMaterial != null)
+            {
+                Color c = frac > 0.5f
+                    ? Color.Lerp(UIHelpers.Hex("#F9C74F"), UIHelpers.Hex("#4CAF50"), (frac - 0.5f) * 2f)
+                    : Color.Lerp(UIHelpers.Hex("#C62828"), UIHelpers.Hex("#F9C74F"), frac * 2f);
+                bar.FillMaterial.color = c;
+                if (bar.FillMaterial.HasProperty("_BaseColor")) bar.FillMaterial.SetColor("_BaseColor", c);
+            }
+            bool showShield = hero.Shield > 0 && hero.Alive;
+            bar.Shield.SetActive(showShield);
+            if (showShield)
+            {
+                float sw = 2.04f * Mathf.Clamp01((float)hero.Shield / hero.MaxHp);
+                bar.Shield.transform.localScale = new Vector3(Mathf.Max(0.001f, sw), 0.20f, 0.04f);
+                bar.Shield.transform.localPosition = new Vector3(-(2.04f - sw) / 2f, 0f, -0.07f);
+            }
+        }
+
         private void CleanupTurnFigures()
         {
             foreach (var fig in _turnFigures)
@@ -1680,6 +1769,11 @@ namespace LunarDominion.UI
                 if (fig != null) Destroy(fig);
             }
             _turnFigures.Clear();
+            foreach (var bar in _turnBars)
+            {
+                if (bar.Root != null) Destroy(bar.Root);
+            }
+            _turnBars.Clear();
         }
 
         private TurnHeroState SelectedHeroState()
@@ -1725,6 +1819,17 @@ namespace LunarDominion.UI
         // ExteriorView; UI taps are filtered by the EventSystem).
         private void Update()
         {
+            // Floating hero bars hover over their figures
+            // (following lunges and falls).
+            if (_turnActive)
+            {
+                for (int i = 0; i < _turnBars.Count; i++)
+                {
+                    var bar = _turnBars[i];
+                    if (bar.Root != null && bar.Figure != null)
+                        bar.Root.transform.position = bar.Figure.transform.position + new Vector3(0f, 3.55f, 0f);
+                }
+            }
             if (!_turnActive || _turnFight == null || _turnFight.Finished) return;
             bool pressed = false;
             Vector2 screenPos = Vector2.zero;
@@ -1790,8 +1895,8 @@ namespace LunarDominion.UI
         {
             if (_turnFight == null) return;
             if (_bossHpFill != null)
-                _bossHpFill.fillAmount = _turnFight.BossMaxHp > 0
-                    ? (float)_turnFight.BossHp / _turnFight.BossMaxHp : 0f;
+                SetBossBarFraction(_turnFight.BossMaxHp > 0
+                    ? (float)_turnFight.BossHp / _turnFight.BossMaxHp : 0f);
             if (_bossHpText != null)
                 _bossHpText.text = $"A.R.E.S.-09  {_turnFight.BossHp} / {_turnFight.BossMaxHp}";
             if (_turnIntentText != null) _turnIntentText.text = "Intent: " + _turnFight.IntentText();
@@ -1861,6 +1966,7 @@ namespace LunarDominion.UI
                 // Only the acting hero's chip is tappable.
                 btn.interactable = hero.Alive && i == _turnFight.SelectedHero
                     && !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished;
+                RefreshTurnBar(i, hero);
             }
 
             // Action buttons for the selected hero.
@@ -2040,6 +2146,17 @@ namespace LunarDominion.UI
 
         // ================= Real-time fight HUD =================
 
+        // Drives the boss HP bar: the fill rect's right anchor
+        // carries the fraction (the fill spans anchors
+        // 0.01..0.99 of the bar background at full HP).
+        private void SetBossBarFraction(float fraction)
+        {
+            if (_bossHpFill == null) return;
+            var rt = _bossHpFill.rectTransform;
+            float f = Mathf.Clamp01(fraction);
+            rt.anchorMax = new Vector2(0.01f + 0.98f * f, rt.anchorMax.y);
+        }
+
         private void BuildFightHud()
         {
             _hudRoot = new GameObject("FightHud");
@@ -2062,12 +2179,14 @@ namespace LunarDominion.UI
             fillRt.offsetMax = Vector2.zero;
             _bossHpFill = fillGo.AddComponent<Image>();
             _bossHpFill.color = UIHelpers.Hex("#C62828");
-            _bossHpFill.type = Image.Type.Filled;
-            _bossHpFill.fillMethod = Image.FillMethod.Horizontal;
-            _bossHpFill.fillOrigin = (int)Image.OriginHorizontal.Left;
-            _bossHpFill.fillAmount = 1f;
+            // Plain (Simple) image: the bar's fraction is driven
+            // by the fill rect's anchors (SetBossBarFraction).
+            // A sprite-less Filled image does not clip in this
+            // Unity version — the bar sat at full width while
+            // the boss lost HP (spotted by Patrick 2026-11-10).
+            _bossHpFill.type = Image.Type.Simple;
             _bossHpText = UIHelpers.LabelInRect(barBg, "BossHpText", "A.R.E.S.-09", 22, Color.white,
-                new Rect(0.02f, 0.02f, 0.98f, 0.45f), TextAnchor.MiddleCenter);
+                new Rect(0.02f, 0.02f, 0.98f, 0.98f), TextAnchor.MiddleCenter);
 
             // Telegraph warning, big and centre-top.
             _warningText = UIHelpers.LabelInRect(_hudRoot, "Warning", "", 44, UIHelpers.Hex("#FF7043"),
