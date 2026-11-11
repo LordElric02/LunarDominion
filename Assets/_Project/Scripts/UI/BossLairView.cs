@@ -1433,7 +1433,7 @@ namespace LunarDominion.UI
         private void BuildTurnPanel()
         {
             _turnRoot = UIHelpers.Panel(_root, "TurnPanel", UIHelpers.Hex("#0D1420"),
-                new Vector2(0.03f, 0.015f), new Vector2(0.97f, 0.30f), Vector2.zero, Vector2.zero);
+                new Vector2(0.03f, 0.01f), new Vector2(0.97f, 0.35f), Vector2.zero, Vector2.zero);
             _turnRoundText = UIHelpers.LabelInRect(_turnRoot, "TurnRound", "ROUND 1", 26, Color.white,
                 new Rect(0.015f, 0.85f, 0.30f, 0.99f), TextAnchor.MiddleLeft);
             _turnIntentText = UIHelpers.LabelInRect(_turnRoot, "TurnIntent", "", 24, UIHelpers.Hex("#FFB74D"),
@@ -1505,8 +1505,8 @@ namespace LunarDominion.UI
             _turnTargetRow = new GameObject("TurnTargets");
             _turnTargetRow.transform.SetParent(_root.transform, false);
             var targetsRt = _turnTargetRow.AddComponent<RectTransform>();
-            targetsRt.anchorMin = new Vector2(0.22f, 0.315f);
-            targetsRt.anchorMax = new Vector2(0.78f, 0.375f);
+            targetsRt.anchorMin = new Vector2(0.22f, 0.36f);
+            targetsRt.anchorMax = new Vector2(0.78f, 0.415f);
             targetsRt.offsetMin = Vector2.zero;
             targetsRt.offsetMax = Vector2.zero;
             var targetsLayout = _turnTargetRow.AddComponent<HorizontalLayoutGroup>();
@@ -1577,6 +1577,18 @@ namespace LunarDominion.UI
             _turnFight.OnPhase2 += OnTurnPhase2;
             _turnFight.OnEnded += OnTurnFightEnded;
             _turnActive = true;
+            // Turn-fight framing: the realtime camera leaves the
+            // heroes at the very bottom of the frame, where the
+            // turn panel covers them — pull the camera up and
+            // back a little and aim it down the tube so the whole
+            // fight sits above the panel. PresentSceneForMode
+            // restores the standard framings on the next Show.
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                cam.transform.position = new Vector3(500f, 11.5f, -25f);
+                cam.transform.LookAt(new Vector3(500f, 1.0f, 7f));
+            }
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
             if (_bossHpFill != null) _bossHpFill.fillAmount = 1f;
             if (_hudRoot != null) _hudRoot.SetActive(true);
@@ -1602,7 +1614,10 @@ namespace LunarDominion.UI
                 var color = HeroColorFor(member.Definition.Id);
                 var fig = BuildCombatFigure(member.Definition, color);
                 fig.transform.SetParent(_sceneRoot.transform, false);
-                fig.transform.position = new Vector3(500f + xSpots[s], 0f, -14f);
+                // Closer to the boss than the realtime gate (-14):
+                // with the turn panel at the bottom of the screen,
+                // the squad must stand well inside the frame.
+                fig.transform.position = new Vector3(500f + xSpots[s], 0f, -7f);
                 _turnFigures.Add(fig);
                 float hpMult = 1f, atkMult = 1f, defMult = 1f;
                 if (_controller.Research != null)
