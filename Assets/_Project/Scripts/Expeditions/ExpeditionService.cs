@@ -460,13 +460,13 @@ namespace LunarDominion.Expeditions
         /// fightSeconds is carried in the result's Rounds field
         /// (the lair view formats it as the fight time).</summary>
         public BattleResult CompleteHeroesRealtime(EncounterDefinition encounter, List<SquadCombatant> squad,
-            List<int> fallenSquadIndices, bool victory, int fightSeconds)
+            List<int> fallenSquadIndices, bool victory, int fightSeconds, bool timeout = false)
         {
             var result = new BattleResult
             {
                 EncounterName = encounter.DisplayName,
                 Victory = victory,
-                Timeout = false,
+                Timeout = timeout,
                 Rounds = fightSeconds,
                 EnergySpent = encounter.EnergyCost
             };
@@ -543,6 +543,30 @@ namespace LunarDominion.Expeditions
                     _state.Biomass - beforeB, _state.Alloy - beforeA, _state.Helium3 - beforeH);
             }
             return result;
+        }
+
+        /// <summary>Turn-based boss fight, start (2026-11-10): the
+        /// arena fight now resolves interactively round by round
+        /// (TurnBasedBossFight) instead of in real time. The economy
+        /// around it is identical to the real-time path — same gate
+        /// checks, energy spent up front (never refunded on
+        /// defeat) — so the start is the same call.</summary>
+        public bool TryStartHeroesTurnBased(EncounterDefinition encounter, List<int> squadHeroIndices,
+            out List<SquadCombatant> squad, out string reason, bool allowLockedTier = false)
+        {
+            return TryStartHeroesRealtime(encounter, squadHeroIndices, out squad, out reason, allowLockedTier);
+        }
+
+        /// <summary>Turn-based boss fight, completion: the same XP
+        /// pool / reward / ladder rules as the real-time path (hero
+        /// boss rate, flawless bonus, fallen heroes recover
+        /// instantly); the result's Rounds field carries the rounds
+        /// fought, and a 20-round timeout reports as a timeout
+        /// defeat.</summary>
+        public BattleResult CompleteHeroesTurnBased(EncounterDefinition encounter, List<SquadCombatant> squad,
+            List<int> fallenSquadIndices, bool victory, int rounds, bool timeout)
+        {
+            return CompleteHeroesRealtime(encounter, squad, fallenSquadIndices, victory, rounds, timeout);
         }
     }
 }

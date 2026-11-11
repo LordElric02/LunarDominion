@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using LunarDominion.Boss;
 using LunarDominion.Core;
 using LunarDominion.Expeditions;
+using LunarDominion.Units;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -102,6 +103,30 @@ namespace LunarDominion.UI
         private readonly List<HeroChip> _chips = new List<HeroChip>();
         private readonly List<Button> _droneButtons = new List<Button>();
         private Coroutine _hudRoutine;
+
+        // Turn-based boss fight (2026-11-10): the arena fight's
+        // interactive mode — the player orders each hero per
+        // round from the turn panel while TurnBasedBossFight runs
+        // the rounds. The real-time controller above stays in the
+        // project but is no longer started (dormant).
+        private TurnBasedBossFight _turnFight;
+        private GameObject _turnRoot;
+        private Text _turnRoundText;
+        private Text _turnIntentText;
+        private Text _turnLogText;
+        private Text _turnSelectedText;
+        private readonly List<Button> _turnActionButtons = new List<Button>();
+        private readonly List<Text> _turnActionLabels = new List<Text>();
+        private readonly List<Button> _turnChipButtons = new List<Button>();
+        private readonly List<Text> _turnChipLabels = new List<Text>();
+        private GameObject _turnTargetRow;
+        private readonly List<Button> _turnTargetButtons = new List<Button>();
+        private readonly List<Text> _turnTargetLabels = new List<Text>();
+        private bool _turnActive;
+        private EncounterDefinition _turnEncounter;
+        private List<SquadCombatant> _turnSquad;
+        private readonly List<GameObject> _turnFigures = new List<GameObject>();
+        private Coroutine _turnHudRoutine;
 
         private class HeroChip
         {
@@ -236,6 +261,15 @@ namespace LunarDominion.UI
         {
             if (!_arenaAvailable) return false;
             return AresOnWholeLadder || _selectedBossLevel >= EncounterCatalog.MaxBossLevel;
+        }
+
+        // Turn-based mode (2026-11-10): the arena fight is now
+        // the interactive turn-based fight wherever the arena is
+        // presented. Same availability condition as the real-time
+        // mode had — the real-time classes stay dormant.
+        private bool UseTurnBased()
+        {
+            return UseRealtime();
         }
 
         // The lava tube arena + A.R.E.S.-09, built once alongside
@@ -553,6 +587,7 @@ namespace LunarDominion.UI
             _closeButton.onClick.AddListener(() => OnCloseClicked?.Invoke());
 
             BuildFightHud();
+            BuildTurnPanel();
         }
 
         private void BuildHeroRowsScroll(GameObject parent)
@@ -638,9 +673,10 @@ namespace LunarDominion.UI
         public void Hide()
         {
             _visible = false;
-            // Leaving mid-fight abandons the real-time fight (energy
-            // already spent is not refunded — same as a defeat).
+            // Leaving mid-fight abandons the fight (energy already
+            // spent is not refunded — same as a defeat).
             if (_realtimeActive) EndRealtimeFightImmediate();
+            if (_turnActive) EndTurnFightImmediate();
             if (_ambience != null) _ambience.ReleaseEnvironment();
             if (_sceneRoot != null) _sceneRoot.SetActive(false);
             if (_root != null) _root.SetActive(false);
@@ -670,7 +706,7 @@ namespace LunarDominion.UI
                 return;
             }
             int highest = HighestUnlockedBossLevel();
-            bool realtime = UseRealtime();
+            bool realtime = UseTurnBased();
             _titleText.text = realtime
                 ? $"A.R.E.S.-09 — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}"
                 : $"WAR ROBOT — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}";
@@ -950,9 +986,9 @@ namespace LunarDominion.UI
             var boss = BossEncounter();
             if (boss == null) return;
             if (_selectedHeroIndices.Count < 1 || _selectedHeroIndices.Count > 3) return;
-            if (UseRealtime())
+            if (UseTurnBased())
             {
-                StartRealtimeFight(boss);
+                StartTurnBasedFight(boss);
                 return;
             }
             var heroIndices = new List<int>(_selectedHeroIndices);
@@ -1374,6 +1410,457 @@ namespace LunarDominion.UI
                 }
             }
             _resultText.text = body.ToString();
+        }
+
+        // ================= Turn-based fight =================
+
+        // A layout-friendly button (panel Image + Button + centred
+        // label), the same construction as the fight chips.
+        private static Button MakePanelButton(GameObject parent, string name, string text,
+            int fontSize, Color bg, out Text label)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform, false);
+            var img = go.AddComponent<Image>();
+            img.color = bg;
+            var btn = go.AddComponent<Button>();
+            btn.targetGraphic = img;
+            label = UIHelpers.LabelInRect(go, "Label", text, fontSize, Color.white,
+                new Rect(0.02f, 0.03f, 0.98f, 0.97f), TextAnchor.MiddleCenter);
+            return btn;
+        }
+
+        private void BuildTurnPanel()
+        {
+            _turnRoot = UIHelpers.Panel(_root, "TurnPanel", UIHelpers.Hex("#0D1420"),
+                new Vector2(0.03f, 0.015f), new Vector2(0.97f, 0.30f), Vector2.zero, Vector2.zero);
+            _turnRoundText = UIHelpers.LabelInRect(_turnRoot, "TurnRound", "ROUND 1", 26, Color.white,
+                new Rect(0.015f, 0.85f, 0.30f, 0.99f), TextAnchor.MiddleLeft);
+            _turnIntentText = UIHelpers.LabelInRect(_turnRoot, "TurnIntent", "", 24, UIHelpers.Hex("#FFB74D"),
+                new Rect(0.30f, 0.85f, 0.985f, 0.99f), TextAnchor.MiddleLeft);
+            _turnLogText = UIHelpers.LabelInRect(_turnRoot, "TurnLog", "", 20, UIHelpers.Hex("#B0BEC5"),
+                new Rect(0.015f, 0.32f, 0.615f, 0.85f), TextAnchor.UpperLeft);
+            _turnSelectedText = UIHelpers.LabelInRect(_turnRoot, "TurnSelected", "", 22, Color.white,
+                new Rect(0.015f, 0.175f, 0.615f, 0.32f), TextAnchor.MiddleLeft);
+
+            // Action buttons for the selected hero.
+            var actionsGo = new GameObject("TurnActions");
+            actionsGo.transform.SetParent(_turnRoot.transform, false);
+            var actionsRt = actionsGo.AddComponent<RectTransform>();
+            actionsRt.anchorMin = new Vector2(0.015f, 0.02f);
+            actionsRt.anchorMax = new Vector2(0.615f, 0.165f);
+            actionsRt.offsetMin = Vector2.zero;
+            actionsRt.offsetMax = Vector2.zero;
+            var actionsLayout = actionsGo.AddComponent<HorizontalLayoutGroup>();
+            actionsLayout.spacing = 8;
+            actionsLayout.childAlignment = TextAnchor.MiddleCenter;
+            actionsLayout.childControlWidth = true;
+            actionsLayout.childControlHeight = true;
+            actionsLayout.childForceExpandWidth = true;
+            actionsLayout.childForceExpandHeight = true;
+            string[] actionNames = { "Attack", "Defend", "Skill 1", "Skill 2", "Skill 3" };
+            for (int i = 0; i < actionNames.Length; i++)
+            {
+                int actionIndex = i;
+                var btn = MakePanelButton(actionsGo, "TurnAction" + i, actionNames[i], 22,
+                    UIHelpers.Hex("#1A2436"), out var label);
+                btn.onClick.AddListener(() =>
+                {
+                    if (_turnFight == null) return;
+                    if (actionIndex == 0) _turnFight.ChooseAttack();
+                    else if (actionIndex == 1) _turnFight.ChooseDefend();
+                    else _turnFight.ChooseSkill(actionIndex - 2);
+                });
+                _turnActionButtons.Add(btn);
+                _turnActionLabels.Add(label);
+            }
+
+            // Hero chips: tap to choose who acts next.
+            var chipsGo = new GameObject("TurnChips");
+            chipsGo.transform.SetParent(_turnRoot.transform, false);
+            var chipsRt = chipsGo.AddComponent<RectTransform>();
+            chipsRt.anchorMin = new Vector2(0.635f, 0.02f);
+            chipsRt.anchorMax = new Vector2(0.985f, 0.83f);
+            chipsRt.offsetMin = Vector2.zero;
+            chipsRt.offsetMax = Vector2.zero;
+            var chipsLayout = chipsGo.AddComponent<VerticalLayoutGroup>();
+            chipsLayout.spacing = 8;
+            chipsLayout.childAlignment = TextAnchor.MiddleCenter;
+            chipsLayout.childControlWidth = true;
+            chipsLayout.childControlHeight = true;
+            chipsLayout.childForceExpandWidth = true;
+            chipsLayout.childForceExpandHeight = true;
+            for (int i = 0; i < 3; i++)
+            {
+                int heroIndex = i;
+                var btn = MakePanelButton(chipsGo, "TurnChip" + i, "Hero", 21,
+                    UIHelpers.Hex("#14202F"), out var label);
+                btn.onClick.AddListener(() => { if (_turnFight != null) _turnFight.SelectHero(heroIndex); });
+                _turnChipButtons.Add(btn);
+                _turnChipLabels.Add(label);
+            }
+
+            // Target row (boss / drones / cancel), shown only
+            // while an attack or attack-skill waits for a target.
+            _turnTargetRow = new GameObject("TurnTargets");
+            _turnTargetRow.transform.SetParent(_root.transform, false);
+            var targetsRt = _turnTargetRow.AddComponent<RectTransform>();
+            targetsRt.anchorMin = new Vector2(0.22f, 0.315f);
+            targetsRt.anchorMax = new Vector2(0.78f, 0.375f);
+            targetsRt.offsetMin = Vector2.zero;
+            targetsRt.offsetMax = Vector2.zero;
+            var targetsLayout = _turnTargetRow.AddComponent<HorizontalLayoutGroup>();
+            targetsLayout.spacing = 8;
+            targetsLayout.childAlignment = TextAnchor.MiddleCenter;
+            targetsLayout.childControlWidth = true;
+            targetsLayout.childControlHeight = true;
+            targetsLayout.childForceExpandWidth = true;
+            targetsLayout.childForceExpandHeight = true;
+            string[] targetNames = { "A.R.E.S.", "Drone A", "Drone B", "Cancel" };
+            for (int i = 0; i < targetNames.Length; i++)
+            {
+                int targetIndex = i;
+                var btn = MakePanelButton(_turnTargetRow, "TurnTarget" + i, targetNames[i], 22,
+                    UIHelpers.Hex("#4A1420"), out var label);
+                btn.onClick.AddListener(() =>
+                {
+                    if (_turnFight == null) return;
+                    if (targetIndex == 3) _turnFight.CancelTarget();
+                    else _turnFight.ChooseTarget(targetIndex);
+                });
+                _turnTargetButtons.Add(btn);
+                _turnTargetLabels.Add(label);
+            }
+
+            _turnRoot.SetActive(false);
+            _turnTargetRow.SetActive(false);
+        }
+
+        private void StartTurnBasedFight(EncounterDefinition boss)
+        {
+            var heroIndices = new List<int>(_selectedHeroIndices);
+            _fighting = true;
+            RefreshFightButton();
+            SetSelectMode(false);
+            if (_headerGo != null) _headerGo.SetActive(false);
+            if (_bottomGo != null) _bottomGo.SetActive(false);
+            PresentSceneForMode();
+
+            if (!_controller.Expeditions.TryStartHeroesTurnBased(boss, heroIndices, out var squad, out var reason, allowLockedTier: true))
+            {
+                _fighting = false;
+                SetSelectMode(true);
+                if (_headerGo != null) _headerGo.SetActive(true);
+                if (_bottomGo != null) _bottomGo.SetActive(true);
+                _resultText.text = reason;
+                RefreshFightButton();
+                return;
+            }
+            _controller.SaveGame();
+            _controller.NotifyChanged();
+
+            _turnEncounter = boss;
+            _turnSquad = squad;
+            _bossPhase = 1;
+            var heroes = BuildTurnHeroes(squad);
+
+            var spawn = boss.Spawns[0];
+            float scale = CombatService.EnemyScale(_controller.State.NexusLevel, boss.RequiredNexusLevel);
+            int bossHp = Mathf.RoundToInt(spawn.Health * scale);
+            int bossAtk = Mathf.RoundToInt(spawn.Attack * scale);
+            int bossDef = Mathf.RoundToInt(spawn.Defense * scale);
+
+            var fightGo = new GameObject("TurnBasedBossFight");
+            fightGo.transform.SetParent(_sceneRoot.transform, false);
+            _turnFight = fightGo.AddComponent<TurnBasedBossFight>();
+            _turnFight.OnChanged += RefreshTurnPanel;
+            _turnFight.OnPhase2 += OnTurnPhase2;
+            _turnFight.OnEnded += OnTurnFightEnded;
+            _turnActive = true;
+            if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
+            if (_bossHpFill != null) _bossHpFill.fillAmount = 1f;
+            if (_hudRoot != null) _hudRoot.SetActive(true);
+            if (_turnRoot != null) _turnRoot.SetActive(true);
+            if (_turnHudRoutine != null) StopCoroutine(_turnHudRoutine);
+            _turnHudRoutine = StartCoroutine(TurnHudRoutine());
+            _turnFight.Begin(heroes, bossHp, bossAtk, bossDef, _selectedBossLevel, scale,
+                _aresRoot.transform, _aresVisual.transform, _slamRing, _droneTemplate);
+        }
+
+        // The turn-based combatants: the same figures as the
+        // real-time fight (hero models when installed), entering
+        // from the arena's south gate — but no real-time combatant
+        // component; TurnBasedBossFight moves them.
+        private List<TurnHeroState> BuildTurnHeroes(List<SquadCombatant> squad)
+        {
+            CleanupTurnFigures();
+            var heroes = new List<TurnHeroState>();
+            var xSpots = new float[] { -4f, 0f, 4f };
+            for (int s = 0; s < squad.Count && s < 3; s++)
+            {
+                var member = squad[s];
+                var color = HeroColorFor(member.Definition.Id);
+                var fig = BuildCombatFigure(member.Definition, color);
+                fig.transform.SetParent(_sceneRoot.transform, false);
+                fig.transform.position = new Vector3(500f + xSpots[s], 0f, -14f);
+                _turnFigures.Add(fig);
+                float hpMult = 1f, atkMult = 1f, defMult = 1f;
+                if (_controller.Research != null)
+                    _controller.Research.ClassMultipliers(member.Definition.Class, out hpMult, out atkMult, out defMult);
+                int level = member.Unit.Level;
+                heroes.Add(new TurnHeroState
+                {
+                    Member = member,
+                    Figure = fig,
+                    MaxHp = Mathf.RoundToInt(UnitStats.ScaledHealth(member.Definition, level) * hpMult),
+                    Atk = Mathf.RoundToInt(UnitStats.ScaledAttack(member.Definition, level) * atkMult),
+                    Def = Mathf.RoundToInt(UnitStats.ScaledDefense(member.Definition, level) * defMult),
+                });
+            }
+            return heroes;
+        }
+
+        private void CleanupTurnFigures()
+        {
+            foreach (var fig in _turnFigures)
+            {
+                if (fig != null) Destroy(fig);
+            }
+            _turnFigures.Clear();
+        }
+
+        private TurnHeroState SelectedHeroState()
+        {
+            if (_turnFight == null) return null;
+            int idx = _turnFight.SelectedHero;
+            if (idx < 0 || idx >= _turnFight.Heroes.Count) return null;
+            return _turnFight.Heroes[idx];
+        }
+
+        private void RefreshTurnPanel()
+        {
+            if (_turnFight == null) return;
+            if (_bossHpFill != null)
+                _bossHpFill.fillAmount = _turnFight.BossMaxHp > 0
+                    ? (float)_turnFight.BossHp / _turnFight.BossMaxHp : 0f;
+            if (_bossHpText != null)
+                _bossHpText.text = $"A.R.E.S.-09  {_turnFight.BossHp} / {_turnFight.BossMaxHp}";
+            if (_turnRoundText != null) _turnRoundText.text = $"ROUND {_turnFight.Round}";
+            if (_turnIntentText != null) _turnIntentText.text = "Intent: " + _turnFight.IntentText();
+            if (_turnFight.SlamCharged) ShowWarning("⚠ SEISMIC SLAM INCOMING");
+            if (_turnLogText != null)
+            {
+                int start = Mathf.Max(0, _turnFight.Log.Count - 4);
+                var lines = new List<string>();
+                for (int i = start; i < _turnFight.Log.Count; i++) lines.Add(_turnFight.Log[i]);
+                _turnLogText.text = string.Join("\n", lines);
+            }
+
+            string selectedText;
+            if (_turnFight.Finished) selectedText = "";
+            else if (_turnFight.AwaitingTarget) selectedText = "Choose a target";
+            else if (_turnFight.Busy) selectedText = "A.R.E.S. is acting…";
+            else
+            {
+                var sel = SelectedHeroState();
+                selectedText = sel != null ? $"{sel.Name} — choose an action" : "A.R.E.S. is acting…";
+            }
+            if (_turnSelectedText != null) _turnSelectedText.text = selectedText;
+
+            // Hero chips.
+            for (int i = 0; i < _turnChipButtons.Count; i++)
+            {
+                var btn = _turnChipButtons[i];
+                var hero = i < _turnFight.Heroes.Count ? _turnFight.Heroes[i] : null;
+                btn.gameObject.SetActive(hero != null);
+                if (hero == null) continue;
+                var sb = new System.Text.StringBuilder();
+                sb.Append(hero.Name);
+                sb.Append($"\nHP {hero.Hp}/{hero.MaxHp}");
+                if (hero.Shield > 0) sb.Append($"  SHIELD {hero.Shield}");
+                if (!hero.Alive) sb.Append("\nDOWN");
+                else if (hero.Acted) sb.Append("\nACTED");
+                _turnChipLabels[i].text = sb.ToString();
+                var img = btn.GetComponent<Image>();
+                if (img != null)
+                {
+                    img.color = !hero.Alive ? UIHelpers.Hex("#3A1420")
+                        : i == _turnFight.SelectedHero ? UIHelpers.Hex("#1E4A7A")
+                        : hero.Acted ? UIHelpers.Hex("#10161F") : UIHelpers.Hex("#14202F");
+                }
+                btn.interactable = hero.Alive && !hero.Acted && !_turnFight.Busy && !_turnFight.AwaitingTarget;
+            }
+
+            // Action buttons for the selected hero.
+            var selected = SelectedHeroState();
+            bool canAct = selected != null && selected.Alive && !selected.Acted
+                && !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished;
+            var skills = selected != null ? SkillCatalog.ForHero(selected.Member.Definition.Id) : null;
+            for (int i = 0; i < _turnActionButtons.Count; i++)
+            {
+                var btn = _turnActionButtons[i];
+                if (i == 0)
+                {
+                    _turnActionLabels[i].text = "Attack";
+                    btn.interactable = canAct;
+                }
+                else if (i == 1)
+                {
+                    _turnActionLabels[i].text = "Defend";
+                    btn.interactable = canAct;
+                }
+                else
+                {
+                    int slot = i - 2;
+                    var skill = skills != null ? skills[slot] : null;
+                    if (skill == null || selected == null)
+                    {
+                        _turnActionLabels[i].text = "—";
+                        btn.interactable = false;
+                    }
+                    else
+                    {
+                        int cd = selected.Cooldowns[slot];
+                        _turnActionLabels[i].text = cd > 0 ? $"{skill.Name} ({cd})" : skill.Name;
+                        btn.interactable = canAct && cd == 0;
+                    }
+                }
+            }
+
+            // Target row.
+            if (_turnTargetRow != null)
+            {
+                _turnTargetRow.SetActive(_turnFight.AwaitingTarget);
+                if (_turnFight.AwaitingTarget)
+                {
+                    for (int i = 1; i <= 2; i++)
+                    {
+                        var btn = _turnTargetButtons[i];
+                        bool show = i - 1 < _turnFight.Drones.Count && _turnFight.Drones[i - 1].Alive;
+                        btn.gameObject.SetActive(show);
+                        if (show)
+                            _turnTargetLabels[i].text = $"{_turnFight.Drones[i - 1].Name} ({_turnFight.Drones[i - 1].Hp} HP)";
+                    }
+                }
+            }
+        }
+
+        private void OnTurnPhase2()
+        {
+            _bossPhase = 2;
+            if (_ambience != null) _ambience.SetPhase2(true);
+        }
+
+        private IEnumerator TurnHudRoutine()
+        {
+            while (_turnActive)
+            {
+                if (_warningText != null && _warningText.gameObject.activeSelf && Time.time > _warningUntil)
+                    _warningText.gameObject.SetActive(false);
+                if (_bossPhase == 2 && _coreMaterial != null && _coreMaterial.HasProperty("_EmissionColor"))
+                {
+                    float pulse = 1.6f + Mathf.Sin(Time.time * 6f) * 0.9f;
+                    _coreMaterial.SetColor("_EmissionColor", _coreBaseEmission * pulse);
+                }
+                yield return new WaitForSeconds(0.1f);
+            }
+        }
+
+        private void OnTurnFightEnded(bool victory, bool timeout, List<int> fallen)
+        {
+            if (_turnEncounter == null || _turnSquad == null) return;
+            int rounds = _turnFight != null ? _turnFight.Round : 0;
+            var result = _controller.Expeditions.CompleteHeroesTurnBased(
+                _turnEncounter, _turnSquad, fallen, victory, rounds, timeout);
+            EndTurnUiCleanup();
+            if (_headerGo != null) _headerGo.SetActive(true);
+            if (_bottomGo != null) _bottomGo.SetActive(true);
+            SetSelectMode(true);
+            _fighting = false;
+            // Boss ladder: a victory at the frontier unlocks the
+            // next level (same rule as the other fight paths).
+            if (result.Victory && _selectedBossLevel > _controller.State.BossLevelDefeated)
+            {
+                _controller.State.BossLevelDefeated = _selectedBossLevel;
+                _selectedBossLevel = HighestUnlockedBossLevel();
+            }
+            _controller.SaveGame();
+            _controller.NotifyChanged();
+            ShowTurnResult(result);
+            RefreshHeroRows();
+            RefreshHeroFigures();
+            RefreshBossInfo();
+            OnFightComplete?.Invoke(result);
+        }
+
+        private void ShowTurnResult(BattleResult result)
+        {
+            var body = new System.Text.StringBuilder();
+            body.AppendLine(result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT — SQUAD DOWN"));
+            body.AppendLine($"{result.EncounterName}  •  Rounds: {result.Rounds}  •  Energy spent: {result.EnergySpent}");
+            if (result.Victory)
+            {
+                body.AppendLine($"Reward: {CostText(result.RewardEarned)}");
+                if (result.Flawless) body.AppendLine("Flawless victory: +25% XP bonus applied.");
+            }
+            else
+            {
+                body.AppendLine("No reward (defeat). Energy is not refunded.");
+            }
+            if (result.HeroCasualtyNames.Count == 0)
+            {
+                body.AppendLine("Heroes down: none");
+            }
+            else
+            {
+                body.AppendLine("Heroes down: " + string.Join(", ", result.HeroCasualtyNames) + " — heroes recover after the fight.");
+            }
+            body.AppendLine($"XP pool: {result.XpPool}");
+            if (result.XpGains.Count == 0)
+            {
+                body.AppendLine("No XP gained.");
+            }
+            else
+            {
+                foreach (var gain in result.XpGains)
+                {
+                    string levelText = gain.NewLevel > gain.OldLevel
+                        ? $"Lv {gain.OldLevel} → Lv {gain.NewLevel}"
+                        : $"Lv {gain.OldLevel}";
+                    body.AppendLine($"{gain.UnitName}: +{gain.XpGained} XP ({levelText})");
+                }
+            }
+            _resultText.text = body.ToString();
+        }
+
+        // Force-stop (the view is hiding mid-fight): no completion
+        // is applied — the fight is abandoned.
+        private void EndTurnFightImmediate()
+        {
+            EndTurnUiCleanup();
+        }
+
+        private void EndTurnUiCleanup()
+        {
+            _turnActive = false;
+            if (_turnHudRoutine != null) { StopCoroutine(_turnHudRoutine); _turnHudRoutine = null; }
+            if (_hudRoot != null) _hudRoot.SetActive(false);
+            if (_turnRoot != null) _turnRoot.SetActive(false);
+            if (_turnTargetRow != null) _turnTargetRow.SetActive(false);
+            if (_turnFight != null)
+            {
+                _turnFight.OnChanged -= RefreshTurnPanel;
+                _turnFight.OnPhase2 -= OnTurnPhase2;
+                _turnFight.OnEnded -= OnTurnFightEnded;
+                Destroy(_turnFight.gameObject);
+                _turnFight = null;
+            }
+            CleanupTurnFigures();
+            ResetAresVisual();
+            if (_ambience != null) _ambience.SetPhase2(false);
+            _bossPhase = 1;
+            _turnEncounter = null;
+            _turnSquad = null;
         }
 
         // ================= Real-time fight HUD =================
