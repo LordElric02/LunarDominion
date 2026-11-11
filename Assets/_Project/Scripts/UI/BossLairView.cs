@@ -6,6 +6,7 @@ using LunarDominion.Core;
 using LunarDominion.Expeditions;
 using LunarDominion.Units;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace LunarDominion.UI
@@ -106,16 +107,18 @@ namespace LunarDominion.UI
 
         // Turn-based boss fight (2026-11-10): the arena fight's
         // interactive mode — the player orders each hero per
-        // round from the turn panel while TurnBasedBossFight runs
+        // round by tapping the acting hero, while the fight runs
         // the rounds. The real-time controller above stays in the
         // project but is no longer started (dormant).
         private TurnBasedBossFight _turnFight;
-        private GameObject _turnRoot;
-        private Text _turnRoundText;
+        private GameObject _turnHud;
         private Text _turnIntentText;
         private Text _turnOrderText;
         private Text _turnLogText;
-        private Text _turnSelectedText;
+        private Text _turnHintText;
+        private GameObject _actionBar;
+        private bool _actionBarOpen;
+        private int _barForHero = -1;
         private readonly List<Button> _turnActionButtons = new List<Button>();
         private readonly List<Text> _turnActionLabels = new List<Text>();
         private readonly List<Button> _turnChipButtons = new List<Button>();
@@ -588,7 +591,7 @@ namespace LunarDominion.UI
             _closeButton.onClick.AddListener(() => OnCloseClicked?.Invoke());
 
             BuildFightHud();
-            BuildTurnPanel();
+            BuildTurnUi();
         }
 
         private void BuildHeroRowsScroll(GameObject parent)
@@ -1431,30 +1434,76 @@ namespace LunarDominion.UI
             return btn;
         }
 
-        private void BuildTurnPanel()
+        // Patrick's flow (2026-11-10 22:44): no turn panel —
+        // the fight is driven from the scene itself. The hero
+        // whose slot it is (Speed order) is selected
+        // automatically; tapping that hero (the 3D figure or
+        // their chip) opens their action bar; acting closes it
+        // and the next slot is selected. The boss and the
+        // drones take their turns at their own Speed slots.
+        // The only HUD: the shared boss bar, a slim status
+        // group (round + order + intent + recent events), the
+        // hero chips along the bottom, and the on-demand bar.
+        private void BuildTurnUi()
         {
-            _turnRoot = UIHelpers.Panel(_root, "TurnPanel", UIHelpers.Hex("#0D1420"),
-                new Vector2(0.03f, 0.01f), new Vector2(0.97f, 0.35f), Vector2.zero, Vector2.zero);
-            _turnRoundText = UIHelpers.LabelInRect(_turnRoot, "TurnRound", "ROUND 1", 26, Color.white,
-                new Rect(0.015f, 0.85f, 0.30f, 0.99f), TextAnchor.MiddleLeft);
-            _turnIntentText = UIHelpers.LabelInRect(_turnRoot, "TurnIntent", "", 24, UIHelpers.Hex("#FFB74D"),
-                new Rect(0.30f, 0.85f, 0.985f, 0.99f), TextAnchor.MiddleLeft);
-            _turnOrderText = UIHelpers.LabelInRect(_turnRoot, "TurnOrder", "", 21, UIHelpers.Hex("#90CAF9"),
-                new Rect(0.015f, 0.715f, 0.985f, 0.85f), TextAnchor.MiddleLeft);
-            _turnLogText = UIHelpers.LabelInRect(_turnRoot, "TurnLog", "", 20, UIHelpers.Hex("#B0BEC5"),
-                new Rect(0.015f, 0.32f, 0.615f, 0.715f), TextAnchor.UpperLeft);
-            _turnSelectedText = UIHelpers.LabelInRect(_turnRoot, "TurnSelected", "", 22, Color.white,
-                new Rect(0.015f, 0.175f, 0.615f, 0.32f), TextAnchor.MiddleLeft);
+            _turnHud = new GameObject("TurnHud");
+            _turnHud.transform.SetParent(_hudRoot.transform, false);
+            var turnHudRt = _turnHud.AddComponent<RectTransform>();
+            turnHudRt.anchorMin = Vector2.zero;
+            turnHudRt.anchorMax = Vector2.one;
+            turnHudRt.offsetMin = Vector2.zero;
+            turnHudRt.offsetMax = Vector2.zero;
 
-            // Action buttons for the selected hero.
-            var actionsGo = new GameObject("TurnActions");
-            actionsGo.transform.SetParent(_turnRoot.transform, false);
-            var actionsRt = actionsGo.AddComponent<RectTransform>();
-            actionsRt.anchorMin = new Vector2(0.015f, 0.02f);
-            actionsRt.anchorMax = new Vector2(0.615f, 0.165f);
+            _turnOrderText = UIHelpers.LabelInRect(_turnHud, "TurnOrder", "", 21, UIHelpers.Hex("#90CAF9"),
+                new Rect(0.22f, 0.865f, 0.78f, 0.925f), TextAnchor.MiddleCenter);
+            _turnIntentText = UIHelpers.LabelInRect(_turnHud, "TurnIntent", "", 20, UIHelpers.Hex("#FFB74D"),
+                new Rect(0.22f, 0.815f, 0.78f, 0.86f), TextAnchor.MiddleCenter);
+            _turnLogText = UIHelpers.LabelInRect(_turnHud, "TurnLog", "", 19, UIHelpers.Hex("#B0BEC5"),
+                new Rect(0.015f, 0.135f, 0.30f, 0.27f), TextAnchor.UpperLeft);
+            _turnHintText = UIHelpers.LabelInRect(_turnHud, "TurnHint", "", 22, Color.white,
+                new Rect(0.28f, 0.125f, 0.72f, 0.17f), TextAnchor.MiddleCenter);
+
+            // Hero chips along the bottom (name + HP + SPD): the
+            // acting hero's chip is a tap target for the action
+            // bar; the white disabled tint keeps every chip's
+            // colours reading normally when it is not tappable.
+            var chipsGo = new GameObject("TurnChips");
+            chipsGo.transform.SetParent(_turnHud.transform, false);
+            var chipsRt = chipsGo.AddComponent<RectTransform>();
+            chipsRt.anchorMin = new Vector2(0.24f, 0.015f);
+            chipsRt.anchorMax = new Vector2(0.76f, 0.115f);
+            chipsRt.offsetMin = Vector2.zero;
+            chipsRt.offsetMax = Vector2.zero;
+            var chipsLayout = chipsGo.AddComponent<HorizontalLayoutGroup>();
+            chipsLayout.spacing = 8;
+            chipsLayout.childAlignment = TextAnchor.MiddleCenter;
+            chipsLayout.childControlWidth = true;
+            chipsLayout.childControlHeight = true;
+            chipsLayout.childForceExpandWidth = true;
+            chipsLayout.childForceExpandHeight = true;
+            for (int i = 0; i < 3; i++)
+            {
+                int heroIndex = i;
+                var btn = MakePanelButton(chipsGo, "TurnChip" + i, "Hero", 20,
+                    UIHelpers.Hex("#14202F"), out var label);
+                btn.onClick.AddListener(() => OnHeroTapped(heroIndex));
+                var chipColors = btn.colors;
+                chipColors.disabledColor = Color.white;
+                btn.colors = chipColors;
+                _turnChipButtons.Add(btn);
+                _turnChipLabels.Add(label);
+            }
+
+            // The action bar: hidden until the acting hero is
+            // tapped; Attack / Defend / the hero's 3 skills.
+            _actionBar = new GameObject("TurnActions");
+            _actionBar.transform.SetParent(_turnHud.transform, false);
+            var actionsRt = _actionBar.AddComponent<RectTransform>();
+            actionsRt.anchorMin = new Vector2(0.20f, 0.125f);
+            actionsRt.anchorMax = new Vector2(0.80f, 0.205f);
             actionsRt.offsetMin = Vector2.zero;
             actionsRt.offsetMax = Vector2.zero;
-            var actionsLayout = actionsGo.AddComponent<HorizontalLayoutGroup>();
+            var actionsLayout = _actionBar.AddComponent<HorizontalLayoutGroup>();
             actionsLayout.spacing = 8;
             actionsLayout.childAlignment = TextAnchor.MiddleCenter;
             actionsLayout.childControlWidth = true;
@@ -1465,7 +1514,7 @@ namespace LunarDominion.UI
             for (int i = 0; i < actionNames.Length; i++)
             {
                 int actionIndex = i;
-                var btn = MakePanelButton(actionsGo, "TurnAction" + i, actionNames[i], 22,
+                var btn = MakePanelButton(_actionBar, "TurnAction" + i, actionNames[i], 22,
                     UIHelpers.Hex("#1A2436"), out var label);
                 btn.onClick.AddListener(() =>
                 {
@@ -1478,46 +1527,13 @@ namespace LunarDominion.UI
                 _turnActionLabels.Add(label);
             }
 
-            // Hero chips: tap to choose who acts next.
-            var chipsGo = new GameObject("TurnChips");
-            chipsGo.transform.SetParent(_turnRoot.transform, false);
-            var chipsRt = chipsGo.AddComponent<RectTransform>();
-            chipsRt.anchorMin = new Vector2(0.635f, 0.02f);
-            chipsRt.anchorMax = new Vector2(0.985f, 0.715f);
-            chipsRt.offsetMin = Vector2.zero;
-            chipsRt.offsetMax = Vector2.zero;
-            var chipsLayout = chipsGo.AddComponent<VerticalLayoutGroup>();
-            chipsLayout.spacing = 8;
-            chipsLayout.childAlignment = TextAnchor.MiddleCenter;
-            chipsLayout.childControlWidth = true;
-            chipsLayout.childControlHeight = true;
-            chipsLayout.childForceExpandWidth = true;
-            chipsLayout.childForceExpandHeight = true;
-            for (int i = 0; i < 3; i++)
-            {
-                int heroIndex = i;
-                var btn = MakePanelButton(chipsGo, "TurnChip" + i, "Hero", 21,
-                    UIHelpers.Hex("#14202F"), out var label);
-                btn.onClick.AddListener(() => { if (_turnFight != null) _turnFight.SelectHero(heroIndex); });
-                // Display-only (2026-11-10): Speed sets the turn
-                // order, so chips no longer select who acts. The
-                // white disabled tint keeps the chip colours set
-                // by RefreshTurnPanel reading normally.
-                btn.interactable = false;
-                var chipColors = btn.colors;
-                chipColors.disabledColor = Color.white;
-                btn.colors = chipColors;
-                _turnChipButtons.Add(btn);
-                _turnChipLabels.Add(label);
-            }
-
             // Target row (boss / drones / cancel), shown only
             // while an attack or attack-skill waits for a target.
             _turnTargetRow = new GameObject("TurnTargets");
-            _turnTargetRow.transform.SetParent(_root.transform, false);
+            _turnTargetRow.transform.SetParent(_turnHud.transform, false);
             var targetsRt = _turnTargetRow.AddComponent<RectTransform>();
-            targetsRt.anchorMin = new Vector2(0.22f, 0.36f);
-            targetsRt.anchorMax = new Vector2(0.78f, 0.415f);
+            targetsRt.anchorMin = new Vector2(0.22f, 0.215f);
+            targetsRt.anchorMax = new Vector2(0.78f, 0.27f);
             targetsRt.offsetMin = Vector2.zero;
             targetsRt.offsetMax = Vector2.zero;
             var targetsLayout = _turnTargetRow.AddComponent<HorizontalLayoutGroup>();
@@ -1543,7 +1559,8 @@ namespace LunarDominion.UI
                 _turnTargetLabels.Add(label);
             }
 
-            _turnRoot.SetActive(false);
+            _turnHud.SetActive(false);
+            _actionBar.SetActive(false);
             _turnTargetRow.SetActive(false);
         }
 
@@ -1589,11 +1606,11 @@ namespace LunarDominion.UI
             _turnFight.OnEnded += OnTurnFightEnded;
             _turnActive = true;
             // Turn-fight framing: the realtime camera leaves the
-            // heroes at the very bottom of the frame, where the
-            // turn panel covers them — pull the camera up and
-            // back a little and aim it down the tube so the whole
-            // fight sits above the panel. PresentSceneForMode
-            // restores the standard framings on the next Show.
+            // heroes at the very bottom of the frame — pull the
+            // camera up and back a little and aim it down the
+            // tube so the whole squad reads clearly above the
+            // slim HUD. PresentSceneForMode restores the
+            // standard framings on the next Show.
             var cam = Camera.main;
             if (cam != null)
             {
@@ -1603,7 +1620,9 @@ namespace LunarDominion.UI
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
             if (_bossHpFill != null) _bossHpFill.fillAmount = 1f;
             if (_hudRoot != null) _hudRoot.SetActive(true);
-            if (_turnRoot != null) _turnRoot.SetActive(true);
+            if (_turnHud != null) _turnHud.SetActive(true);
+            _actionBarOpen = false;
+            _barForHero = -1;
             if (_turnHudRoutine != null) StopCoroutine(_turnHudRoutine);
             _turnHudRoutine = StartCoroutine(TurnHudRoutine());
             _turnFight.Begin(heroes, bossHp, bossAtk, bossDef, _selectedBossLevel, scale,
@@ -1625,12 +1644,18 @@ namespace LunarDominion.UI
                 var color = HeroColorFor(member.Definition.Id);
                 var fig = BuildCombatFigure(member.Definition, color);
                 fig.transform.SetParent(_sceneRoot.transform, false);
-                // Close to the boss: with the turn panel at the
-                // bottom of the screen, the squad must stand well
+                // Close to the boss: the squad must stand well
                 // inside the frame (the realtime gate at -14 and
-                // even -7 both projected behind the panel).
+                // even -7 both projected behind the old panel).
                 fig.transform.position = new Vector3(500f + xSpots[s], 0f, -2f);
                 _turnFigures.Add(fig);
+                // Invisible tap target: tapping the acting hero
+                // opens their action bar (Update raycasts these).
+                var hitArea = new GameObject("HeroHitArea");
+                hitArea.transform.SetParent(fig.transform, false);
+                hitArea.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+                var hitCollider = hitArea.AddComponent<BoxCollider>();
+                hitCollider.size = new Vector3(2.4f, 3.4f, 2.4f);
                 float hpMult = 1f, atkMult = 1f, defMult = 1f;
                 if (_controller.Research != null)
                     _controller.Research.ClassMultipliers(member.Definition.Class, out hpMult, out atkMult, out defMult);
@@ -1675,6 +1700,92 @@ namespace LunarDominion.UI
             return idx >= 0 ? full.Substring(idx + 1) : full;
         }
 
+        // Tapping the acting hero (the 3D figure or their
+        // chip) opens the action bar; tapping again closes it.
+        // Acting closes it too — selection then moves to the
+        // next slot in the Speed order.
+        private void OnHeroTapped(int heroIndex)
+        {
+            if (_turnFight == null || _turnFight.Finished || _turnFight.Busy || _turnFight.AwaitingTarget) return;
+            if (heroIndex != _turnFight.SelectedHero) return;
+            if (_actionBarOpen && _barForHero == heroIndex)
+            {
+                _actionBarOpen = false;
+            }
+            else
+            {
+                _actionBarOpen = true;
+                _barForHero = heroIndex;
+            }
+            RefreshTurnPanel();
+        }
+
+        // World taps during a turn fight: raycast the hero
+        // figures' hit areas (the same pointer pattern as
+        // ExteriorView; UI taps are filtered by the EventSystem).
+        private void Update()
+        {
+            if (!_turnActive || _turnFight == null || _turnFight.Finished) return;
+            bool pressed = false;
+            Vector2 screenPos = Vector2.zero;
+            int touchPointerId = -1;
+#if ENABLE_INPUT_SYSTEM
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            var touchscreen = UnityEngine.InputSystem.Touchscreen.current;
+            if (touchscreen != null && (touchscreen.primaryTouch.press.isPressed || touchscreen.primaryTouch.press.wasPressedThisFrame || touchscreen.primaryTouch.press.wasReleasedThisFrame))
+            {
+                pressed = touchscreen.primaryTouch.press.wasPressedThisFrame;
+                screenPos = touchscreen.primaryTouch.position.ReadValue();
+                touchPointerId = (int)touchscreen.primaryTouch.touchId.ReadValue();
+            }
+            else if (mouse != null)
+            {
+                pressed = mouse.leftButton.wasPressedThisFrame;
+                screenPos = mouse.position.ReadValue();
+            }
+#else
+            if (Input.touchCount > 0)
+            {
+                var touch = Input.GetTouch(0);
+                pressed = touch.phase == TouchPhase.Began;
+                screenPos = touch.position;
+            }
+            else
+            {
+                pressed = Input.GetMouseButtonDown(0);
+                screenPos = Input.mousePosition;
+            }
+#endif
+            if (!pressed) return;
+            if (EventSystem.current != null)
+            {
+#if ENABLE_INPUT_SYSTEM
+                if (touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject()) return;
+#else
+                if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) return;
+                if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) return;
+#endif
+            }
+            var cam = Camera.main;
+            if (cam == null) return;
+            var ray = cam.ScreenPointToRay(screenPos);
+            var hits = Physics.RaycastAll(ray, 200f);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var node = hits[i].collider.transform;
+                while (node != null)
+                {
+                    int figIndex = _turnFigures.IndexOf(node.gameObject);
+                    if (figIndex >= 0)
+                    {
+                        OnHeroTapped(figIndex);
+                        return;
+                    }
+                    node = node.parent;
+                }
+            }
+        }
+
         private void RefreshTurnPanel()
         {
             if (_turnFight == null) return;
@@ -1683,12 +1794,11 @@ namespace LunarDominion.UI
                     ? (float)_turnFight.BossHp / _turnFight.BossMaxHp : 0f;
             if (_bossHpText != null)
                 _bossHpText.text = $"A.R.E.S.-09  {_turnFight.BossHp} / {_turnFight.BossMaxHp}";
-            if (_turnRoundText != null) _turnRoundText.text = $"ROUND {_turnFight.Round}";
             if (_turnIntentText != null) _turnIntentText.text = "Intent: " + _turnFight.IntentText();
             if (_turnOrderText != null)
             {
                 var order = _turnFight.GetTurnOrder();
-                var orderSb = new System.Text.StringBuilder("Order: ");
+                var orderSb = new System.Text.StringBuilder($"R{_turnFight.Round} — Order: ");
                 for (int i = 0; i < order.Count; i++)
                 {
                     var entry = order[i];
@@ -1703,20 +1813,29 @@ namespace LunarDominion.UI
             if (_turnFight.SlamCharged) ShowWarning("⚠ SEISMIC SLAM INCOMING");
             if (_turnLogText != null)
             {
-                int start = Mathf.Max(0, _turnFight.Log.Count - 4);
+                int start = Mathf.Max(0, _turnFight.Log.Count - 3);
                 var lines = new List<string>();
                 for (int i = start; i < _turnFight.Log.Count; i++) lines.Add(_turnFight.Log[i]);
                 _turnLogText.text = string.Join("\n", lines);
             }
 
-            string selectedText;
-            var selectedHero = SelectedHeroState();
-            if (_turnFight.Finished) selectedText = "";
-            else if (_turnFight.AwaitingTarget) selectedText = "Choose a target";
-            else if (selectedHero != null && _turnFight.Busy) selectedText = $"{selectedHero.Name} is acting…";
-            else if (selectedHero != null) selectedText = $"{selectedHero.Name} — choose an action";
-            else selectedText = "Enemy is acting…";
-            if (_turnSelectedText != null) _turnSelectedText.text = selectedText;
+            // The action bar belongs to the acting hero: any
+            // other state (busy, targeting, another actor, the
+            // fight over) closes it.
+            bool inputReady = !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished
+                && _turnFight.SelectedHero >= 0;
+            if (!inputReady || _barForHero != _turnFight.SelectedHero) _actionBarOpen = false;
+            if (_actionBar != null) _actionBar.SetActive(_actionBarOpen && inputReady);
+
+            // Hint line: the one thing to do right now.
+            string hintText;
+            var hintHero = SelectedHeroState();
+            if (_turnFight.Finished) hintText = "";
+            else if (_turnFight.AwaitingTarget) hintText = "Choose a target";
+            else if (!inputReady || _actionBarOpen) hintText = "";
+            else if (hintHero != null) hintText = $"Tap {ShortHeroName(hintHero.Name)} to act";
+            else hintText = "";
+            if (_turnHintText != null) _turnHintText.text = hintText;
 
             // Hero chips.
             for (int i = 0; i < _turnChipButtons.Count; i++)
@@ -1739,12 +1858,16 @@ namespace LunarDominion.UI
                         : i == _turnFight.SelectedHero ? UIHelpers.Hex("#1E4A7A")
                         : hero.Acted ? UIHelpers.Hex("#10161F") : UIHelpers.Hex("#14202F");
                 }
+                // Only the acting hero's chip is tappable.
+                btn.interactable = hero.Alive && i == _turnFight.SelectedHero
+                    && !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished;
             }
 
             // Action buttons for the selected hero.
             var selected = SelectedHeroState();
             bool canAct = selected != null && selected.Alive && !selected.Acted
-                && !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished;
+                && !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished
+                && _actionBarOpen;
             var skills = selected != null ? SkillCatalog.ForHero(selected.Member.Definition.Id) : null;
             for (int i = 0; i < _turnActionButtons.Count; i++)
             {
@@ -1893,9 +2016,11 @@ namespace LunarDominion.UI
         private void EndTurnUiCleanup()
         {
             _turnActive = false;
+            _actionBarOpen = false;
+            _barForHero = -1;
             if (_turnHudRoutine != null) { StopCoroutine(_turnHudRoutine); _turnHudRoutine = null; }
             if (_hudRoot != null) _hudRoot.SetActive(false);
-            if (_turnRoot != null) _turnRoot.SetActive(false);
+            if (_turnHud != null) _turnHud.SetActive(false);
             if (_turnTargetRow != null) _turnTargetRow.SetActive(false);
             if (_turnFight != null)
             {
