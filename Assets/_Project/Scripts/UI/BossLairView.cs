@@ -853,9 +853,10 @@ namespace LunarDominion.UI
         // lives on a wrapper, never on the imported instance (the
         // A.R.E.S. lesson: the FBX root carries Blender's axis
         // conversion — overwrite it and the model lies flat). The
-        // model faces +X as imported; the wrapper's -90 yaw maps
-        // that to the figure root's +Z, the direction both lair
-        // views face their targets.
+        // wrapper's +90 yaw maps the model's imported facing to
+        // the figure root's +Z, the direction both lair views
+        // face their targets (verified in the arena 2026-11-10:
+        // with -90 the heroes faced the camera instead).
         private bool TryAddHeroModel(GameObject fig, UnitDefinition def)
         {
             var path = HeroModelPath(def.Id);
@@ -864,7 +865,7 @@ namespace LunarDominion.UI
             if (prefab == null) return false;
             var wrap = new GameObject("HeroModel");
             wrap.transform.SetParent(fig.transform, false);
-            wrap.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+            wrap.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
             var model = Instantiate(prefab);
             model.name = "HeroModelInstance";
             model.transform.SetParent(wrap.transform, false);
@@ -909,7 +910,7 @@ namespace LunarDominion.UI
                 bool modeled = def != null && TryAddHeroModel(fig, def);
                 if (modeled)
                 {
-                    fig.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                    fig.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
                 }
                 else
                 {
