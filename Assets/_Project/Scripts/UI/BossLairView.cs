@@ -1489,9 +1489,9 @@ namespace LunarDominion.UI
             turnHudRt.offsetMax = Vector2.zero;
 
             _turnOrderText = UIHelpers.LabelInRect(_turnHud, "TurnOrder", "", 21, UIHelpers.Hex("#90CAF9"),
-                new Rect(0.22f, 0.865f, 0.78f, 0.925f), TextAnchor.MiddleCenter);
+                new Rect(0.22f, 0.78f, 0.78f, 0.84f), TextAnchor.MiddleCenter);
             _turnIntentText = UIHelpers.LabelInRect(_turnHud, "TurnIntent", "", 20, UIHelpers.Hex("#FFB74D"),
-                new Rect(0.22f, 0.815f, 0.78f, 0.86f), TextAnchor.MiddleCenter);
+                new Rect(0.22f, 0.73f, 0.78f, 0.775f), TextAnchor.MiddleCenter);
             _turnLogText = UIHelpers.LabelInRect(_turnHud, "TurnLog", "", 19, UIHelpers.Hex("#B0BEC5"),
                 new Rect(0.015f, 0.135f, 0.30f, 0.27f), TextAnchor.UpperLeft);
             _turnHintText = UIHelpers.LabelInRect(_turnHud, "TurnHint", "", 22, Color.white,
@@ -2229,9 +2229,16 @@ namespace LunarDominion.UI
             hudRt.offsetMin = Vector2.zero;
             hudRt.offsetMax = Vector2.zero;
 
-            // Boss HP bar across the top.
+            // Boss HP bar across the top — BELOW the resource row
+            // (restack 2026-11-11): at its old height (0.93–0.985)
+            // the bar sat on top of the TopBar's chip texts (they
+            // are vertically centred in the 140px bar, glyphs
+            // reaching ~0.92), hiding the BIO/ALLOY/He-3 amounts on
+            // the phone. The whole fight stack (bar, order, intent,
+            // warning) shifted down together; the fill and text are
+            // children of the background, so they move with it.
             var barBg = UIHelpers.Panel(_hudRoot, "BossHpBg", UIHelpers.Hex("#0D1420"),
-                new Vector2(0.22f, 0.93f), new Vector2(0.78f, 0.985f), Vector2.zero, Vector2.zero);
+                new Vector2(0.22f, 0.845f), new Vector2(0.78f, 0.90f), Vector2.zero, Vector2.zero);
             var fillGo = new GameObject("BossHpFill");
             fillGo.transform.SetParent(barBg.transform, false);
             var fillRt = fillGo.AddComponent<RectTransform>();
@@ -2250,9 +2257,10 @@ namespace LunarDominion.UI
             _bossHpText = UIHelpers.LabelInRect(barBg, "BossHpText", "A.R.E.S.-09", 22, Color.white,
                 new Rect(0.02f, 0.02f, 0.98f, 0.98f), TextAnchor.MiddleCenter);
 
-            // Telegraph warning, big and centre-top.
+            // Telegraph warning, big and centre-top (moved down
+            // with the 2026-11-11 restack, clear of the intent line).
             _warningText = UIHelpers.LabelInRect(_hudRoot, "Warning", "", 44, UIHelpers.Hex("#FF7043"),
-                new Rect(0.25f, 0.80f, 0.75f, 0.92f), TextAnchor.MiddleCenter);
+                new Rect(0.25f, 0.605f, 0.75f, 0.725f), TextAnchor.MiddleCenter);
             _warningText.gameObject.SetActive(false);
 
             // Hero chips along the bottom: tap a chip to dash that
