@@ -21,6 +21,12 @@ namespace LunarDominion.Core
         public int BaseAttack;
         public int BaseDefense;
 
+        // Turn order in the turn-based boss fight (2026-11-10):
+        // higher acts earlier in the round. Only heroes use it so
+        // far (boss/drone speeds live in TurnBasedBossFight);
+        // UnitStats.ScaledSpeed adds +2 per level.
+        public int BaseSpeed;
+
         // Hero (2026-11-10): a named character, not a regular troop.
         // Heroes are recruited once each (one of each, max 3), live in
         // GameState.Heroes (not the Army), and fight bosses in the lair

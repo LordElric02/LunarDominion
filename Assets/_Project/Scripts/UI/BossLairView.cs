@@ -113,6 +113,7 @@ namespace LunarDominion.UI
         private GameObject _turnRoot;
         private Text _turnRoundText;
         private Text _turnIntentText;
+        private Text _turnOrderText;
         private Text _turnLogText;
         private Text _turnSelectedText;
         private readonly List<Button> _turnActionButtons = new List<Button>();
@@ -1438,8 +1439,10 @@ namespace LunarDominion.UI
                 new Rect(0.015f, 0.85f, 0.30f, 0.99f), TextAnchor.MiddleLeft);
             _turnIntentText = UIHelpers.LabelInRect(_turnRoot, "TurnIntent", "", 24, UIHelpers.Hex("#FFB74D"),
                 new Rect(0.30f, 0.85f, 0.985f, 0.99f), TextAnchor.MiddleLeft);
+            _turnOrderText = UIHelpers.LabelInRect(_turnRoot, "TurnOrder", "", 21, UIHelpers.Hex("#90CAF9"),
+                new Rect(0.015f, 0.715f, 0.985f, 0.85f), TextAnchor.MiddleLeft);
             _turnLogText = UIHelpers.LabelInRect(_turnRoot, "TurnLog", "", 20, UIHelpers.Hex("#B0BEC5"),
-                new Rect(0.015f, 0.32f, 0.615f, 0.85f), TextAnchor.UpperLeft);
+                new Rect(0.015f, 0.32f, 0.615f, 0.715f), TextAnchor.UpperLeft);
             _turnSelectedText = UIHelpers.LabelInRect(_turnRoot, "TurnSelected", "", 22, Color.white,
                 new Rect(0.015f, 0.175f, 0.615f, 0.32f), TextAnchor.MiddleLeft);
 
@@ -1480,7 +1483,7 @@ namespace LunarDominion.UI
             chipsGo.transform.SetParent(_turnRoot.transform, false);
             var chipsRt = chipsGo.AddComponent<RectTransform>();
             chipsRt.anchorMin = new Vector2(0.635f, 0.02f);
-            chipsRt.anchorMax = new Vector2(0.985f, 0.83f);
+            chipsRt.anchorMax = new Vector2(0.985f, 0.715f);
             chipsRt.offsetMin = Vector2.zero;
             chipsRt.offsetMax = Vector2.zero;
             var chipsLayout = chipsGo.AddComponent<VerticalLayoutGroup>();
@@ -1496,6 +1499,14 @@ namespace LunarDominion.UI
                 var btn = MakePanelButton(chipsGo, "TurnChip" + i, "Hero", 21,
                     UIHelpers.Hex("#14202F"), out var label);
                 btn.onClick.AddListener(() => { if (_turnFight != null) _turnFight.SelectHero(heroIndex); });
+                // Display-only (2026-11-10): Speed sets the turn
+                // order, so chips no longer select who acts. The
+                // white disabled tint keeps the chip colours set
+                // by RefreshTurnPanel reading normally.
+                btn.interactable = false;
+                var chipColors = btn.colors;
+                chipColors.disabledColor = Color.white;
+                btn.colors = chipColors;
                 _turnChipButtons.Add(btn);
                 _turnChipLabels.Add(label);
             }
@@ -1631,6 +1642,7 @@ namespace LunarDominion.UI
                     MaxHp = Mathf.RoundToInt(UnitStats.ScaledHealth(member.Definition, level) * hpMult),
                     Atk = Mathf.RoundToInt(UnitStats.ScaledAttack(member.Definition, level) * atkMult),
                     Def = Mathf.RoundToInt(UnitStats.ScaledDefense(member.Definition, level) * defMult),
+                    Speed = UnitStats.ScaledSpeed(member.Definition, level),
                 });
             }
             return heroes;
@@ -1653,6 +1665,16 @@ namespace LunarDominion.UI
             return _turnFight.Heroes[idx];
         }
 
+        // "Commander Elena Reyes" -> "Reyes" for the order strip;
+        // drones and the boss keep their short names as-is.
+        private static string ShortHeroName(string full)
+        {
+            if (string.IsNullOrEmpty(full)) return full;
+            if (full.StartsWith("Drone") || full == "A.R.E.S.") return full;
+            int idx = full.LastIndexOf(' ');
+            return idx >= 0 ? full.Substring(idx + 1) : full;
+        }
+
         private void RefreshTurnPanel()
         {
             if (_turnFight == null) return;
@@ -1663,6 +1685,21 @@ namespace LunarDominion.UI
                 _bossHpText.text = $"A.R.E.S.-09  {_turnFight.BossHp} / {_turnFight.BossMaxHp}";
             if (_turnRoundText != null) _turnRoundText.text = $"ROUND {_turnFight.Round}";
             if (_turnIntentText != null) _turnIntentText.text = "Intent: " + _turnFight.IntentText();
+            if (_turnOrderText != null)
+            {
+                var order = _turnFight.GetTurnOrder();
+                var orderSb = new System.Text.StringBuilder("Order: ");
+                for (int i = 0; i < order.Count; i++)
+                {
+                    var entry = order[i];
+                    if (i > 0) orderSb.Append("  ▸  ");
+                    string entryLabel = ShortHeroName(entry.Label) + " " + entry.Speed;
+                    if (entry.Current) orderSb.Append($"<color=#FFD54F><b>{entryLabel}</b></color>");
+                    else if (entry.Done) orderSb.Append($"<color=#607D8B>{entryLabel}</color>");
+                    else orderSb.Append(entryLabel);
+                }
+                _turnOrderText.text = orderSb.ToString();
+            }
             if (_turnFight.SlamCharged) ShowWarning("⚠ SEISMIC SLAM INCOMING");
             if (_turnLogText != null)
             {
@@ -1673,14 +1710,12 @@ namespace LunarDominion.UI
             }
 
             string selectedText;
+            var selectedHero = SelectedHeroState();
             if (_turnFight.Finished) selectedText = "";
             else if (_turnFight.AwaitingTarget) selectedText = "Choose a target";
-            else if (_turnFight.Busy) selectedText = "A.R.E.S. is acting…";
-            else
-            {
-                var sel = SelectedHeroState();
-                selectedText = sel != null ? $"{sel.Name} — choose an action" : "A.R.E.S. is acting…";
-            }
+            else if (selectedHero != null && _turnFight.Busy) selectedText = $"{selectedHero.Name} is acting…";
+            else if (selectedHero != null) selectedText = $"{selectedHero.Name} — choose an action";
+            else selectedText = "Enemy is acting…";
             if (_turnSelectedText != null) _turnSelectedText.text = selectedText;
 
             // Hero chips.
@@ -1692,7 +1727,7 @@ namespace LunarDominion.UI
                 if (hero == null) continue;
                 var sb = new System.Text.StringBuilder();
                 sb.Append(hero.Name);
-                sb.Append($"\nHP {hero.Hp}/{hero.MaxHp}");
+                sb.Append($"\nHP {hero.Hp}/{hero.MaxHp}  SPD {hero.Speed}");
                 if (hero.Shield > 0) sb.Append($"  SHIELD {hero.Shield}");
                 if (!hero.Alive) sb.Append("\nDOWN");
                 else if (hero.Acted) sb.Append("\nACTED");
@@ -1704,7 +1739,6 @@ namespace LunarDominion.UI
                         : i == _turnFight.SelectedHero ? UIHelpers.Hex("#1E4A7A")
                         : hero.Acted ? UIHelpers.Hex("#10161F") : UIHelpers.Hex("#14202F");
                 }
-                btn.interactable = hero.Alive && !hero.Acted && !_turnFight.Busy && !_turnFight.AwaitingTarget;
             }
 
             // Action buttons for the selected hero.

@@ -30,9 +30,9 @@ namespace LunarDominion.Core
             // squads. Reyes (Infantry) counters the Mechanized War
             // Robot; Vega (Ranged) is high damage / fragile; Okafor
             // (Mechanized) is the tank.
-            list.Add(MakeHero(UnitId.HeroReyes, "Commander Elena Reyes", UnitClass.Infantry, 800, 120, 50, 500, 500, 200));
-            list.Add(MakeHero(UnitId.HeroVega, "Sergeant Marcus Vega", UnitClass.Ranged, 550, 180, 30, 500, 500, 200));
-            list.Add(MakeHero(UnitId.HeroOkafor, "Lieutenant Ada Okafor", UnitClass.Mechanized, 1200, 80, 80, 500, 500, 200));
+            list.Add(MakeHero(UnitId.HeroReyes, "Commander Elena Reyes", UnitClass.Infantry, 800, 120, 50, 50, 500, 500, 200));
+            list.Add(MakeHero(UnitId.HeroVega, "Sergeant Marcus Vega", UnitClass.Ranged, 550, 180, 30, 65, 500, 500, 200));
+            list.Add(MakeHero(UnitId.HeroOkafor, "Lieutenant Ada Okafor", UnitClass.Mechanized, 1200, 80, 80, 40, 500, 500, 200));
             // Tiers 4-6 (2026-11-10): the endgame tiers. Tiers 1-3 grow
             // ~x1.75 per tier; tiers 4-6 grow ~x2.2 per tier — the jump
             // is deliberate: a maxed (Lv 20) full Tier 6 squad is the
@@ -58,7 +58,7 @@ namespace LunarDominion.Core
         }
 
         private static UnitDefinition MakeHero(UnitId id, string name, UnitClass cls,
-            int hp, int atk, int def, int costB, int costA, int costH)
+            int hp, int atk, int def, int speed, int costB, int costA, int costH)
         {
             var unit = ScriptableObject.CreateInstance<UnitDefinition>();
             unit.Id = id;
@@ -69,6 +69,7 @@ namespace LunarDominion.Core
             unit.BaseHealth = hp;
             unit.BaseAttack = atk;
             unit.BaseDefense = def;
+            unit.BaseSpeed = speed;
             unit.BaseBiomassCost = costB;
             unit.BaseAlloyCost = costA;
             unit.BaseHelium3Cost = costH;

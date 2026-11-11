@@ -22,6 +22,7 @@ namespace LunarDominion.Boss
         public int Hp;
         public int Atk;
         public int Def;
+        public int Speed;
         public int Shield;
         public int ShieldRounds;
         public bool Alive = true;
@@ -52,22 +53,35 @@ namespace LunarDominion.Boss
         public int MaxHp;
         public int Hp;
         public int Atk;
+        public int Speed;
         public bool Alive = true;
         public string Name;
+    }
+
+    /// <summary>One entry of the round's turn order for the
+    /// lair's order strip.</summary>
+    public class TurnOrderEntry
+    {
+        public string Label;
+        public int Speed;
+        public bool Current;
+        public bool Done;
     }
 
     /// <summary>The turn-based A.R.E.S.-09 boss fight
     /// (2026-11-10 spec, replacing the real-time mode as the
     /// arena fight; the real-time classes stay in the project,
-    /// dormant). Round structure: each living hero acts once in
-    /// the order the player chooses (Attack / Defend / 3 skills on
-    /// round cooldowns), then the boss acts once — a basic strike
-    /// at the weakest hero, Thermal Sweep every 3rd turn, or the
-    /// telegraphed Seismic Slam (charged one turn, landing the
-    /// next) — then drones shoot and the round ends (Phase 2 core
-    /// venting). 20 rounds; the boss still standing at the cap is
-    /// a timeout defeat. All damage flows through
-    /// CombatService.Damage; buffs scale its inputs.</summary>
+    /// dormant). Round structure: a speed-ordered queue — each
+    /// round, heroes, the boss and any drones act in Speed order
+    /// (heroes gain +2 Speed per level; the boss gains +2 per
+    /// ladder level) — the player choosing each hero's action
+    /// when their slot comes up (Attack / Defend / 3 skills on
+    /// round cooldowns), the boss answering with its skill
+    /// rotation (basic strike at the weakest hero, Thermal Sweep
+    /// every 3rd boss turn, telegraphed Seismic Slam, drones at
+    /// 50% HP, Phase 2 core venting). 20 rounds; the boss still
+    /// standing at the cap is a timeout defeat. All damage flows
+    /// through CombatService.Damage; buffs scale its inputs.</summary>
     public class TurnBasedBossFight : MonoBehaviour
     {
         // ---- Tuning (the spec's numbers) ----
@@ -95,6 +109,7 @@ namespace LunarDominion.Boss
         private const float VentVulnMult = 1.25f;
         private const int DroneBaseHp = 170;
         private const float DroneAtkFrac = 0.20f;
+        private const int DroneSpeed = 55;
 
         public readonly List<TurnHeroState> Heroes = new List<TurnHeroState>();
         public readonly List<TurnDroneState> Drones = new List<TurnDroneState>();
@@ -105,6 +120,12 @@ namespace LunarDominion.Boss
         public int BossAtk { get; private set; }
         public int BossDef { get; private set; }
         public int BossLevel { get; private set; }
+
+        /// <summary>Turn-order speed of the boss: 45 + 2 per
+        /// ladder level (L1 47, L15 75) — early levels act late,
+        /// the capstone cuts in ahead of all but the fastest
+        /// heroes.</summary>
+        public int BossSpeed => 45 + 2 * BossLevel;
         public int Round { get; private set; }
         public bool Finished { get; private set; }
         public bool Busy { get; private set; }
@@ -143,6 +164,21 @@ namespace LunarDominion.Boss
         private TurnHeroState _tauntHero;
         private bool _pendingAttack;
         private int _pendingSkillSlot = -1;
+
+        // Speed-ordered turn queue (2026-11-10): a round is one
+        // pass through the queue — heroes, the boss and drones
+        // interleaved by Speed instead of heroes-then-boss.
+        private enum ActorKind { Hero, Boss, Drone }
+
+        private struct TurnActor
+        {
+            public ActorKind Kind;
+            public int Index;
+            public int Speed;
+        }
+
+        private readonly List<TurnActor> _order = new List<TurnActor>();
+        private int _orderStep;
 
         private int BossEffAtk => Mathf.RoundToInt(BossAtk * (_bossAtkDebuffRounds > 0 ? SuppressAtkMult : 1f));
         private int BossEffDef => Mathf.RoundToInt(BossDef * (_bossDefDebuffRounds > 0 ? ArmorBreakDefMult : 1f));
@@ -194,24 +230,123 @@ namespace LunarDominion.Boss
             foreach (var hero in Heroes)
             {
                 hero.Acted = false;
-                hero.Defending = false;
+                // Defending is NOT cleared here: it lasts until
+                // the hero's own next turn (AdvanceToNextActor
+                // clears it when their slot comes up).
                 for (int i = 0; i < hero.Cooldowns.Length; i++)
                 {
                     if (hero.Cooldowns[i] > 0) hero.Cooldowns[i]--;
                 }
             }
-            SelectedHero = FirstUnacted();
+            BuildOrder();
+            _orderStep = 0;
             AddLog($"— Round {Round} —");
             OnChanged?.Invoke();
+            AdvanceToNextActor();
         }
 
-        private int FirstUnacted()
+        // The round's turn order: everyone who will act, fastest
+        // first. Ties go heroes, then the boss, then drones;
+        // squad order breaks the rest.
+        private void BuildOrder()
         {
+            _order.Clear();
             for (int i = 0; i < Heroes.Count; i++)
             {
-                if (Heroes[i].Alive && !Heroes[i].Acted) return i;
+                if (Heroes[i].Alive)
+                    _order.Add(new TurnActor { Kind = ActorKind.Hero, Index = i, Speed = Heroes[i].Speed });
             }
-            return -1;
+            _order.Add(new TurnActor { Kind = ActorKind.Boss, Index = -1, Speed = BossSpeed });
+            for (int i = 0; i < Drones.Count; i++)
+            {
+                if (Drones[i].Alive)
+                    _order.Add(new TurnActor { Kind = ActorKind.Drone, Index = i, Speed = Drones[i].Speed });
+            }
+            _order.Sort((a, b) =>
+            {
+                int bySpeed = b.Speed.CompareTo(a.Speed);
+                if (bySpeed != 0) return bySpeed;
+                int byKind = a.Kind.CompareTo(b.Kind);
+                if (byKind != 0) return byKind;
+                return a.Index.CompareTo(b.Index);
+            });
+        }
+
+        /// <summary>The current turn order for the lair's order
+        /// strip (labels are full names; the view shortens
+        /// them).</summary>
+        public List<TurnOrderEntry> GetTurnOrder()
+        {
+            var list = new List<TurnOrderEntry>();
+            for (int i = 0; i < _order.Count; i++)
+            {
+                var actor = _order[i];
+                string label = actor.Kind == ActorKind.Hero ? Heroes[actor.Index].Name
+                    : actor.Kind == ActorKind.Boss ? "A.R.E.S."
+                    : Drones[actor.Index].Name;
+                list.Add(new TurnOrderEntry
+                {
+                    Label = label,
+                    Speed = actor.Speed,
+                    Current = i == _orderStep && !Finished,
+                    Done = i < _orderStep,
+                });
+            }
+            return list;
+        }
+
+        // Step the queue: hero slots wait for the player's order;
+        // boss and drone slots run their actions and step on.
+        // Dead heroes are skipped (they may have fallen earlier
+        // in the round, before their slot came up).
+        private void AdvanceToNextActor()
+        {
+            if (Finished) return;
+            while (_orderStep < _order.Count)
+            {
+                var actor = _order[_orderStep];
+                if (actor.Kind == ActorKind.Hero)
+                {
+                    var hero = Heroes[actor.Index];
+                    if (!hero.Alive)
+                    {
+                        _orderStep++;
+                        continue;
+                    }
+                    SelectedHero = actor.Index;
+                    // A fresh turn ends this hero's Defend.
+                    hero.Defending = false;
+                    Busy = false;
+                    OnChanged?.Invoke();
+                    return;
+                }
+                if (actor.Kind == ActorKind.Boss)
+                {
+                    SelectedHero = -1;
+                    Busy = true;
+                    OnChanged?.Invoke();
+                    StartCoroutine(BossActionRoutine());
+                    return;
+                }
+                var drone = Drones[actor.Index];
+                if (!drone.Alive)
+                {
+                    _orderStep++;
+                    continue;
+                }
+                SelectedHero = -1;
+                Busy = true;
+                OnChanged?.Invoke();
+                StartCoroutine(DroneTurnRoutine(drone));
+                return;
+            }
+            StartCoroutine(RoundEndRoutine());
+        }
+
+        private void CompleteHeroAction()
+        {
+            _orderStep++;
+            AdvanceToNextActor();
         }
 
         private bool AllHeroesDown()
@@ -232,31 +367,15 @@ namespace LunarDominion.Boss
             return false;
         }
 
-        private void AdvanceAfterAction()
-        {
-            if (Finished) return;
-            int next = FirstUnacted();
-            if (next >= 0)
-            {
-                SelectedHero = next;
-                Busy = false;
-                OnChanged?.Invoke();
-            }
-            else
-            {
-                StartCoroutine(BossPhaseRoutine());
-            }
-        }
-
         // ================= Player input (from the view) =================
 
         public void SelectHero(int index)
         {
+            // Turn order is set by Speed now: the acting hero is
+            // whoever's slot it is. Chip taps no longer reorder —
+            // this stays only so the view's wiring is harmless.
             if (Finished || Busy || AwaitingTarget) return;
-            if (index < 0 || index >= Heroes.Count) return;
-            var hero = Heroes[index];
-            if (!hero.Alive || hero.Acted) return;
-            SelectedHero = index;
+            if (index != SelectedHero) return;
             OnChanged?.Invoke();
         }
 
@@ -286,7 +405,7 @@ namespace LunarDominion.Boss
             AddLog($"{hero.Name} defends (half damage until their next turn).");
             StartCoroutine(FlashRoutine(hero.Figure.transform, 1.06f));
             OnChanged?.Invoke();
-            AdvanceAfterAction();
+            CompleteHeroAction();
         }
 
         public void ChooseSkill(int slot)
@@ -401,7 +520,7 @@ namespace LunarDominion.Boss
             }
             hero.Acted = true;
             OnChanged?.Invoke();
-            AdvanceAfterAction();
+            CompleteHeroAction();
         }
 
         private IEnumerator SkillRoutine(TurnHeroState hero, int slot, TurnDroneState drone)
@@ -518,7 +637,7 @@ namespace LunarDominion.Boss
             }
             hero.Acted = true;
             OnChanged?.Invoke();
-            AdvanceAfterAction();
+            CompleteHeroAction();
         }
 
         private int ConsumeDeadeye(TurnHeroState hero, int dmg)
@@ -601,13 +720,15 @@ namespace LunarDominion.Boss
             return LowestHpHero();
         }
 
-        // ================= Boss phase =================
+        // ================= Boss + drone turns =================
 
-        private IEnumerator BossPhaseRoutine()
+        // The boss's slot in the turn order: summon drones first
+        // if Phase 2 just triggered, then one action (the
+        // telegraphed slam, the every-3rd-turn sweep, or a basic
+        // strike), then the next slam starts charging on cadence.
+        private IEnumerator BossActionRoutine()
         {
-            Busy = true;
-            OnChanged?.Invoke();
-            yield return new WaitForSeconds(0.5f);
+            yield return new WaitForSeconds(0.45f);
             if (Finished) yield break;
 
             if (_pendingSummon)
@@ -636,23 +757,6 @@ namespace LunarDominion.Boss
                 yield return BossBasicRoutine();
             }
             if (Finished) yield break;
-            if (AllHeroesDown())
-            {
-                StartCoroutine(FinishRoutine(false, false));
-                yield break;
-            }
-
-            // Drones shoot the weakest hero.
-            foreach (var drone in Drones)
-            {
-                if (!drone.Alive) continue;
-                yield return DroneShootRoutine(drone);
-                if (AllHeroesDown())
-                {
-                    StartCoroutine(FinishRoutine(false, false));
-                    yield break;
-                }
-            }
 
             // Telegraph: the slam charges on turns 4, 9, 14, 19
             // and lands on 5, 10, 15, 20.
@@ -663,7 +767,28 @@ namespace LunarDominion.Boss
                 OnChanged?.Invoke();
             }
 
-            yield return RoundEndRoutine();
+            _orderStep++;
+            if (AllHeroesDown())
+            {
+                StartCoroutine(FinishRoutine(false, false));
+                yield break;
+            }
+            AdvanceToNextActor();
+        }
+
+        // A drone's slot in the turn order: one shot at the
+        // weakest hero. Drones summoned this round join the
+        // order from the next round.
+        private IEnumerator DroneTurnRoutine(TurnDroneState drone)
+        {
+            yield return DroneShootRoutine(drone);
+            _orderStep++;
+            if (AllHeroesDown())
+            {
+                StartCoroutine(FinishRoutine(false, false));
+                yield break;
+            }
+            AdvanceToNextActor();
         }
 
         private IEnumerator BossBasicRoutine()
@@ -773,6 +898,7 @@ namespace LunarDominion.Boss
                     Name = names[i],
                     MaxHp = Mathf.RoundToInt(DroneBaseHp * Mathf.Pow(1.3f, BossLevel - 1) * _enemyScale),
                     Atk = Mathf.RoundToInt(BossAtk * DroneAtkFrac),
+                    Speed = DroneSpeed,
                 };
                 drone.Hp = drone.MaxHp;
                 Drones.Add(drone);

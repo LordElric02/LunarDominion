@@ -22,6 +22,15 @@ namespace LunarDominion.Units
             return (int)Math.Round(def.BaseDefense * (1f + 0.05f * (level - 1)));
         }
 
+        /// <summary>Turn-order speed for the turn-based boss
+        /// fight: base + 2 per level, so heroes get quicker as
+        /// they level (2026-11-10). Only heroes carry a meaningful
+        /// BaseSpeed; regular troops stay 0 (unused).</summary>
+        public static int ScaledSpeed(UnitDefinition def, int level)
+        {
+            return def.BaseSpeed + 2 * (level - 1);
+        }
+
         /// <summary>XP to go from this level to the next (GDD §6).</summary>
         public static int XpToNextLevel(int level)
         {
