@@ -68,8 +68,8 @@ namespace LunarDominion.Boss
                 spot.color = new Color(0.96f, 0.97f, 1.0f);
                 spot.intensity = 3.2f;
                 spot.range = 46f;
-                spot.spotAngle = 22f;
-                spot.innerSpotAngle = 12f;
+                spot.spotAngle = 17f;
+                spot.innerSpotAngle = 9f;
                 // A spotlight shines along its transform's +Z —
                 // rotate the light to point straight down the shaft.
                 lightGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
@@ -89,7 +89,11 @@ namespace LunarDominion.Boss
                 {
                     var mat = new Material(unlit);
                     mat.SetTexture("_BaseMap", gradient);
-                    mat.SetColor("_BaseColor", new Color(0.75f, 0.82f, 1.0f, 0.16f));
+                    // Alpha 0.09 (was 0.16, 2026-11-11): at 0.16 the
+                    // cones read as solid floating objects; lighter
+                    // plus the stronger gradient fade below makes
+                    // them read as light falling through the cracks.
+                    mat.SetColor("_BaseColor", new Color(0.75f, 0.82f, 1.0f, 0.09f));
                     mat.SetFloat("_Surface", 1f);          // transparent
                     mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
                     mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One); // additive
@@ -180,7 +184,18 @@ namespace LunarDominion.Boss
             {
                 var mat = new Material(shader);
                 mat.SetTexture("_BaseMap", MakeDotTexture());
-                mat.SetColor("_BaseColor", new Color(0.8f, 0.85f, 1.0f, 0.16f));
+                mat.SetColor("_BaseColor", new Color(0.8f, 0.85f, 1.0f, 0.5f));
+                // Transparent setup (2026-11-11 fix): without it
+                // the material stays OPAQUE, the dot texture's
+                // alpha is ignored, and every particle renders as
+                // a solid pale SQUARE (the texture's RGB is white
+                // everywhere; all the softness lives in alpha).
+                // Mirrors the shaft-cone recipe that works.
+                mat.SetFloat("_Surface", 1f);
+                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One); // additive
+                mat.SetInt("_ZWrite", 0);
+                mat.renderQueue = 3000;
                 renderer.material = mat;
             }
         }
@@ -217,7 +232,16 @@ namespace LunarDominion.Boss
                 {
                     var mat = new Material(shader);
                     mat.SetTexture("_BaseMap", MakeDotTexture());
-                    mat.SetColor("_BaseColor", new Color(0.75f, 0.8f, 0.85f, 0.20f));
+                    mat.SetColor("_BaseColor", new Color(0.75f, 0.8f, 0.85f, 1.0f));
+                    // Transparent setup (2026-11-11 fix, same as
+                    // the dust): normal alpha blending for steam,
+                    // so the soft dot texture reads as mist puffs
+                    // instead of solid squares.
+                    mat.SetFloat("_Surface", 1f);
+                    mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    mat.SetInt("_ZWrite", 0);
+                    mat.renderQueue = 3000;
                     renderer.material = mat;
                 }
                 _steamSystems.Add(ps);
@@ -352,7 +376,7 @@ namespace LunarDominion.Boss
             for (int y = 0; y < 64; y++)
             {
                 float t = y / 63f;
-                float a = Mathf.Pow(t, 1.6f);
+                float a = Mathf.Pow(t, 2.4f);
                 tex.SetPixel(0, y, new Color(1f, 1f, 1f, a));
             }
             tex.Apply();
