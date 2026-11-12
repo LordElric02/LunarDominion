@@ -1629,8 +1629,14 @@ namespace LunarDominion.UI
         // back to its normal anchors when they return.
         private void SetFightChrome(bool fight)
         {
-            if (_topBarGo == null) _topBarGo = GameObject.Find("TopBarView");
-            if (_bottomNavGo == null) _bottomNavGo = GameObject.Find("BottomNavView");
+            // The panels are named "TopBar"/"BottomNav" and are
+            // children of the CANVAS — the "TopBarView"/
+            // "BottomNavView" objects are empty component hosts
+            // (both views parent their UI to the canvas in Build).
+            // The first version of this method hid the hosts and
+            // changed nothing on screen (Patrick, 2026-11-11).
+            if (_topBarGo == null) _topBarGo = GameObject.Find("TopBar");
+            if (_bottomNavGo == null) _bottomNavGo = GameObject.Find("BottomNav");
             if (_topBarGo != null) _topBarGo.SetActive(!fight);
             if (_bottomNavGo != null) _bottomNavGo.SetActive(!fight);
             if (_bossHpText != null && _bossHpText.transform.parent is RectTransform barRt)
