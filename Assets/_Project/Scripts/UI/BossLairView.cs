@@ -1683,12 +1683,16 @@ namespace LunarDominion.UI
             // re-aimed in the 2x boss package (2026-11-11) so the
             // 17.8-unit boss stays in frame — but the camera stays
             // at z -26, INSIDE the wall ring: z -40 put it inside
-            // the south wall and the view was solid rock.
+            // the south wall and the view was solid rock. Aimed a
+            // touch higher again the same evening: at 6x the boss's
+            // head reached into the boss HP bar's screen band, so
+            // the aim point rose (y 6.5) and the boss sits ~4%
+            // lower in frame, head clear of the bar.
             var cam = Camera.main;
             if (cam != null)
             {
                 cam.transform.position = new Vector3(500f, 15f, -26f);
-                cam.transform.LookAt(new Vector3(500f, 5f, 5f));
+                cam.transform.LookAt(new Vector3(500f, 6.5f, 5f));
             }
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
             SetBossBarFraction(1f);
