@@ -350,12 +350,15 @@ namespace LunarDominion.UI
             // terrain regression lesson: never force rotation on an
             // imported FBX; preserve it). The FBX faces +X as
             // imported; the wrapper's -90 yaw maps that to the
-            // fight root's forward. Scale 3x (~8.9 units tall).
+            // fight root's forward. Scale 6x (~17.8 units tall —
+            // doubled 2026-11-11 at Patrick's request so the boss
+            // towers over the ~3.2-unit heroes; the arena ceiling
+            // was raised in LavaTube v3 to fit).
             _aresVisual.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
             var aresModel = Instantiate(aresPrefab);
             aresModel.name = "Ares09";
             aresModel.transform.SetParent(_aresVisual.transform, false);
-            aresModel.transform.localScale = Vector3.one * 3f;
+            aresModel.transform.localScale = Vector3.one * 6f;
             foreach (var collider in aresModel.GetComponentsInChildren<Collider>())
                 Destroy(collider);
             _aresVisualOrigPos = _aresVisual.transform.localPosition;
@@ -482,11 +485,13 @@ namespace LunarDominion.UI
                 if (realtime)
                 {
                     // INSIDE the tube: the arena is an enclosed set
-                    // (walls r~29.5, ceiling ~18), so the camera sits
-                    // within it — south end, above the heroes,
-                    // looking down the tube toward the boss.
-                    cam.transform.position = new Vector3(500f, 9f, -24f);
-                    cam.transform.LookAt(new Vector3(500f, 2.5f, 4f));
+                    // (walls r~29.5, ceiling ~27 in v3), so the camera
+                    // sits within it — south end, above the heroes,
+                    // looking down the tube toward the boss. Pulled
+                    // back in the 2x boss package (2026-11-11) so the
+                    // 17.8-unit boss stays framed.
+                    cam.transform.position = new Vector3(500f, 11f, -32f);
+                    cam.transform.LookAt(new Vector3(500f, 4.5f, 6f));
                 }
                 else
                 {
@@ -1672,12 +1677,14 @@ namespace LunarDominion.UI
             // camera up and back a little and aim it down the
             // tube so the whole squad reads clearly above the
             // slim HUD. PresentSceneForMode restores the
-            // standard framings on the next Show.
+            // standard framings on the next Show. Pulled further
+            // back and raised in the 2x boss package (2026-11-11)
+            // so the 17.8-unit boss stays in frame.
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.transform.position = new Vector3(500f, 13f, -26f);
-                cam.transform.LookAt(new Vector3(500f, 0.5f, 9f));
+                cam.transform.position = new Vector3(500f, 16f, -40f);
+                cam.transform.LookAt(new Vector3(500f, 3.5f, 4f));
             }
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
             SetBossBarFraction(1f);

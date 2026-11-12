@@ -58,7 +58,7 @@ namespace LunarDominion.Boss
             var gradient = MakeGradientTexture();
             for (int i = 0; i < CrackXZ.Length; i++)
             {
-                Vector3 top = new Vector3(CrackXZ[i].x, 15.5f, CrackXZ[i].y);
+                Vector3 top = new Vector3(CrackXZ[i].x, 25.0f, CrackXZ[i].y);
                 // Spotlight at the crack, aimed straight down.
                 var lightGo = new GameObject("ShaftLight_" + (i + 1));
                 lightGo.transform.SetParent(transform, false);
@@ -67,7 +67,7 @@ namespace LunarDominion.Boss
                 spot.type = LightType.Spot;
                 spot.color = new Color(0.96f, 0.97f, 1.0f);
                 spot.intensity = 3.2f;
-                spot.range = 32f;
+                spot.range = 46f;
                 spot.spotAngle = 22f;
                 spot.innerSpotAngle = 12f;
                 // A spotlight shines along its transform's +Z —
@@ -79,10 +79,10 @@ namespace LunarDominion.Boss
                     spot.shadows = LightShadows.Soft;
                 }
                 // Fake volumetric cone: additive, gradient alpha.
-                var cone = MakeCone(5.0f, 15.0f, 12);
+                var cone = MakeCone(6.5f, 24.0f, 12);
                 cone.name = "ShaftCone_" + (i + 1);
                 cone.transform.SetParent(transform, false);
-                cone.transform.localPosition = new Vector3(CrackXZ[i].x, 7.5f, CrackXZ[i].y);
+                cone.transform.localPosition = new Vector3(CrackXZ[i].x, 12.2f, CrackXZ[i].y);
                 var renderer = cone.GetComponent<MeshRenderer>();
                 var unlit = Shader.Find("Universal Render Pipeline/Unlit");
                 if (unlit != null && renderer != null)
@@ -103,12 +103,12 @@ namespace LunarDominion.Boss
             // with the black walls + a warm key over the hero side.
             var rimGo = new GameObject("BossRimLight");
             rimGo.transform.SetParent(transform, false);
-            rimGo.transform.localPosition = new Vector3(0f, 8f, 22f);
+            rimGo.transform.localPosition = new Vector3(0f, 13f, 26f);
             var rim = rimGo.AddComponent<Light>();
             rim.type = LightType.Point;
             rim.color = new Color(0.22f, 0.33f, 0.55f);
             rim.intensity = 0.9f;
-            rim.range = 30f;
+            rim.range = 44f;
             var heroGo = new GameObject("HeroKeyLight");
             heroGo.transform.SetParent(transform, false);
             heroGo.transform.localPosition = new Vector3(0f, 6f, -12f);
@@ -160,7 +160,7 @@ namespace LunarDominion.Boss
         {
             var go = new GameObject("LairDust");
             go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0f, 6f, 0f);
+            go.transform.localPosition = new Vector3(0f, 10f, 0f);
             var ps = go.AddComponent<ParticleSystem>();
             var main = ps.main;
             main.loop = true;
@@ -173,7 +173,7 @@ namespace LunarDominion.Boss
             emission.rateOverTime = 24f;
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(50f, 11f, 50f);
+            shape.scale = new Vector3(50f, 20f, 50f);
             var renderer = go.GetComponent<ParticleSystemRenderer>();
             var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
             if (shader != null && renderer != null)

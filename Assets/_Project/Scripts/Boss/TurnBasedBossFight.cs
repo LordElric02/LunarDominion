@@ -502,12 +502,13 @@ namespace LunarDominion.Boss
             Vector3 targetPos = drone != null ? drone.Figure.transform.position : _bossRoot.position;
             if (hero.Class == UnitClass.Ranged)
             {
-                yield return BoltRoutine(FigureChest(hero.Figure.transform), targetPos + Vector3.up * 2.2f,
+                yield return BoltRoutine(FigureChest(hero.Figure.transform), targetPos + Vector3.up * (drone != null ? 2.2f : 8.5f),
                     new Color(0.6f, 0.9f, 1f));
             }
             else
             {
-                yield return LungeRoutine(hero.Figure.transform, hero.Home, targetPos);
+                yield return LungeRoutine(hero.Figure.transform, hero.Home, targetPos,
+                    drone != null ? 2.6f : 5.2f);
             }
             int dmg = CombatService.Damage(HeroAtk(hero), drone != null ? 0 : BossEffDef,
                 hero.Class, UnitClass.Mechanized, hero.Level, BossLevel);
@@ -567,7 +568,8 @@ namespace LunarDominion.Boss
                 case HeroSkillId.PrecisionStrike:
                 {
                     yield return LungeRoutine(hero.Figure.transform, hero.Home,
-                        drone != null ? drone.Figure.transform.position : bossPos);
+                        drone != null ? drone.Figure.transform.position : bossPos,
+                        drone != null ? 2.6f : 5.2f);
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * PrecisionMult),
                         drone != null ? 0 : BossEffDef / 2,
@@ -581,7 +583,7 @@ namespace LunarDominion.Boss
                 case HeroSkillId.PiercingShot:
                 {
                     yield return BoltRoutine(FigureChest(hero.Figure.transform),
-                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * 2.2f,
+                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         new Color(1f, 0.75f, 0.35f));
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * PiercingMult), 0,
@@ -593,7 +595,7 @@ namespace LunarDominion.Boss
                 }
 
                 case HeroSkillId.SuppressingFire:
-                    yield return BoltRoutine(FigureChest(hero.Figure.transform), bossPos + Vector3.up * 2.2f,
+                    yield return BoltRoutine(FigureChest(hero.Figure.transform), bossPos + Vector3.up * 8.5f,
                         new Color(1f, 0.55f, 0.2f));
                     _bossAtkDebuffRounds = SuppressRounds;
                     AddLog($"{hero.Name} uses SUPPRESSING FIRE — boss ATK down for {SuppressRounds} rounds.");
@@ -624,7 +626,8 @@ namespace LunarDominion.Boss
                 case HeroSkillId.ArmorBreak:
                 {
                     yield return LungeRoutine(hero.Figure.transform, hero.Home,
-                        drone != null ? drone.Figure.transform.position : bossPos);
+                        drone != null ? drone.Figure.transform.position : bossPos,
+                        drone != null ? 2.6f : 5.2f);
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * ArmorBreakMult),
                         drone != null ? 0 : BossEffDef,
@@ -861,7 +864,7 @@ namespace LunarDominion.Boss
             Vector3 home = _bossRoot.position;
             Vector3 dir = target.Figure.transform.position - home;
             dir.y = 0f;
-            Vector3 stop = home + dir.normalized * 1.8f;
+            Vector3 stop = home + dir.normalized * 2.4f;
             yield return MoveRoutine(_bossRoot, home, stop, 0.18f);
             int dmg = CombatService.Damage(BossEffAtk, target.EffDef,
                 UnitClass.Mechanized, target.Class, BossLevel, target.Level);
@@ -877,7 +880,7 @@ namespace LunarDominion.Boss
             Vector3 bossPos = _bossRoot.position;
             Vector3 heroPos = Heroes.Count > 0 ? Heroes[0].Home : bossPos + Vector3.back * 20f;
             Vector3 mid = (bossPos + heroPos) / 2f;
-            mid.y = 2.0f;
+            mid.y = 7.0f;
             var beam = GameObject.CreatePrimitive(PrimitiveType.Cube);
             beam.name = "TurnSweepBeam";
             Destroy(beam.GetComponent<Collider>());
@@ -892,8 +895,8 @@ namespace LunarDominion.Boss
                 rend.material = mat;
             }
             beam.transform.position = mid;
-            beam.transform.LookAt(new Vector3(heroPos.x, 2.0f, heroPos.z));
-            beam.transform.localScale = new Vector3(11f, 1.4f, Vector3.Distance(bossPos, heroPos));
+            beam.transform.LookAt(new Vector3(heroPos.x, 1.2f, heroPos.z));
+            beam.transform.localScale = new Vector3(14f, 2.4f, Vector3.Distance(bossPos, heroPos));
             yield return new WaitForSeconds(0.28f);
             Destroy(beam);
             int atk = Mathf.RoundToInt(BossEffAtk * SweepAtkMult);
@@ -951,7 +954,7 @@ namespace LunarDominion.Boss
                 fig.name = "TurnDrone_" + (i + 1);
                 fig.transform.SetParent(transform, false);
                 fig.SetActive(true);
-                Vector3 home = bossPos + new Vector3(i == 0 ? -3.4f : 3.4f, 3.4f, -2.2f);
+                Vector3 home = bossPos + new Vector3(i == 0 ? -6.8f : 6.8f, 4.2f, -2.6f);
                 fig.transform.position = home + Vector3.up * 5f;
                 var drone = new TurnDroneState
                 {
@@ -1053,14 +1056,19 @@ namespace LunarDominion.Boss
             OnChanged?.Invoke();
             if (victory && _bossVisual != null)
             {
+                // Defeat slump: at 6x scale the old 75-degree tip
+                // would sweep the 17.8-unit body through the heroes
+                // or the wall, so it crumples instead — a 30-degree
+                // lean with a deeper sink (the full rig collapse
+                // arrives with the Phase 3 animation pass).
                 float t = 0f;
                 while (t < 1.2f)
                 {
                     t += Time.deltaTime;
                     float p = Mathf.Clamp01(t / 1.2f);
-                    _bossVisual.localRotation = _bossVisualOrigRot * Quaternion.Euler(75f * p, 0f, 0f);
+                    _bossVisual.localRotation = _bossVisualOrigRot * Quaternion.Euler(30f * p, 0f, 0f);
                     Vector3 pos = _bossVisualOrigPos;
-                    pos.y = _bossVisualOrigPos.y - 1.6f * p;
+                    pos.y = _bossVisualOrigPos.y - 3.0f * p;
                     _bossVisual.localPosition = pos;
                     yield return null;
                 }
@@ -1097,13 +1105,18 @@ namespace LunarDominion.Boss
             target.position = to;
         }
 
-        private IEnumerator LungeRoutine(Transform fig, Vector3 home, Vector3 targetPos)
+        private IEnumerator LungeRoutine(Transform fig, Vector3 home, Vector3 targetPos,
+            float stopGap = 2.6f)
         {
             Vector3 dir = targetPos - home;
             dir.y = 0f;
             float dist = dir.magnitude;
             if (dist < 0.01f) yield break;
-            Vector3 stop = home + dir.normalized * Mathf.Max(0f, dist - 2.6f);
+            // stopGap is measured back from the target's centre:
+            // 2.6 for drones, 5.2 for the boss — at 6x scale its
+            // toes reach ~2.9 units from the root centre, so the
+            // old gap put the hero inside the boss's feet.
+            Vector3 stop = home + dir.normalized * Mathf.Max(0f, dist - stopGap);
             yield return MoveRoutine(fig, home, stop, 0.20f);
             yield return new WaitForSeconds(0.07f);
             yield return MoveRoutine(fig, stop, home, 0.20f);
@@ -1219,7 +1232,7 @@ namespace LunarDominion.Boss
                 if (_slamCharged && _bossRoot != null)
                 {
                     _slamRing.transform.position = _bossRoot.position + Vector3.up * 0.12f;
-                    _slamRing.Show(7f, 0.72f + 0.28f * Mathf.Sin(Time.time * 4f));
+                    _slamRing.Show(8.5f, 0.72f + 0.28f * Mathf.Sin(Time.time * 4f));
                 }
                 else if (!_slamCharged)
                 {
