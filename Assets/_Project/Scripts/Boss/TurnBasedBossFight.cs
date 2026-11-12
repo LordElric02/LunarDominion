@@ -832,7 +832,7 @@ namespace LunarDominion.Boss
             _recoil = Mathf.Min(1f, _recoil + 0.55f);
             if (dmg > 0 && _bossRoot != null)
                 SpawnDamageNumber(_bossRoot.position + Vector3.up * 12.2f, dmg,
-                    new Color(1f, 0.95f, 0.6f), 2.6f);
+                    new Color(1f, 0.95f, 0.6f), 0.7f);
             AddLog($"{hero.Name} — {label}: {dmg} dmg" + (_ventActive ? " (core exposed!)" : "") + ".");
             if (!_phase2 && BossHp > 0 && BossHp <= BossMaxHp / 2)
             {
@@ -854,7 +854,7 @@ namespace LunarDominion.Boss
             RefreshDroneBar(drone);
             if (dmg > 0 && drone.Figure != null)
                 SpawnDamageNumber(drone.Figure.transform.position + Vector3.up * 2.2f, dmg,
-                    new Color(1f, 0.8f, 0.4f), 0.85f);
+                    new Color(1f, 0.8f, 0.4f), 0.28f);
             AddLog($"{hero.Name} — {label} {drone.Name}: {dmg} dmg.");
             if (drone.Hp <= 0 && drone.Alive)
             {
@@ -939,7 +939,7 @@ namespace LunarDominion.Boss
             StartCoroutine(FlashRoutine(hero.Figure.transform, 1.10f));
             if (dmg > 0)
                 SpawnDamageNumber(hero.Figure.transform.position + Vector3.up * 4.1f, dmg,
-                    new Color(1f, 0.45f, 0.3f), 1.15f);
+                    new Color(1f, 0.45f, 0.3f), 0.38f);
             if (hero.Hp <= 0)
             {
                 hero.Alive = false;
@@ -1399,7 +1399,12 @@ namespace LunarDominion.Boss
         /// <summary>A floating damage number: rises and fades
         /// over ~0.9s, facing the (static) fight camera. TextMesh
         /// uses the built-in font material — no runtime shader
-        /// lookup, so nothing new can be stripped on Android.</summary>
+        /// lookup, so nothing new can be stripped on Android.
+        /// NOTE: characterSize renders ~5x larger than its face
+        /// value at fontSize 64 (measured from Patrick's L2
+        /// video: 2.6 produced digits a third of the screen
+        /// tall), so the sizes at the call sites are small:
+        /// boss 0.7, heroes 0.38, drones 0.28.</summary>
         private void SpawnDamageNumber(Vector3 pos, int dmg, Color color, float size)
         {
             var go = new GameObject("DamageNumber");
