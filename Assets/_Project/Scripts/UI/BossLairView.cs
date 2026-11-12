@@ -439,9 +439,20 @@ namespace LunarDominion.UI
             eye.name = "DroneEye";
             eye.transform.SetParent(root.transform, false);
             eye.transform.localPosition = new Vector3(0f, 0f, 0.45f);
-            eye.transform.localScale = Vector3.one * 0.35f;
+            eye.transform.localScale = Vector3.one * 0.5f;
             SetGlow(eye.GetComponent<Renderer>(), new Color(1f, 0.2f, 0.1f));
             Destroy(eye.GetComponent<Collider>());
+            // Glowing under-ring (2026-11-11, with the drone
+            // size-up in TurnBasedBossFight): a halo disc under
+            // the body, readable from every angle — the front
+            // eye alone was easy to miss.
+            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            ring.name = "DroneGlowRing";
+            ring.transform.SetParent(root.transform, false);
+            ring.transform.localPosition = new Vector3(0f, -0.30f, 0f);
+            ring.transform.localScale = new Vector3(1.5f, 0.07f, 1.5f);
+            SetGlow(ring.GetComponent<Renderer>(), new Color(1f, 0.25f, 0.1f));
+            Destroy(ring.GetComponent<Collider>());
             for (int i = 0; i < 2; i++)
             {
                 var rotor = GameObject.CreatePrimitive(PrimitiveType.Cylinder);

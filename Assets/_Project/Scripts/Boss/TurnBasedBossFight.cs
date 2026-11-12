@@ -112,6 +112,12 @@ namespace LunarDominion.Boss
         private const int DroneBaseHp = 170;
         private const float DroneAtkFrac = 0.20f;
         private const int DroneSpeed = 55;
+        // Drone figure scale (2026-11-11): the template was
+        // sized for the 3x boss; at 6x the drones read as floor
+        // clutter, so the turn-based fight summons them doubled
+        // (Patrick: 'make the drones bigger with a glow' — the
+        // glow ring/eye live in BossLairView's drone template).
+        private const float DroneFigureScale = 2f;
 
         public readonly List<TurnHeroState> Heroes = new List<TurnHeroState>();
         public readonly List<TurnDroneState> Drones = new List<TurnDroneState>();
@@ -708,6 +714,12 @@ namespace LunarDominion.Boss
             var root = new GameObject("DroneBar");
             root.transform.SetParent(drone.Figure.transform, false);
             root.transform.localPosition = new Vector3(0f, 0.85f, 0f);
+            // The figure is scaled (DroneFigureScale); counter-
+            // scale the bar so it keeps its original world size
+            // instead of doubling with the drone. Its height
+            // still benefits: local y 0.85 rides at 1.7 world
+            // units over the doubled body.
+            root.transform.localScale = Vector3.one * (1f / DroneFigureScale);
             BarBox(root, "DroneBarBg", new Vector3(1.6f, 0.22f, 0.06f), Vector3.zero,
                 new Color(0.05f, 0.08f, 0.13f));
             var fill = BarBox(root, "DroneBarFill", new Vector3(1.46f, 0.14f, 0.08f),
@@ -954,7 +966,12 @@ namespace LunarDominion.Boss
                 fig.name = "TurnDrone_" + (i + 1);
                 fig.transform.SetParent(transform, false);
                 fig.SetActive(true);
-                Vector3 home = bossPos + new Vector3(i == 0 ? -6.8f : 6.8f, 4.2f, -2.6f);
+                fig.transform.localScale = Vector3.one * DroneFigureScale;
+                // Spawn a touch wider than the original +-6.8:
+                // at double size the drone's radius is ~1.1, and
+                // 6.8 left almost no clearance from the boss's
+                // 5.6 half-width.
+                Vector3 home = bossPos + new Vector3(i == 0 ? -7.6f : 7.6f, 4.2f, -2.6f);
                 fig.transform.position = home + Vector3.up * 5f;
                 var drone = new TurnDroneState
                 {
