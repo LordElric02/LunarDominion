@@ -30,6 +30,7 @@ namespace LunarDominion.UI
         // old rows in the layout for a frame (Destroy is deferred),
         // piling two sets on top of each other.
         private string _builtSignature;
+        private float _rowCursorY;
         private Text _summaryText;
         private readonly Button[] _armyTabs = new Button[GameState.MaxArmies];
         private readonly Text[] _armyTabLabels = new Text[GameState.MaxArmies];
@@ -122,17 +123,15 @@ namespace LunarDominion.UI
             contentRt.pivot = new Vector2(0.5f, 1);
             contentRt.anchoredPosition = Vector2.zero;
             contentRt.sizeDelta = Vector2.zero;
-            var layout = _rowsContent.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 10;
-            layout.padding = new RectOffset(10, 10, 10, 10);
-            layout.childAlignment = TextAnchor.UpperCenter;
-            layout.childControlWidth = true;
-            layout.childControlHeight = false;
-            layout.childForceExpandWidth = true;
-            layout.childForceExpandHeight = false;
-            var fitter = _rowsContent.AddComponent<ContentSizeFitter>();
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            // NOTE (2026-11-12): no VerticalLayoutGroup /
+            // ContentSizeFitter here. The rows are positioned
+            // explicitly in RebuildRows and the content height
+            // is set by hand — the layout-group version of this
+            // exact scroll setup (which works in HeroesView and
+            // the squad picker) positioned this view's rebuilt
+            // rows with near-zero heights, piling every row on
+            // top of the others (Patrick's screenshots). Explicit
+            // positions cannot drift.
             scroll.content = contentRt;
         }
 
@@ -297,6 +296,7 @@ namespace LunarDominion.UI
             int army = _selectedArmy;
             bool unlocked = state.ArmyUnlocked(army);
             bool editable = Editable(army);
+            _rowCursorY = 10f;
 
             AddHeaderRow("HERO — one per army");
             if (state.Heroes == null || state.Heroes.Count == 0)
@@ -326,19 +326,21 @@ namespace LunarDominion.UI
             {
                 AddTextRow("No troops available. Recruit units at the barracks buildings, then assign them here.");
             }
-            // Lay the new rows out NOW rather than trusting the
-            // next layout pass — rows added dynamically to a
-            // ContentSizeFitter list can otherwise sit piled at
-            // the top for a frame (or until a resize).
-            if (_contentRt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(_contentRt);
+            // The ScrollRect scrolls the content by its height:
+            // rows + spacing + top/bottom padding.
+            if (_contentRt != null) _contentRt.sizeDelta = new Vector2(0f, _rowCursorY + 10f);
         }
 
         private GameObject MakeRow(float height)
         {
+            // Top-anchored, full width, at the running cursor —
+            // no layout group involved (see BuildRowsScroll).
             var row = UIHelpers.Panel(_rowsContent, "Row", UIHelpers.Hex("#1A2436"),
-                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            var layout = row.AddComponent<LayoutElement>();
-            layout.preferredHeight = height;
+                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(10f, -_rowCursorY - height), new Vector2(-10f, -_rowCursorY));
+            var rt = row.GetComponent<RectTransform>();
+            rt.pivot = new Vector2(0.5f, 1f);
+            _rowCursorY += height + 10f;
             return row;
         }
 
