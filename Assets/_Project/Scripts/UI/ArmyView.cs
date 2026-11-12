@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using LunarDominion.Core;
 using UnityEngine;
 using UnityEngine.UI;
@@ -22,6 +23,13 @@ namespace LunarDominion.UI
 
         private GameObject _root;
         private GameObject _rowsContent;
+        private RectTransform _contentRt;
+        // Rows are rebuilt only when the roster STRUCTURE changes
+        // (selection, membership, levels, locks) — Refresh() runs
+        // on every state tick, and rebuilding every time left the
+        // old rows in the layout for a frame (Destroy is deferred),
+        // piling two sets on top of each other.
+        private string _builtSignature;
         private Text _summaryText;
         private readonly Button[] _armyTabs = new Button[GameState.MaxArmies];
         private readonly Text[] _armyTabLabels = new Text[GameState.MaxArmies];
@@ -108,6 +116,7 @@ namespace LunarDominion.UI
             _rowsContent = new GameObject("Content");
             _rowsContent.transform.SetParent(viewportGo.transform, false);
             var contentRt = _rowsContent.AddComponent<RectTransform>();
+            _contentRt = contentRt;
             contentRt.anchorMin = new Vector2(0, 1);
             contentRt.anchorMax = new Vector2(1, 1);
             contentRt.pivot = new Vector2(0.5f, 1);
@@ -245,7 +254,37 @@ namespace LunarDominion.UI
                 _summaryText.text = $"Army {army + 1} — {myCount}/8 assigned. Tap + to assign, − to return a unit to the pool.";
             }
 
-            RebuildRows();
+            string signature = StructureSignature();
+            if (signature != _builtSignature)
+            {
+                _builtSignature = signature;
+                RebuildRows();
+            }
+        }
+
+        // Everything that changes what the rows show: the selected
+        // army, Nexus (gates), every roster's membership, the
+        // owned pool (type + level), heroes, the injured list,
+        // and whether the selected army is out (edit lock).
+        private string StructureSignature()
+        {
+            var state = State;
+            var sb = new StringBuilder();
+            sb.Append(_selectedArmy).Append('|').Append(state.NexusLevel).Append('|');
+            for (int a = 0; a < GameState.MaxArmies; a++)
+            {
+                var roster = state.GetRoster(a);
+                if (roster != null) foreach (var u in roster) if (u != null) sb.Append(u.Serial).Append(',');
+                sb.Append(';');
+            }
+            sb.Append('|');
+            if (state.Army != null) foreach (var u in state.Army) if (u != null) sb.Append((int)u.Id).Append(':').Append(u.Level).Append(',');
+            sb.Append('|');
+            if (state.Heroes != null) foreach (var u in state.Heroes) if (u != null) sb.Append(u.Serial).Append(',');
+            sb.Append('|');
+            if (state.Injured != null) foreach (var u in state.Injured) if (u != null) sb.Append(u.Serial).Append(',');
+            sb.Append('|').Append(ArmyOut(_selectedArmy) ? '1' : '0');
+            return sb.ToString();
         }
 
         private void RebuildRows()
@@ -287,6 +326,11 @@ namespace LunarDominion.UI
             {
                 AddTextRow("No troops available. Recruit units at the barracks buildings, then assign them here.");
             }
+            // Lay the new rows out NOW rather than trusting the
+            // next layout pass — rows added dynamically to a
+            // ContentSizeFitter list can otherwise sit piled at
+            // the top for a frame (or until a resize).
+            if (_contentRt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(_contentRt);
         }
 
         private GameObject MakeRow(float height)
