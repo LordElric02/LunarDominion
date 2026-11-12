@@ -272,6 +272,7 @@ namespace LunarDominion.Bootstrap
             // call so a failure result can still pop over it.
             _mapInfoView.Hide();
             _excursions.StartExcursion(_selectedPoint, squad, heroes);
+            _selectedPoint = null;
         }
 
         private void OnSquadPickerCancel()
@@ -345,6 +346,12 @@ namespace LunarDominion.Bootstrap
         {
             if (_lairView != null && _lairView.IsVisible) return;
             if (_mapInfoView.ShowingResult) return;
+            // Refresh ONLY a panel that is actually on screen
+            // (Patrick 2026-11-12): this used to resurrect the
+            // panel after it had been dismissed — on send, and
+            // again when the army got home — popping up a camp
+            // the player never tapped.
+            if (!_mapInfoView.IsShowing) return;
             if (_selectedPoint != null) ShowMapPoint(_selectedPoint);
         }
 

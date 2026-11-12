@@ -24,6 +24,7 @@ namespace LunarDominion.UI
         // than a point's info — the Bootstrap does not overwrite a
         // result with a point refresh until the player taps again.
         public bool ShowingResult => _showingResult;
+        public bool IsShowing => _root != null && _root.activeSelf;
 
         private GameObject _root;
         private Text _titleText;
