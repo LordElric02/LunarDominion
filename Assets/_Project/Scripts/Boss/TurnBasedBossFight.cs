@@ -156,6 +156,36 @@ namespace LunarDominion.Boss
         private Transform _bossVisual;
         private Vector3 _bossVisualOrigPos;
         private Quaternion _bossVisualOrigRot;
+
+        // ---- Phase 3 (2026-11-11): code-driven posing of the
+        // A.R.E.S. pivot rig (the FBX empties: Hips, Torso, Head,
+        // ShoulderL/R, knees). Poses are Euler offsets composed
+        // on each pivot's captured initial rotation — the rig's
+        // own local rotations are safe to pose (unlike the FBX
+        // root's). Presentation only: damage, timing of damage
+        // application and the economy are untouched. The initial
+        // pose is kept in statics because the fight component is
+        // recreated per fight while the model persists: a later
+        // fight first restores the authored pose, so a victory
+        // collapse never leaks into the next fight's "initial".
+        private Transform _rigHips, _rigTorso, _rigHead, _rigShoulderL, _rigShoulderR, _rigKneeL, _rigKneeR;
+        private bool _rigOk;
+        private Vector3 _hipsUpInParent = Vector3.up;
+        private float _hipsParentScale = 6f;
+        private static bool _rigCaptured;
+        private static Quaternion _sHipsRot, _sTorsoRot, _sHeadRot, _sShLRot, _sShRRot, _sKneeLRot, _sKneeRRot;
+        private static Vector3 _sHipsPos;
+        private static bool _sHasShoulders, _sHasKnees;
+        // Pose state: current values ease toward the targets in
+        // Update; idle sway/scan and the recoil impulse layer on
+        // top at application time; _defeatP is driven directly
+        // by FinishRoutine (Update stops once Finished).
+        private float _poseTorsoPitch, _poseTorsoPitchT;
+        private float _poseTorsoYaw, _poseTorsoYawT;
+        private float _poseShoulder, _poseShoulderT;
+        private float _poseHipsDip, _poseHipsDipT;   // world units, down is negative-applied
+        private float _recoil;
+        private float _defeatP;
         private TelegraphRing _slamRing;
         private GameObject _droneTemplate;
         private float _enemyScale = 1f;
@@ -219,8 +249,137 @@ namespace LunarDominion.Boss
             }
             _slamRing = slamRing;
             _droneTemplate = droneTemplate;
+            SetupRig();
             AddLog("A.R.E.S.-09 awakens. Choose each hero's action.");
             StartRound();
+        }
+
+        // ================= Boss rig posing (Phase 3) =================
+
+        private static Transform DeepFind(Transform root, string name)
+        {
+            if (root == null) return null;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == name) return t;
+            return null;
+        }
+
+        private void SetupRig()
+        {
+            _rigOk = false;
+            if (_bossVisual == null) return;
+            _rigHips = DeepFind(_bossVisual, "Hips");
+            _rigTorso = DeepFind(_bossVisual, "Torso");
+            _rigHead = DeepFind(_bossVisual, "Head");
+            _rigShoulderL = DeepFind(_bossVisual, "ShoulderL");
+            _rigShoulderR = DeepFind(_bossVisual, "ShoulderR");
+            _rigKneeL = DeepFind(_bossVisual, "LegL_Knee");
+            _rigKneeR = DeepFind(_bossVisual, "LegR_Knee");
+            if (_rigHips == null || _rigTorso == null || _rigHead == null) return;
+            if (_rigCaptured)
+            {
+                // A previous fight may have left the rig posed
+                // (the victory collapse): restore the authored
+                // pose before treating anything as initial.
+                RestoreRig();
+            }
+            else
+            {
+                _sHipsRot = _rigHips.localRotation;
+                _sTorsoRot = _rigTorso.localRotation;
+                _sHeadRot = _rigHead.localRotation;
+                _sHipsPos = _rigHips.localPosition;
+                _sHasShoulders = _rigShoulderL != null && _rigShoulderR != null;
+                if (_sHasShoulders)
+                {
+                    _sShLRot = _rigShoulderL.localRotation;
+                    _sShRRot = _rigShoulderR.localRotation;
+                }
+                _sHasKnees = _rigKneeL != null && _rigKneeR != null;
+                if (_sHasKnees)
+                {
+                    _sKneeLRot = _rigKneeL.localRotation;
+                    _sKneeRRot = _rigKneeR.localRotation;
+                }
+                _rigCaptured = true;
+            }
+            // The hips dip is applied in the hips' parent space:
+            // precompute which local direction is world-up there
+            // (the FBX frame may not match Unity's) and the
+            // parent scale, so dips can be specified in world
+            // units. Ancestors only translate during a fight, so
+            // this stays valid.
+            if (_rigHips.parent != null)
+            {
+                _hipsUpInParent = _rigHips.parent.InverseTransformDirection(Vector3.up).normalized;
+                float s = _rigHips.parent.lossyScale.y;
+                if (s > 0.01f) _hipsParentScale = s;
+            }
+            _rigOk = true;
+        }
+
+        private void RestoreRig()
+        {
+            if (_rigHips != null) { _rigHips.localRotation = _sHipsRot; _rigHips.localPosition = _sHipsPos; }
+            if (_rigTorso != null) _rigTorso.localRotation = _sTorsoRot;
+            if (_rigHead != null) _rigHead.localRotation = _sHeadRot;
+            if (_sHasShoulders)
+            {
+                if (_rigShoulderL != null) _rigShoulderL.localRotation = _sShLRot;
+                if (_rigShoulderR != null) _rigShoulderR.localRotation = _sShRRot;
+            }
+            if (_sHasKnees)
+            {
+                if (_rigKneeL != null) _rigKneeL.localRotation = _sKneeLRot;
+                if (_rigKneeR != null) _rigKneeR.localRotation = _sKneeRRot;
+            }
+            _poseTorsoPitch = _poseTorsoPitchT = 0f;
+            _poseTorsoYaw = _poseTorsoYawT = 0f;
+            _poseShoulder = _poseShoulderT = 0f;
+            _poseHipsDip = _poseHipsDipT = 0f;
+            _recoil = 0f;
+            _defeatP = 0f;
+        }
+
+        private void SetPose(float torsoPitch, float torsoYaw, float shoulder)
+        {
+            _poseTorsoPitchT = torsoPitch;
+            _poseTorsoYawT = torsoYaw;
+            _poseShoulderT = shoulder;
+        }
+
+        private void SetHipsDip(float worldDip)
+        {
+            _poseHipsDipT = worldDip;
+        }
+
+        private void ApplyRigPose()
+        {
+            if (!_rigOk) return;
+            float t = Time.time;
+            float idle = 1f - _defeatP;
+            float sway = Mathf.Sin(t * 0.9f) * 1.6f * idle;
+            float scan = Mathf.Sin(t * 0.45f) * 14f * idle;
+            _rigTorso.localRotation = _sTorsoRot * Quaternion.Euler(
+                _poseTorsoPitch + sway - _recoil * 7f + _defeatP * 26f,
+                _poseTorsoYaw, 0f);
+            _rigHead.localRotation = _sHeadRot * Quaternion.Euler(
+                _defeatP * 30f - _recoil * 9f,
+                scan - _poseTorsoYaw * 0.5f, 0f);
+            if (_sHasShoulders)
+            {
+                var sh = Quaternion.Euler(_poseShoulder + _defeatP * 16f, 0f, 0f);
+                _rigShoulderL.localRotation = _sShLRot * sh;
+                _rigShoulderR.localRotation = _sShRRot * sh;
+            }
+            float dipWorld = -_poseHipsDip - _defeatP * 2.6f;
+            _rigHips.localPosition = _sHipsPos
+                + _hipsUpInParent * (dipWorld / _hipsParentScale);
+            if (_sHasKnees)
+            {
+                _rigKneeL.localRotation = _sKneeLRot * Quaternion.Euler(_defeatP * 16f, 0f, 0f);
+                _rigKneeR.localRotation = _sKneeRRot * Quaternion.Euler(_defeatP * 10f, 0f, 0f);
+            }
         }
 
         // ================= Round flow =================
@@ -670,6 +829,7 @@ namespace LunarDominion.Boss
         {
             if (_ventActive) dmg = Mathf.RoundToInt(dmg * VentVulnMult);
             BossHp = Mathf.Max(0, BossHp - dmg);
+            _recoil = Mathf.Min(1f, _recoil + 0.55f);
             AddLog($"{hero.Name} — {label}: {dmg} dmg" + (_ventActive ? " (core exposed!)" : "") + ".");
             if (!_phase2 && BossHp > 0 && BossHp <= BossMaxHp / 2)
             {
@@ -872,7 +1032,11 @@ namespace LunarDominion.Boss
         {
             var target = BossBasicTarget();
             if (target == null) yield break;
-            // The boss root lunges toward the target and back.
+            // Wind up (rig), then the boss root lunges toward
+            // the target and back, striking at the lunge.
+            SetPose(-7f, 0f, -8f);
+            yield return new WaitForSeconds(0.16f);
+            SetPose(11f, 0f, 10f);
             Vector3 home = _bossRoot.position;
             Vector3 dir = target.Figure.transform.position - home;
             dir.y = 0f;
@@ -881,6 +1045,7 @@ namespace LunarDominion.Boss
             int dmg = CombatService.Damage(BossEffAtk, target.EffDef,
                 UnitClass.Mechanized, target.Class, BossLevel, target.Level);
             ApplyHeroDamage(target, dmg, "A.R.E.S.");
+            SetPose(0f, 0f, 0f);
             yield return MoveRoutine(_bossRoot, stop, home, 0.18f);
         }
 
@@ -909,8 +1074,13 @@ namespace LunarDominion.Boss
             beam.transform.position = mid;
             beam.transform.LookAt(new Vector3(heroPos.x, 1.2f, heroPos.z));
             beam.transform.localScale = new Vector3(14f, 2.4f, Vector3.Distance(bossPos, heroPos));
-            yield return new WaitForSeconds(0.28f);
+            // The sweep arm swings across the hero line (rig).
+            SetPose(0f, -14f, 20f);
+            yield return new WaitForSeconds(0.14f);
+            SetPose(0f, 14f, 20f);
+            yield return new WaitForSeconds(0.14f);
             Destroy(beam);
+            SetPose(0f, 0f, 0f);
             int atk = Mathf.RoundToInt(BossEffAtk * SweepAtkMult);
             foreach (var hero in Heroes)
             {
@@ -925,7 +1095,9 @@ namespace LunarDominion.Boss
         {
             AddLog("SEISMIC SLAM!");
             OnChanged?.Invoke();
-            // The boss rears up and crashes down.
+            // The boss rears up (rig leans back, arms raised)
+            // and crashes down (rig pitches forward, hips dip).
+            SetPose(-13f, 0f, 16f);
             Vector3 orig = _bossVisual.localPosition;
             float t = 0f;
             while (t < 0.18f)
@@ -935,6 +1107,8 @@ namespace LunarDominion.Boss
                 _bossVisual.localPosition = orig + Vector3.up * (2.4f * p);
                 yield return null;
             }
+            SetPose(20f, 0f, -6f);
+            SetHipsDip(0.85f);
             t = 0f;
             while (t < 0.10f)
             {
@@ -952,12 +1126,15 @@ namespace LunarDominion.Boss
                     UnitClass.Mechanized, hero.Class, BossLevel, hero.Level);
                 ApplyHeroDamage(hero, dmg, "SEISMIC SLAM");
             }
+            SetPose(0f, 0f, 0f);
+            SetHipsDip(0f);
         }
 
         private IEnumerator SummonDronesRoutine()
         {
             AddLog("A.R.E.S. launches sub-drones!");
             OnChanged?.Invoke();
+            SetPose(0f, 0f, 24f);
             Vector3 bossPos = _bossRoot.position;
             string[] names = { "Drone A", "Drone B" };
             for (int i = 0; i < 2; i++)
@@ -988,6 +1165,7 @@ namespace LunarDominion.Boss
                 StartCoroutine(MoveRoutine(fig.transform, fig.transform.position, home, 0.55f));
             }
             yield return new WaitForSeconds(0.6f);
+            SetPose(0f, 0f, 0f);
             OnChanged?.Invoke();
         }
 
@@ -1073,25 +1251,36 @@ namespace LunarDominion.Boss
             OnChanged?.Invoke();
             if (victory && _bossVisual != null)
             {
-                // Defeat slump: at 6x scale the old 75-degree tip
-                // would sweep the 17.8-unit body through the heroes
-                // or the wall, so it crumples instead — a 30-degree
-                // lean with a deeper sink (the full rig collapse
-                // arrives with the Phase 3 animation pass).
+                // Defeat collapse (Phase 3): the rig crumples —
+                // hips sink, knees bend, torso pitches forward,
+                // head droops, shoulders drop — while the wrapper
+                // keeps only a gentle lean and sink. (The old
+                // 30-degree root slump alone swept the 17.8-unit
+                // body too wide; the rig carries the collapse
+                // now.) Update() no longer runs once Finished,
+                // so this loop drives the pose directly. The
+                // collapsed pose stays for the result panel; the
+                // next fight's SetupRig restores the authored
+                // pose from the statics before capturing.
                 float t = 0f;
-                while (t < 1.2f)
+                while (t < 1.7f)
                 {
                     t += Time.deltaTime;
-                    float p = Mathf.Clamp01(t / 1.2f);
-                    _bossVisual.localRotation = _bossVisualOrigRot * Quaternion.Euler(30f * p, 0f, 0f);
+                    float p = Mathf.Clamp01(t / 1.7f);
+                    _bossVisual.localRotation = _bossVisualOrigRot * Quaternion.Euler(13f * p, 0f, 0f);
                     Vector3 pos = _bossVisualOrigPos;
-                    pos.y = _bossVisualOrigPos.y - 3.0f * p;
+                    pos.y = _bossVisualOrigPos.y - 1.4f * p;
                     _bossVisual.localPosition = pos;
+                    _defeatP = p;
+                    ApplyRigPose();
                     yield return null;
                 }
             }
             else
             {
+                // The boss still stands: return the rig to its
+                // authored pose before handing back to the lair.
+                RestoreRig();
                 yield return new WaitForSeconds(0.8f);
             }
             var fallen = new List<int>();
@@ -1255,6 +1444,18 @@ namespace LunarDominion.Boss
                 {
                     _slamRing.Hide();
                 }
+            }
+            // Boss rig posing (Phase 3): ease the pose values
+            // toward their targets, decay the hit recoil, apply.
+            if (_rigOk)
+            {
+                float k = 1f - Mathf.Exp(-7f * Time.deltaTime);
+                _poseTorsoPitch += (_poseTorsoPitchT - _poseTorsoPitch) * k;
+                _poseTorsoYaw += (_poseTorsoYawT - _poseTorsoYaw) * k;
+                _poseShoulder += (_poseShoulderT - _poseShoulder) * k;
+                _poseHipsDip += (_poseHipsDipT - _poseHipsDip) * k;
+                _recoil = Mathf.MoveTowards(_recoil, 0f, Time.deltaTime * 3.2f);
+                ApplyRigPose();
             }
         }
     }
