@@ -1428,6 +1428,10 @@ namespace LunarDominion.UI
             if (slot < 0 || slot >= _marchMarkers.Length) return;
             var marker = _marchMarkers[slot];
             if (marker == null) return;
+            // Sending an army out closes the search bar (Patrick
+            // 2026-11-12): the find UI has done its job once the
+            // squad is marching. Also clears the highlights.
+            SetFindBarOpen(false);
             from.y = TerrainHeight(from.x, from.z) + MarkerRideHeight;
             marker.transform.position = from;
             marker.SetActive(true);
