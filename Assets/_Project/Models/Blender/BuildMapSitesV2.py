@@ -209,14 +209,15 @@ BUILDERS = [
 
 
 def export_model(name):
-    bpy.ops.object.select_all(action="DESELECT")
-    for obj in OBJECTS:
-        obj.select_set(True)
-    bpy.context.view_layer.objects.active = OBJECTS[0]
+    # use_selection=False on purpose (Blender 5.2 GUI exporter
+    # AttributeError on context.selected_objects — see
+    # BuildExteriorTerrainV2.py). At export time the scene holds
+    # ONLY this model's objects (each model is deleted right
+    # after its export), so exporting everything is exact.
     path = os.path.join(SCRIPT_DIR, name + ".fbx")
     bpy.ops.export_scene.fbx(
         filepath=path,
-        use_selection=True,
+        use_selection=False,
         object_types={"MESH"},
         use_mesh_modifiers=True,
         apply_scale_options="FBX_SCALE_ALL",

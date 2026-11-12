@@ -192,12 +192,16 @@ def build_terrain():
 
 
 def export_fbx(obj):
-    bpy.ops.object.select_all(action="DESELECT")
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
+    # use_selection=False on purpose: in Blender 5.2's GUI the
+    # exporter's use_selection path reads context.selected_objects,
+    # which raises AttributeError when the script built its mesh
+    # through bpy.data (no operator context) — hit by Patrick
+    # 2026-11-12. The scene holds ONLY the terrain at this point
+    # (read_factory_settings emptied it), so exporting everything
+    # exports exactly the terrain.
     bpy.ops.export_scene.fbx(
         filepath=OUTPUT_FBX,
-        use_selection=True,
+        use_selection=False,
         object_types={"MESH"},
         use_mesh_modifiers=True,
         apply_scale_options="FBX_SCALE_ALL",
