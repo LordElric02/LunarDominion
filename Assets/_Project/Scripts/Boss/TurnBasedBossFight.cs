@@ -358,13 +358,13 @@ namespace LunarDominion.Boss
             if (!_rigOk) return;
             float t = Time.time;
             float idle = 1f - _defeatP;
-            float sway = Mathf.Sin(t * 0.9f) * 1.6f * idle;
-            float scan = Mathf.Sin(t * 0.45f) * 14f * idle;
+            float sway = Mathf.Sin(t * 0.9f) * 3.0f * idle;
+            float scan = Mathf.Sin(t * 0.7f) * 26f * idle;
             _rigTorso.localRotation = _sTorsoRot * Quaternion.Euler(
-                _poseTorsoPitch + sway - _recoil * 7f + _defeatP * 26f,
+                _poseTorsoPitch + sway - _recoil * 10f + _defeatP * 26f,
                 _poseTorsoYaw, 0f);
             _rigHead.localRotation = _sHeadRot * Quaternion.Euler(
-                _defeatP * 30f - _recoil * 9f,
+                _defeatP * 30f - _recoil * 13f,
                 scan - _poseTorsoYaw * 0.5f, 0f);
             if (_sHasShoulders)
             {
@@ -1034,9 +1034,9 @@ namespace LunarDominion.Boss
             if (target == null) yield break;
             // Wind up (rig), then the boss root lunges toward
             // the target and back, striking at the lunge.
-            SetPose(-7f, 0f, -8f);
-            yield return new WaitForSeconds(0.16f);
-            SetPose(11f, 0f, 10f);
+            SetPose(-10f, 0f, -12f);
+            yield return new WaitForSeconds(0.28f);
+            SetPose(15f, 0f, 14f);
             Vector3 home = _bossRoot.position;
             Vector3 dir = target.Figure.transform.position - home;
             dir.y = 0f;
@@ -1075,9 +1075,9 @@ namespace LunarDominion.Boss
             beam.transform.LookAt(new Vector3(heroPos.x, 1.2f, heroPos.z));
             beam.transform.localScale = new Vector3(14f, 2.4f, Vector3.Distance(bossPos, heroPos));
             // The sweep arm swings across the hero line (rig).
-            SetPose(0f, -14f, 20f);
+            SetPose(0f, -20f, 26f);
             yield return new WaitForSeconds(0.14f);
-            SetPose(0f, 14f, 20f);
+            SetPose(0f, 20f, 26f);
             yield return new WaitForSeconds(0.14f);
             Destroy(beam);
             SetPose(0f, 0f, 0f);
@@ -1097,7 +1097,7 @@ namespace LunarDominion.Boss
             OnChanged?.Invoke();
             // The boss rears up (rig leans back, arms raised)
             // and crashes down (rig pitches forward, hips dip).
-            SetPose(-13f, 0f, 16f);
+            SetPose(-18f, 0f, 20f);
             Vector3 orig = _bossVisual.localPosition;
             float t = 0f;
             while (t < 0.18f)
@@ -1107,8 +1107,8 @@ namespace LunarDominion.Boss
                 _bossVisual.localPosition = orig + Vector3.up * (2.4f * p);
                 yield return null;
             }
-            SetPose(20f, 0f, -6f);
-            SetHipsDip(0.85f);
+            SetPose(26f, 0f, -8f);
+            SetHipsDip(1.1f);
             t = 0f;
             while (t < 0.10f)
             {
@@ -1134,7 +1134,7 @@ namespace LunarDominion.Boss
         {
             AddLog("A.R.E.S. launches sub-drones!");
             OnChanged?.Invoke();
-            SetPose(0f, 0f, 24f);
+            SetPose(0f, 0f, 30f);
             Vector3 bossPos = _bossRoot.position;
             string[] names = { "Drone A", "Drone B" };
             for (int i = 0; i < 2; i++)
