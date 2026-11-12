@@ -138,6 +138,7 @@ namespace LunarDominion.UI
         public void Show(string title, string info, bool showSend)
         {
             _showingResult = false;
+            _resultHideAt = -1f;
             _titleText.text = title;
             _infoText.text = info;
             _sendButton.gameObject.SetActive(showSend);
@@ -151,6 +152,11 @@ namespace LunarDominion.UI
         public void ShowResult(string title, string body)
         {
             _showingResult = true;
+            // Result popups are transient (Patrick 2026-11-12):
+            // victory, defeat and harvest results all dismiss
+            // themselves after a couple of seconds. Point info
+            // (Show) stays until dismissed.
+            _resultHideAt = Time.time + ResultSeconds;
             _titleText.text = title;
             _infoText.text = body;
             _sendButton.gameObject.SetActive(false);
@@ -166,7 +172,16 @@ namespace LunarDominion.UI
         public void Hide()
         {
             _showingResult = false;
+            _resultHideAt = -1f;
             _root.SetActive(false);
+        }
+
+        private const float ResultSeconds = 2f;
+        private float _resultHideAt = -1f;
+
+        private void Update()
+        {
+            if (_resultHideAt > 0f && Time.time >= _resultHideAt) Hide();
         }
 
         // After the text changes, size the content to the text's

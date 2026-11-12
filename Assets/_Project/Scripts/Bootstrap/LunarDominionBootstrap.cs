@@ -267,6 +267,10 @@ namespace LunarDominion.Bootstrap
             var squad = SquadIndicesForCounts(counts);
             var heroes = HeroIndicesForCounts(counts);
             if (squad.Count == 0 && heroes.Count == 0) return;
+            // The point's info panel goes away as the army heads
+            // out (Patrick 2026-11-12) — hidden BEFORE the start
+            // call so a failure result can still pop over it.
+            _mapInfoView.Hide();
             _excursions.StartExcursion(_selectedPoint, squad, heroes);
         }
 
