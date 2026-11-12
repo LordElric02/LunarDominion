@@ -103,10 +103,12 @@ namespace LunarDominion.UI
         private readonly bool[] _marching = new bool[2];
         private readonly Vector3[] _marchTargets = new Vector3[2];
         private readonly Action[] _marchCallbacks = new Action[2];
-        // March speed: 20 u/s since the 2026-11-12 map enlargement
-        // (positions doubled, so trip times match the old map's
-        // deliberate 10 u/s pace — a far node still takes ~13s).
-        private static readonly float MarchSpeed = 20f; // units/second
+        // March speed: 20 u/s when the map enlarged (positions
+        // doubled, so trip times matched the old map's 10 u/s);
+        // slowed to 14 u/s for Phase 2 (Patrick 2026-11-12) — real
+        // marching figures read hurried at 20, and a far corner now
+        // takes ~24s, which suits an army on the move.
+        private static readonly float MarchSpeed = 14f; // units/second
 
         // Map Phase 2 (2026-11-12, Patrick's pick: real Blender mini
         // troops over code-built figures): each slot's marker root
@@ -136,7 +138,7 @@ namespace LunarDominion.UI
         // If a Play check ever shows troops marching backwards, this
         // constant is the one-line fix.
         private const float FigureFacingOffsetDeg = 180f;
-        private const float TroopFigureScale = 1.25f;
+        private const float TroopFigureScale = 1.8f;
         private GameObject _miniInfantryPrefab;
         private GameObject _miniRangedPrefab;
         private GameObject _miniMechPrefab;
@@ -706,8 +708,8 @@ namespace LunarDominion.UI
             var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             pole.name = "SquadBannerPole";
             pole.transform.SetParent(root.transform, false);
-            pole.transform.localPosition = new Vector3(-1.7f, 2.3f, -1.7f);
-            pole.transform.localScale = new Vector3(0.09f, 2.3f, 0.09f);
+            pole.transform.localPosition = new Vector3(-2.2f, 3.1f, -2.2f);
+            pole.transform.localScale = new Vector3(0.11f, 3.1f, 0.11f);
             var poleRenderer = pole.GetComponent<Renderer>();
             if (poleRenderer != null) poleRenderer.material = MakeLitMaterial(new Color(0.12f, 0.12f, 0.14f));
             StripCollider(pole);
@@ -715,15 +717,15 @@ namespace LunarDominion.UI
             var flag = GameObject.CreatePrimitive(PrimitiveType.Cube);
             flag.name = "SquadBannerFlag";
             flag.transform.SetParent(root.transform, false);
-            flag.transform.localPosition = new Vector3(-1.7f, 4.15f, -1.05f);
-            flag.transform.localScale = new Vector3(0.06f, 0.75f, 1.3f);
+            flag.transform.localPosition = new Vector3(-2.2f, 5.55f, -1.45f);
+            flag.transform.localScale = new Vector3(0.07f, 0.95f, 1.65f);
             var flagRenderer = flag.GetComponent<Renderer>();
             if (flagRenderer != null) flagRenderer.material = MakeLitMaterial(ArmyColors[slot], 0.5f);
             StripCollider(flag);
 
             var chipGo = new GameObject("SquadCountChip");
             chipGo.transform.SetParent(root.transform, false);
-            chipGo.transform.localPosition = new Vector3(0f, 5.2f, 0f);
+            chipGo.transform.localPosition = new Vector3(0f, 6.9f, 0f);
             var chip = chipGo.AddComponent<TextMesh>();
             chip.text = "0";
             chip.fontSize = 64;
@@ -821,7 +823,7 @@ namespace LunarDominion.UI
             {
                 var path = HeroModelPath(id);
                 if (path != null) prefab = Resources.Load<GameObject>(path);
-                scale = 1.0f; // heroes are ~3.2 tall — natural leader size
+                scale = 1.35f; // heroes ~3.2 tall x 1.35 — still the tallest in the squad
             }
             if (prefab == null)
             {
@@ -862,7 +864,7 @@ namespace LunarDominion.UI
                 ring.name = "HeroRing";
                 ring.transform.SetParent(fig.transform, false);
                 ring.transform.localPosition = new Vector3(0f, 0.06f, 0f);
-                ring.transform.localScale = new Vector3(1.7f, 0.06f, 1.7f);
+                ring.transform.localScale = new Vector3(2.4f, 0.06f, 2.4f);
                 var r = ring.GetComponent<Renderer>();
                 if (r != null) r.material = MakeLitMaterial(new Color(1.0f, 0.78f, 0.25f), 0.8f);
                 StripCollider(ring);
@@ -880,10 +882,10 @@ namespace LunarDominion.UI
             {
                 if (i == 0) return Vector3.zero;
                 int row = (i + 1) / 2;
-                float x = (i % 2 == 1) ? -1.6f : 1.6f;
-                return new Vector3(x, 0f, -2.3f * row);
+                float x = (i % 2 == 1) ? -2.3f : 2.3f;
+                return new Vector3(x, 0f, -3.1f * row);
             }
-            float radius = mode == SquadModeFighting ? 6.5f : 5.0f;
+            float radius = mode == SquadModeFighting ? 8.0f : 6.5f;
             if (n <= 1) return new Vector3(0f, 0f, radius);
             float angle = i * (Mathf.PI * 2f / n);
             return new Vector3(Mathf.Sin(angle) * radius, 0f, Mathf.Cos(angle) * radius);
@@ -945,7 +947,7 @@ namespace LunarDominion.UI
                     float nz = Mathf.Lerp(lp.z, target.z, step);
                     Vector3 world = root.transform.TransformPoint(new Vector3(nx, 0f, nz));
                     float bob = (_squadModes[slot] == SquadModeMarching && _marching[slot])
-                        ? Mathf.Abs(Mathf.Sin(_squadAnimTime * 9f + i * 1.3f)) * 0.14f
+                        ? Mathf.Abs(Mathf.Sin(_squadAnimTime * 7f + i * 1.3f)) * 0.16f
                         : 0f;
                     float ny = TerrainHeight(world.x, world.z) - root.transform.position.y + bob;
                     fig.transform.localPosition = new Vector3(nx, ny, nz);
