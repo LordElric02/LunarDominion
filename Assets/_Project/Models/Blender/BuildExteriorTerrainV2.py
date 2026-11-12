@@ -15,9 +15,12 @@
 # TerrainHeight uses the IDENTICAL formulas and constants; the
 # marching markers sample it so armies ride the dunes and dip
 # through craters while every site sits on a flat disc at h=0):
-#   dunes(x,z) = 1.5*sin(0.021x + 1.7)*sin(0.017z - 0.6)
-#              + 1.1*sin(0.043x - 2.1)*sin(0.052z + 1.2)
-#              + 0.6*sin(0.110x + 0.3)*sin(0.090z + 2.9)
+#   dunes(x,z) = 2.4*sin(0.021x + 1.7)*sin(0.017z - 0.6)
+#              + 1.75*sin(0.043x - 2.1)*sin(0.052z + 1.2)
+#              + 0.95*sin(0.110x + 0.3)*sin(0.090z + 2.9)
+#     (amplitudes raised ~1.6x 2026-11-12: the first version read
+#     almost flat under the game's lighting in Patrick's Play
+#     check; crater depth/rim and highlands raised to match)
 #   highlands: 3 broad gaussian rises (table below).
 #   craters: 16 analytic craters (table below): bowl
 #     -depth*(0.5 + 0.5*cos(pi*q)) for q = dist/R < 1, rim
@@ -27,7 +30,7 @@
 #     (10->17), the 15 camp slots (21->30), the lair (19->28),
 #     all at the NEW x2 positions; border taper to 0 at the
 #     mesh edge (|x| 258->280, |z| 218->240).
-#   h = clamp((dunes + highlands + craters) * m, -3.6, 5.5)
+#   h = clamp((dunes + highlands + craters) * m, -5.2, 8.0)
 #
 # AXIS CONVENTION (same as BuildTerrain.py, confirmed by FBX
 # parsing there): a Blender vertex (x, y, z) lands at Unity
@@ -85,29 +88,29 @@ DISCS = [
 
 # Broad highland rises: (cx, cz, amp, sigma).
 HIGHLANDS = [
-    (-190.0, 150.0, 2.6, 55.0),
-    (205.0, -160.0, 2.2, 48.0),
-    (150.0, 170.0, 1.8, 42.0),
+    (-190.0, 150.0, 3.9, 55.0),
+    (205.0, -160.0, 3.3, 48.0),
+    (150.0, 170.0, 2.7, 42.0),
 ]
 
 # Craters: (cx, cz, radius, depth, rim height).
 CRATERS = [
-    (-60.0, -120.0, 22.0, 3.1, 2.0),
-    (60.0, 130.0, 18.0, 2.5, 1.6),
-    (150.0, -60.0, 14.0, 2.0, 1.3),
-    (-160.0, -90.0, 16.0, 2.2, 1.4),
-    (230.0, 120.0, 20.0, 2.8, 1.8),
-    (-230.0, 90.0, 15.0, 2.1, 1.4),
-    (90.0, -150.0, 12.0, 1.7, 1.1),
-    (-40.0, 40.0, 11.0, 1.5, 1.0),
-    (180.0, 190.0, 16.0, 2.2, 1.4),
-    (-110.0, -180.0, 19.0, 2.7, 1.7),
-    (40.0, -40.0, 9.0, 1.3, 0.8),
-    (260.0, -40.0, 13.0, 1.8, 1.2),
-    (-260.0, -140.0, 17.0, 2.4, 1.5),
-    (120.0, 60.0, 10.0, 1.4, 0.9),
-    (-190.0, 190.0, 14.0, 2.0, 1.3),
-    (10.0, -110.0, 13.0, 1.8, 1.2),
+    (-60.0, -120.0, 22.0, 5.0, 3.2),
+    (60.0, 130.0, 18.0, 4.0, 2.6),
+    (150.0, -60.0, 14.0, 3.2, 2.1),
+    (-160.0, -90.0, 16.0, 3.5, 2.2),
+    (230.0, 120.0, 20.0, 4.5, 2.9),
+    (-230.0, 90.0, 15.0, 3.4, 2.2),
+    (90.0, -150.0, 12.0, 2.7, 1.8),
+    (-40.0, 40.0, 11.0, 2.4, 1.6),
+    (180.0, 190.0, 16.0, 3.5, 2.2),
+    (-110.0, -180.0, 19.0, 4.3, 2.7),
+    (40.0, -40.0, 9.0, 2.1, 1.3),
+    (260.0, -40.0, 13.0, 2.9, 1.9),
+    (-260.0, -140.0, 17.0, 3.8, 2.4),
+    (120.0, 60.0, 10.0, 2.2, 1.4),
+    (-190.0, 190.0, 14.0, 3.2, 2.1),
+    (10.0, -110.0, 13.0, 2.9, 1.9),
 ]
 
 
@@ -123,9 +126,9 @@ def smoothstep(a, b, x):
 def height_at(x, z):
     """Terrain height at Unity (x, z). MIRRORED IN C# — keep the
     two implementations byte-for-byte equivalent in math."""
-    d = (1.5 * math.sin(0.021 * x + 1.7) * math.sin(0.017 * z - 0.6)
-         + 1.1 * math.sin(0.043 * x - 2.1) * math.sin(0.052 * z + 1.2)
-         + 0.6 * math.sin(0.110 * x + 0.3) * math.sin(0.090 * z + 2.9))
+    d = (2.4 * math.sin(0.021 * x + 1.7) * math.sin(0.017 * z - 0.6)
+         + 1.75 * math.sin(0.043 * x - 2.1) * math.sin(0.052 * z + 1.2)
+         + 0.95 * math.sin(0.110 * x + 0.3) * math.sin(0.090 * z + 2.9))
     for (cx, cz, amp, sigma) in HIGHLANDS:
         dx = x - cx
         dz = z - cz
@@ -145,7 +148,7 @@ def height_at(x, z):
     m *= 1.0 - smoothstep(258.0, 280.0, abs(x))
     m *= 1.0 - smoothstep(218.0, 240.0, abs(z))
     h = d * m
-    return max(-3.6, min(5.5, h))
+    return max(-5.2, min(8.0, h))
 
 
 def clear_scene():
@@ -223,7 +226,7 @@ def verify(mesh):
     xs = [v.co.x for v in mesh.vertices]
     zs = [v.co.z for v in mesh.vertices]
     check(abs(min(xs) + HX) < 0.01 and abs(max(xs) - HX) < 0.01, "x extent +-280")
-    check(abs(min(zs)) < 3.6 + 0.01 and max(zs) <= 5.5 + 0.01, "height clamp range")
+    check(abs(min(zs)) < 5.2 + 0.01 and max(zs) <= 8.0 + 0.01, "height clamp range")
     check(len(mesh.polygons) > 100000, "tri count %d" % len(mesh.polygons))
     # Sites sit at h == 0 (flat discs).
     worst = 0.0
@@ -233,7 +236,7 @@ def verify(mesh):
     # Crater centres are real bowls (where the mask lets them be).
     c0 = CRATERS[0]
     h0 = height_at(c0[0], c0[1])
-    check(h0 < -2.0, "crater 1 centre is a bowl (h=%.2f)" % h0)
+    check(h0 < -3.5, "crater 1 centre is a bowl (h=%.2f)" % h0)
     # Normals point up on average (Blender +Z == Unity +Y here).
     import bmesh
     bm = bmesh.new()

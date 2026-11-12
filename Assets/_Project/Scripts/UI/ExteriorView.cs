@@ -247,29 +247,29 @@ namespace LunarDominion.UI
         // itself sits at y -0.05 (see Build()).
         private static readonly float[,] TerrainHighlands =
         {
-            { -190f, 150f, 2.6f, 55f },
-            { 205f, -160f, 2.2f, 48f },
-            { 150f, 170f, 1.8f, 42f },
+            { -190f, 150f, 3.9f, 55f },
+            { 205f, -160f, 3.3f, 48f },
+            { 150f, 170f, 2.7f, 42f },
         };
         // (cx, cz, radius, depth, rim height)
         private static readonly float[,] TerrainCraters =
         {
-            { -60f, -120f, 22f, 3.1f, 2.0f },
-            { 60f, 130f, 18f, 2.5f, 1.6f },
-            { 150f, -60f, 14f, 2.0f, 1.3f },
-            { -160f, -90f, 16f, 2.2f, 1.4f },
-            { 230f, 120f, 20f, 2.8f, 1.8f },
-            { -230f, 90f, 15f, 2.1f, 1.4f },
-            { 90f, -150f, 12f, 1.7f, 1.1f },
-            { -40f, 40f, 11f, 1.5f, 1.0f },
-            { 180f, 190f, 16f, 2.2f, 1.4f },
-            { -110f, -180f, 19f, 2.7f, 1.7f },
-            { 40f, -40f, 9f, 1.3f, 0.8f },
-            { 260f, -40f, 13f, 1.8f, 1.2f },
-            { -260f, -140f, 17f, 2.4f, 1.5f },
-            { 120f, 60f, 10f, 1.4f, 0.9f },
-            { -190f, 190f, 14f, 2.0f, 1.3f },
-            { 10f, -110f, 13f, 1.8f, 1.2f },
+            { -60f, -120f, 22f, 5.0f, 3.2f },
+            { 60f, 130f, 18f, 4.0f, 2.6f },
+            { 150f, -60f, 14f, 3.2f, 2.1f },
+            { -160f, -90f, 16f, 3.5f, 2.2f },
+            { 230f, 120f, 20f, 4.5f, 2.9f },
+            { -230f, 90f, 15f, 3.4f, 2.2f },
+            { 90f, -150f, 12f, 2.7f, 1.8f },
+            { -40f, 40f, 11f, 2.4f, 1.6f },
+            { 180f, 190f, 16f, 3.5f, 2.2f },
+            { -110f, -180f, 19f, 4.3f, 2.7f },
+            { 40f, -40f, 9f, 2.1f, 1.3f },
+            { 260f, -40f, 13f, 2.9f, 1.9f },
+            { -260f, -140f, 17f, 3.8f, 2.4f },
+            { 120f, 60f, 10f, 2.2f, 1.4f },
+            { -190f, 190f, 14f, 3.2f, 2.1f },
+            { 10f, -110f, 13f, 2.9f, 1.9f },
         };
         // How high a march marker rides above the terrain surface:
         // the mesh sits at -0.05, and markers historically rode at
@@ -287,9 +287,9 @@ namespace LunarDominion.UI
         /// BuildExteriorTerrainV2.py — change both together.</summary>
         public static float TerrainHeight(float x, float z)
         {
-            float d = 1.5f * Mathf.Sin(0.021f * x + 1.7f) * Mathf.Sin(0.017f * z - 0.6f)
-                    + 1.1f * Mathf.Sin(0.043f * x - 2.1f) * Mathf.Sin(0.052f * z + 1.2f)
-                    + 0.6f * Mathf.Sin(0.110f * x + 0.3f) * Mathf.Sin(0.090f * z + 2.9f);
+            float d = 2.4f * Mathf.Sin(0.021f * x + 1.7f) * Mathf.Sin(0.017f * z - 0.6f)
+                    + 1.75f * Mathf.Sin(0.043f * x - 2.1f) * Mathf.Sin(0.052f * z + 1.2f)
+                    + 0.95f * Mathf.Sin(0.110f * x + 0.3f) * Mathf.Sin(0.090f * z + 2.9f);
             for (int i = 0; i < TerrainHighlands.GetLength(0); i++)
             {
                 float dx = x - TerrainHighlands[i, 0];
@@ -336,7 +336,7 @@ namespace LunarDominion.UI
             }
             m *= 1f - TerrainSmoothstep(258f, 280f, Mathf.Abs(x));
             m *= 1f - TerrainSmoothstep(218f, 240f, Mathf.Abs(z));
-            return Mathf.Clamp(d * m, -3.6f, 5.5f);
+            return Mathf.Clamp(d * m, -5.2f, 8.0f);
         }
 
         public static string CampTitleForTier(int tier)
