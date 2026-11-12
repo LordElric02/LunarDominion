@@ -49,6 +49,7 @@ namespace LunarDominion.Boss
         {
             BuildShafts();
             BuildBeacons(tubeInstance);
+            BuildCrystalLights(tubeInstance);
             BuildDust();
             BuildSteam(tubeInstance);
         }
@@ -93,7 +94,7 @@ namespace LunarDominion.Boss
                     // cones read as solid floating objects; lighter
                     // plus the stronger gradient fade below makes
                     // them read as light falling through the cracks.
-                    mat.SetColor("_BaseColor", new Color(0.75f, 0.82f, 1.0f, 0.09f));
+                    mat.SetColor("_BaseColor", new Color(0.85f, 0.90f, 1.0f, 0.09f));
                     mat.SetFloat("_Surface", 1f);          // transparent
                     mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
                     mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One); // additive
@@ -157,6 +158,52 @@ namespace LunarDominion.Boss
                 light.range = 12f;
                 light.intensity = 1.2f;
                 _beaconLights.Add(light);
+            }
+        }
+
+        /// <summary>Cyan point lights at the crystal clusters
+        /// (2026-11-11, concept-art pass): the shards glow via
+        /// their emissive material but cast no light; a real
+        /// light at each big cluster throws the cool rim light
+        /// across the nearby rocks. Shards are grouped greedily
+        /// (within 6 units = one cluster), the six largest
+        /// clusters get lights — a bounded count for mobile.</summary>
+        private void BuildCrystalLights(Transform tubeInstance)
+        {
+            if (tubeInstance == null) return;
+            var points = new List<Vector3>();
+            foreach (var t in tubeInstance.GetComponentsInChildren<Transform>())
+            {
+                if (t.name.StartsWith("Crystal_")) points.Add(t.position);
+            }
+            var clusters = new List<List<Vector3>>();
+            foreach (var p in points)
+            {
+                List<Vector3> home = null;
+                foreach (var c in clusters)
+                {
+                    if (Vector3.Distance(p, c[0]) < 6f) { home = c; break; }
+                }
+                if (home == null) { home = new List<Vector3>(); clusters.Add(home); }
+                home.Add(p);
+            }
+            clusters.Sort((a, b) => b.Count.CompareTo(a.Count));
+            int made = 0;
+            foreach (var c in clusters)
+            {
+                if (made >= 6) break;
+                Vector3 centroid = Vector3.zero;
+                foreach (var p in c) centroid += p;
+                centroid /= c.Count;
+                var go = new GameObject("CrystalLight_" + (made + 1));
+                go.transform.SetParent(transform, false);
+                go.transform.position = centroid + Vector3.up * 0.6f;
+                var light = go.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = new Color(0.25f, 0.85f, 1.0f);
+                light.range = 11f;
+                light.intensity = 2.4f;
+                made++;
             }
         }
 
@@ -282,13 +329,19 @@ namespace LunarDominion.Boss
                 _captured = true;
             }
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.11f, 0.17f, 0.29f);
-            RenderSettings.ambientEquatorColor = new Color(0.05f, 0.08f, 0.14f);
-            RenderSettings.ambientGroundColor = new Color(0.02f, 0.02f, 0.04f);
+            // Colour grade (2026-11-11, toward the lair concept
+            // art): space-blue sky, obsidian-purple ground and
+            // fog, and slightly denser fog so the far walls fall
+            // off into haze. The fight area stays readable via
+            // the shaft spots, the hero key light and the rim
+            // light, which are unchanged.
+            RenderSettings.ambientSkyColor = new Color(0.14f, 0.12f, 0.30f);
+            RenderSettings.ambientEquatorColor = new Color(0.06f, 0.045f, 0.115f);
+            RenderSettings.ambientGroundColor = new Color(0.030f, 0.018f, 0.05f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = new Color(0.03f, 0.05f, 0.09f);
-            RenderSettings.fogDensity = 0.011f;
+            RenderSettings.fogColor = new Color(0.05f, 0.04f, 0.11f);
+            RenderSettings.fogDensity = 0.0135f;
         }
 
         public void ReleaseEnvironment()
