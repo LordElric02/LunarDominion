@@ -124,8 +124,6 @@ namespace LunarDominion.UI
         private float _surrenderArmUntil;
         private readonly List<Button> _turnActionButtons = new List<Button>();
         private readonly List<Text> _turnActionLabels = new List<Text>();
-        private readonly List<Button> _turnChipButtons = new List<Button>();
-        private readonly List<Text> _turnChipLabels = new List<Text>();
         private GameObject _turnTargetRow;
         private readonly List<Button> _turnTargetButtons = new List<Button>();
         private readonly List<Text> _turnTargetLabels = new List<Text>();
@@ -1500,48 +1498,25 @@ namespace LunarDominion.UI
             _turnIntentText = UIHelpers.LabelInRect(_turnHud, "TurnIntent", "", 20, UIHelpers.Hex("#FFB74D"),
                 new Rect(0.22f, 0.73f, 0.78f, 0.775f), TextAnchor.MiddleCenter);
             _turnLogText = UIHelpers.LabelInRect(_turnHud, "TurnLog", "", 19, UIHelpers.Hex("#B0BEC5"),
-                new Rect(0.015f, 0.135f, 0.30f, 0.27f), TextAnchor.UpperLeft);
+                new Rect(0.015f, 0.19f, 0.30f, 0.325f), TextAnchor.UpperLeft);
             _turnHintText = UIHelpers.LabelInRect(_turnHud, "TurnHint", "", 22, Color.white,
-                new Rect(0.28f, 0.125f, 0.72f, 0.17f), TextAnchor.MiddleCenter);
+                new Rect(0.28f, 0.19f, 0.72f, 0.235f), TextAnchor.MiddleCenter);
 
-            // Hero chips along the bottom (name + HP + SPD): the
-            // acting hero's chip is a tap target for the action
-            // bar; the white disabled tint keeps every chip's
-            // colours reading normally when it is not tappable.
-            var chipsGo = new GameObject("TurnChips");
-            chipsGo.transform.SetParent(_turnHud.transform, false);
-            var chipsRt = chipsGo.AddComponent<RectTransform>();
-            chipsRt.anchorMin = new Vector2(0.24f, 0.015f);
-            chipsRt.anchorMax = new Vector2(0.76f, 0.115f);
-            chipsRt.offsetMin = Vector2.zero;
-            chipsRt.offsetMax = Vector2.zero;
-            var chipsLayout = chipsGo.AddComponent<HorizontalLayoutGroup>();
-            chipsLayout.spacing = 8;
-            chipsLayout.childAlignment = TextAnchor.MiddleCenter;
-            chipsLayout.childControlWidth = true;
-            chipsLayout.childControlHeight = true;
-            chipsLayout.childForceExpandWidth = true;
-            chipsLayout.childForceExpandHeight = true;
-            for (int i = 0; i < 3; i++)
-            {
-                int heroIndex = i;
-                var btn = MakePanelButton(chipsGo, "TurnChip" + i, "Hero", 20,
-                    UIHelpers.Hex("#14202F"), out var label);
-                btn.onClick.AddListener(() => OnHeroTapped(heroIndex));
-                var chipColors = btn.colors;
-                chipColors.disabledColor = Color.white;
-                btn.colors = chipColors;
-                _turnChipButtons.Add(btn);
-                _turnChipLabels.Add(label);
-            }
+            // The hero chips that used to sit along the bottom
+            // (name + HP + SPD, acting hero tappable) were removed
+            // 2026-11-11 at Patrick's request: that information
+            // lives in the Heroes screen now, in-fight HP reads
+            // from the floating bars over the figures, and the
+            // acting hero is tapped on their 3D figure instead.
+            // The action bar below took over the chips' band.
 
             // The action bar: hidden until the acting hero is
             // tapped; Attack / Defend / the hero's 3 skills.
             _actionBar = new GameObject("TurnActions");
             _actionBar.transform.SetParent(_turnHud.transform, false);
             var actionsRt = _actionBar.AddComponent<RectTransform>();
-            actionsRt.anchorMin = new Vector2(0.20f, 0.125f);
-            actionsRt.anchorMax = new Vector2(0.80f, 0.205f);
+            actionsRt.anchorMin = new Vector2(0.24f, 0.015f);
+            actionsRt.anchorMax = new Vector2(0.76f, 0.115f);
             actionsRt.offsetMin = Vector2.zero;
             actionsRt.offsetMax = Vector2.zero;
             var actionsLayout = _actionBar.AddComponent<HorizontalLayoutGroup>();
@@ -1573,8 +1548,8 @@ namespace LunarDominion.UI
             _turnTargetRow = new GameObject("TurnTargets");
             _turnTargetRow.transform.SetParent(_turnHud.transform, false);
             var targetsRt = _turnTargetRow.AddComponent<RectTransform>();
-            targetsRt.anchorMin = new Vector2(0.22f, 0.215f);
-            targetsRt.anchorMax = new Vector2(0.78f, 0.27f);
+            targetsRt.anchorMin = new Vector2(0.22f, 0.125f);
+            targetsRt.anchorMax = new Vector2(0.78f, 0.18f);
             targetsRt.offsetMin = Vector2.zero;
             targetsRt.offsetMax = Vector2.zero;
             var targetsLayout = _turnTargetRow.AddComponent<HorizontalLayoutGroup>();
@@ -1600,7 +1575,7 @@ namespace LunarDominion.UI
                 _turnTargetLabels.Add(label);
             }
 
-            // Surrender: bottom-right beside the chips. The
+            // Surrender: bottom-right corner. The
             // first tap arms it ("Sure?"); a second tap inside
             // the window ends the fight as a defeat.
             _surrenderButton = MakePanelButton(_turnHud, "SurrenderButton", "Surrender", 20,
@@ -2068,31 +2043,10 @@ namespace LunarDominion.UI
                 _surrenderLabel.text = "Surrender";
             }
 
-            // Hero chips.
-            for (int i = 0; i < _turnChipButtons.Count; i++)
+            // Floating hero bars (refreshed here each tick).
+            for (int i = 0; i < _turnFight.Heroes.Count; i++)
             {
-                var btn = _turnChipButtons[i];
-                var hero = i < _turnFight.Heroes.Count ? _turnFight.Heroes[i] : null;
-                btn.gameObject.SetActive(hero != null);
-                if (hero == null) continue;
-                var sb = new System.Text.StringBuilder();
-                sb.Append(hero.Name);
-                sb.Append($"\nHP {hero.Hp}/{hero.MaxHp}  SPD {hero.Speed}");
-                if (hero.Shield > 0) sb.Append($"  SHIELD {hero.Shield}");
-                if (!hero.Alive) sb.Append("\nDOWN");
-                else if (hero.Acted) sb.Append("\nACTED");
-                _turnChipLabels[i].text = sb.ToString();
-                var img = btn.GetComponent<Image>();
-                if (img != null)
-                {
-                    img.color = !hero.Alive ? UIHelpers.Hex("#3A1420")
-                        : i == _turnFight.SelectedHero ? UIHelpers.Hex("#1E4A7A")
-                        : hero.Acted ? UIHelpers.Hex("#10161F") : UIHelpers.Hex("#14202F");
-                }
-                // Only the acting hero's chip is tappable.
-                btn.interactable = hero.Alive && i == _turnFight.SelectedHero
-                    && !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished;
-                RefreshTurnBar(i, hero);
+                RefreshTurnBar(i, _turnFight.Heroes[i]);
             }
 
             // Action buttons for the selected hero.

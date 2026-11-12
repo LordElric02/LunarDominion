@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using LunarDominion.Boss;
 using LunarDominion.Core;
 using LunarDominion.Units;
 using UnityEngine;
@@ -22,6 +23,7 @@ namespace LunarDominion.UI
         {
             public GameObject Root;
             public UnitDefinition Def;
+            public Image Bg;
             public Text StatsText;
             public Text CostText;
             public Button RecruitButton;
@@ -31,6 +33,10 @@ namespace LunarDominion.UI
         private GameObject _rowsContent;
         private Text _summaryText;
         private Text _footerText;
+        private UnitDefinition _selectedDef;
+        private Text _detailTitle;
+        private Text _detailStats;
+        private Text _detailSkills;
         private List<Row> _rows = new List<Row>();
         private GameController _controller;
 
@@ -53,6 +59,20 @@ namespace LunarDominion.UI
                 22, UIHelpers.Hex("#C0C8D0"),
                 new Rect(0.04f, 0.01f, 0.96f, 0.06f), TextAnchor.MiddleCenter);
 
+            // Hero detail panel (Patrick 2026-11-11): tapping a
+            // hero row selects it and the hero's full information
+            // — level-scaled HP/ATK/DEF/SPD, XP, and skills — is
+            // displayed here. This is where the information from
+            // the removed fight-HUD chips lives now.
+            var detail = UIHelpers.Panel(_root, "HeroDetail", UIHelpers.Hex("#101826"),
+                new Vector2(0.04f, 0.075f), new Vector2(0.96f, 0.295f), Vector2.zero, Vector2.zero);
+            _detailTitle = UIHelpers.LabelInRect(detail, "DetailName", "Tap a hero to see their details", 26, Color.white,
+                new Rect(0.03f, 0.64f, 0.97f, 0.97f));
+            _detailStats = UIHelpers.LabelInRect(detail, "DetailStats", "", 24, UIHelpers.Hex("#C0C8D0"),
+                new Rect(0.03f, 0.34f, 0.97f, 0.64f));
+            _detailSkills = UIHelpers.LabelInRect(detail, "DetailSkills", "", 22, UIHelpers.Hex("#90CAF9"),
+                new Rect(0.03f, 0.04f, 0.97f, 0.34f));
+
             BuildRowsScroll();
             BuildRows();
             _root.SetActive(false);
@@ -65,7 +85,7 @@ namespace LunarDominion.UI
             var scrollGo = new GameObject("RowsScroll");
             scrollGo.transform.SetParent(_root.transform, false);
             var scrollRt = scrollGo.AddComponent<RectTransform>();
-            scrollRt.anchorMin = new Vector2(0.02f, 0.08f);
+            scrollRt.anchorMin = new Vector2(0.02f, 0.31f);
             scrollRt.anchorMax = new Vector2(0.98f, 0.80f);
             scrollRt.offsetMin = Vector2.zero;
             scrollRt.offsetMax = Vector2.zero;
@@ -134,14 +154,26 @@ namespace LunarDominion.UI
             {
                 int owned = _controller.Recruitment.CountOwned(row.Def.Id);
                 string levelText = "";
+                int heroLevel = 1;
                 if (owned > 0)
                 {
                     var ownedUnit = _controller.State.Heroes != null
                         ? _controller.State.Heroes.Find(u => u.Id == row.Def.Id)
                         : null;
-                    if (ownedUnit != null) levelText = $"  •  Lv {ownedUnit.Level}";
+                    if (ownedUnit != null)
+                    {
+                        levelText = $"  •  Lv {ownedUnit.Level}";
+                        heroLevel = ownedUnit.Level;
+                    }
                 }
-                row.StatsText.text = $"HP {row.Def.BaseHealth}  ATK {row.Def.BaseAttack}  DEF {row.Def.BaseDefense}{levelText}";
+                if (row.Bg != null)
+                    row.Bg.color = row.Def == _selectedDef ? UIHelpers.Hex("#24466B") : UIHelpers.Hex("#1A2436");
+                // Real level-scaled stats including SPD — the
+                // numbers the fight HUD chips used to show
+                // (Patrick 2026-11-11: the chips were removed
+                // from the fight and this info lives here now).
+                // Unrecruited heroes preview at level 1.
+                row.StatsText.text = $"HP {Mathf.RoundToInt(UnitStats.ScaledHealth(row.Def, heroLevel))}  ATK {Mathf.RoundToInt(UnitStats.ScaledAttack(row.Def, heroLevel))}  DEF {Mathf.RoundToInt(UnitStats.ScaledDefense(row.Def, heroLevel))}  SPD {UnitStats.ScaledSpeed(row.Def, heroLevel)}{levelText}";
                 var status = _controller.Recruitment.CheckRecruit(row.Def, out var cost, out var reason);
                 string costText = CostText(cost);
                 row.CostText.text = status == RecruitStatus.CanRecruit
@@ -149,6 +181,50 @@ namespace LunarDominion.UI
                     : $"{reason}  Cost: {costText}";
                 UIHelpers.SetButtonEnabled(row.RecruitButton, status == RecruitStatus.CanRecruit);
             }
+
+            // Selected hero's detail panel.
+            if (_detailTitle != null)
+            {
+                if (_selectedDef == null)
+                {
+                    _detailTitle.text = "Tap a hero to see their details";
+                    if (_detailStats != null) _detailStats.text = "";
+                    if (_detailSkills != null) _detailSkills.text = "";
+                }
+                else
+                {
+                    var def = _selectedDef;
+                    var ownedUnit = _controller.State.Heroes != null
+                        ? _controller.State.Heroes.Find(u => u.Id == def.Id)
+                        : null;
+                    int lvl = ownedUnit != null ? ownedUnit.Level : 1;
+                    _detailTitle.text = ownedUnit != null
+                        ? $"{def.DisplayName} — {def.Class} ★ HERO  •  Lv {lvl}"
+                        : $"{def.DisplayName} — {def.Class} ★ HERO  •  Not recruited";
+                    string statsLine = $"HP {Mathf.RoundToInt(UnitStats.ScaledHealth(def, lvl))}  ATK {Mathf.RoundToInt(UnitStats.ScaledAttack(def, lvl))}  DEF {Mathf.RoundToInt(UnitStats.ScaledDefense(def, lvl))}  SPD {UnitStats.ScaledSpeed(def, lvl)}";
+                    if (ownedUnit != null)
+                        statsLine += lvl >= 20 ? "  •  MAX LEVEL" : $"  •  XP {ownedUnit.XP} / {UnitStats.XpToNextLevel(lvl)}";
+                    else
+                        statsLine += "  •  Lv 1 stats";
+                    if (_detailStats != null) _detailStats.text = statsLine;
+                    if (_detailSkills != null)
+                    {
+                        var names = new List<string>();
+                        var skills = SkillCatalog.ForHero(def.Id);
+                        if (skills != null)
+                        {
+                            foreach (var s in skills) names.Add(s.Name);
+                        }
+                        _detailSkills.text = names.Count > 0 ? "Skills: " + string.Join("  •  ", names) : "";
+                    }
+                }
+            }
+        }
+
+        private void SelectHero(UnitDefinition def)
+        {
+            _selectedDef = def;
+            Refresh();
         }
 
         private static string CostText(ResourceCost cost)
@@ -228,8 +304,14 @@ namespace LunarDominion.UI
                 rt.offsetMax = Vector2.zero;
                 var heroDef = def;
                 btn.onClick.AddListener(() => OnRecruitClicked(heroDef));
-                _rows.Add(new Row { Root = rowGo, Def = def, StatsText = stats, CostText = cost, RecruitButton = btn });
+                // Tapping the row (anywhere but the Recruit
+                // button) selects the hero for the detail panel.
+                var rowBtn = rowGo.AddComponent<Button>();
+                rowBtn.targetGraphic = rowImg;
+                rowBtn.onClick.AddListener(() => SelectHero(heroDef));
+                _rows.Add(new Row { Root = rowGo, Def = def, Bg = rowImg, StatsText = stats, CostText = cost, RecruitButton = btn });
             }
+            if (_selectedDef == null && heroes.Count > 0) _selectedDef = heroes[0];
         }
 
         // The hero's menu portrait (rendered by BuildHero<Name>.py
