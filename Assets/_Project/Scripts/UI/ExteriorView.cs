@@ -598,13 +598,33 @@ namespace LunarDominion.UI
             // camera — the fine texture averages out to light grey, so
             // the material colour pulls it back toward lunar grey).
             var renderer = _terrain.GetComponentInChildren<Renderer>();
-            var regolith = Resources.Load<Texture2D>("Textures/GroundRegolith");
-            if (regolith != null && renderer != null)
+            // Terrain V3 (2026-11-12): when the baked tint texture
+            // is installed (BuildExteriorTerrainV3.py writes
+            // ExteriorTerrainTint.png into Resources/Textures), it
+            // replaces the tiling regolith on the terrain — it
+            // carries the soft crater shading and mottling the
+            // mockup look needs, authored at the regolith palette,
+            // so the material colour stays white and the UVs map
+            // 1:1. Without it, the tiling regolith below applies
+            // exactly as before.
+            var tint = Resources.Load<Texture2D>("Textures/ExteriorTerrainTint");
+            if (tint != null && renderer != null)
             {
-                regolith.wrapMode = TextureWrapMode.Repeat;
-                renderer.material.mainTexture = regolith;
-                renderer.material.mainTextureScale = new Vector2(80f, 68f);
-                renderer.material.color = new Color(0.7f, 0.7f, 0.7f);
+                tint.wrapMode = TextureWrapMode.Clamp;
+                renderer.material.mainTexture = tint;
+                renderer.material.mainTextureScale = new Vector2(1f, 1f);
+                renderer.material.color = Color.white;
+            }
+            else
+            {
+                var regolith = Resources.Load<Texture2D>("Textures/GroundRegolith");
+                if (regolith != null && renderer != null)
+                {
+                    regolith.wrapMode = TextureWrapMode.Repeat;
+                    renderer.material.mainTexture = regolith;
+                    renderer.material.mainTextureScale = new Vector2(80f, 68f);
+                    renderer.material.color = new Color(0.7f, 0.7f, 0.7f);
+                }
             }
 
             // Start hidden — the Base tab is the default view.
