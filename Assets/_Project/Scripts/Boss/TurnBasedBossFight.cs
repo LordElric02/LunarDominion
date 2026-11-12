@@ -221,6 +221,26 @@ namespace LunarDominion.Boss
         private int BossEffAtk => Mathf.RoundToInt(BossAtk * (_bossAtkDebuffRounds > 0 ? SuppressAtkMult : 1f));
         private int BossEffDef => Mathf.RoundToInt(BossDef * (_bossDefDebuffRounds > 0 ? ArmorBreakDefMult : 1f));
 
+        // ================= Camera shake (Phase 5) =================
+        // The fight camera is static, so a shake is a temporary
+        // positional offset driven from Update: while a shake is
+        // active the camera sits at the captured base position
+        // plus Perlin-noise jitter scaled by the remaining
+        // strength; while idle the base tracks the camera, so
+        // any framing the view applies between fights is
+        // adopted automatically. Strengths: slam landing 0.55,
+        // boss collapse 0.45, hero down 0.25, phase 2 onset 0.2,
+        // basic blast impact 0.12. One knob: ShakeGain.
+        private const float ShakeGain = 1.4f;
+        private Camera _cam;
+        private Vector3 _camBasePos;
+        private float _shake;
+
+        private void AddShake(float strength)
+        {
+            _shake = Mathf.Max(_shake, strength);
+        }
+
         public void Begin(List<TurnHeroState> heroes, int bossMaxHp, int bossAtk, int bossDef,
             int bossLevel, float enemyScale, Transform bossRoot, Transform bossVisual,
             TelegraphRing slamRing, GameObject droneTemplate)
@@ -249,6 +269,8 @@ namespace LunarDominion.Boss
             }
             _slamRing = slamRing;
             _droneTemplate = droneTemplate;
+            _cam = Camera.main;
+            if (_cam != null) _camBasePos = _cam.transform.position;
             SetupRig();
             AddLog("A.R.E.S.-09 awakens. Choose each hero's action.");
             StartRound();
@@ -837,6 +859,7 @@ namespace LunarDominion.Boss
             if (!_phase2 && BossHp > 0 && BossHp <= BossMaxHp / 2)
             {
                 _phase2 = true;
+                AddShake(0.2f);
                 if (!_dronesSummoned) _pendingSummon = true;
                 AddLog("A.R.E.S. core exposed — PHASE 2. Drones incoming!");
                 OnPhase2?.Invoke();
@@ -944,6 +967,7 @@ namespace LunarDominion.Boss
             {
                 hero.Alive = false;
                 AddLog($"{hero.Name} is DOWN!");
+                AddShake(0.25f);
                 StartCoroutine(TipOverRoutine(hero));
             }
             else if (dmg > 0 || absorbed > 0)
@@ -1134,7 +1158,9 @@ namespace LunarDominion.Boss
             }
             _bossVisual.localPosition = orig;
             // The landing shockwave rolls out across the floor
-            // as the damage lands (Phase 4).
+            // as the damage lands (Phase 4), and the impact
+            // shakes the camera (Phase 5).
+            AddShake(0.55f);
             StartCoroutine(ShockwaveRoutine(_bossRoot.position));
             int atk = Mathf.RoundToInt(BossEffAtk * SlamAtkMult);
             foreach (var hero in Heroes)
@@ -1269,6 +1295,7 @@ namespace LunarDominion.Boss
             OnChanged?.Invoke();
             if (victory && _bossVisual != null)
             {
+                AddShake(0.45f);
                 // Defeat collapse (Phase 3): the rig crumples —
                 // hips sink, knees bend, torso pitches forward,
                 // head droops, shoulders drop — while the wrapper
@@ -1301,6 +1328,9 @@ namespace LunarDominion.Boss
                 RestoreRig();
                 yield return new WaitForSeconds(0.8f);
             }
+            // Hand the camera back exactly as captured (Phase 5).
+            _shake = 0f;
+            if (_cam != null) _cam.transform.position = _camBasePos;
             var fallen = new List<int>();
             foreach (var hero in Heroes)
             {
@@ -1491,6 +1521,8 @@ namespace LunarDominion.Boss
                 yield return null;
             }
             Destroy(go);
+            // The blast's arrival is the impact frame (Phase 5).
+            AddShake(0.12f);
         }
 
         /// <summary>The slam's ground shockwave: an additive
@@ -1598,6 +1630,27 @@ namespace LunarDominion.Boss
 
         private void Update()
         {
+            // Camera shake (Phase 5) — deliberately before the
+            // Finished early-out so the victory-collapse shake
+            // plays during FinishRoutine.
+            if (_cam != null)
+            {
+                if (_shake > 0.002f)
+                {
+                    float n = Time.time * 47f;
+                    float m = _shake * ShakeGain;
+                    _cam.transform.position = _camBasePos + new Vector3(
+                        (Mathf.PerlinNoise(n, 3.7f) - 0.5f) * m,
+                        (Mathf.PerlinNoise(9.1f, n) - 0.5f) * m,
+                        (Mathf.PerlinNoise(n * 0.83f, 7.3f) - 0.5f) * m * 0.6f);
+                    _shake = Mathf.MoveTowards(_shake, 0f, Time.deltaTime * 1.5f);
+                    if (_shake <= 0.002f) _cam.transform.position = _camBasePos;
+                }
+                else
+                {
+                    _camBasePos = _cam.transform.position;
+                }
+            }
             if (Finished) return;
             // Drones hover.
             for (int i = 0; i < Drones.Count; i++)
