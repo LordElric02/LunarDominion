@@ -125,6 +125,8 @@ namespace LunarDominion.UI
         private readonly List<Button> _turnActionButtons = new List<Button>();
         private readonly List<Text> _turnActionLabels = new List<Text>();
         private GameObject _turnTargetRow;
+        private GameObject _actionTooltip;
+        private Text _actionTooltipText;
         private readonly List<Button> _turnTargetButtons = new List<Button>();
         private readonly List<Text> _turnTargetLabels = new List<Text>();
         private bool _turnActive;
@@ -1539,6 +1541,17 @@ namespace LunarDominion.UI
                     else if (actionIndex == 1) _turnFight.ChooseDefend();
                     else _turnFight.ChooseSkill(actionIndex - 2);
                 });
+                // Hover tooltip (Patrick 2026-11-11): the
+                // description shows while the mouse is over the
+                // button and disappears when it leaves — it
+                // never stays on screen.
+                var trigger = btn.gameObject.AddComponent<EventTrigger>();
+                var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+                enter.callback.AddListener(_ => ShowActionTooltip(actionIndex));
+                trigger.triggers.Add(enter);
+                var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+                exit.callback.AddListener(_ => HideActionTooltip());
+                trigger.triggers.Add(exit);
                 _turnActionButtons.Add(btn);
                 _turnActionLabels.Add(label);
             }
@@ -1574,6 +1587,21 @@ namespace LunarDominion.UI
                 _turnTargetButtons.Add(btn);
                 _turnTargetLabels.Add(label);
             }
+
+            // Action tooltip: a slim strip above the action bar
+            // (the target row's band — the two never show at
+            // once, since choosing an action closes the bar
+            // before a target is picked). Visible only while the
+            // mouse hovers an action button. It never intercepts
+            // clicks (raycast targets off).
+            _actionTooltip = UIHelpers.Panel(_turnHud, "TurnTooltip", UIHelpers.Hex("#0D1420"),
+                new Vector2(0.22f, 0.125f), new Vector2(0.78f, 0.185f), Vector2.zero, Vector2.zero);
+            var tipImg = _actionTooltip.GetComponent<Image>();
+            if (tipImg != null) tipImg.raycastTarget = false;
+            _actionTooltipText = UIHelpers.LabelInRect(_actionTooltip, "TurnTooltipText", "", 20, Color.white,
+                new Rect(0.02f, 0.05f, 0.98f, 0.95f), TextAnchor.MiddleCenter);
+            _actionTooltipText.raycastTarget = false;
+            _actionTooltip.SetActive(false);
 
             // Surrender: bottom-right corner. The
             // first tap arms it ("Sure?"); a second tap inside
@@ -1918,6 +1946,54 @@ namespace LunarDominion.UI
             RefreshTurnPanel();
         }
 
+        // Hover tooltips for the action bar (Patrick
+        // 2026-11-11): the description shows while the mouse is
+        // over a button and disappears when the mouse leaves or
+        // the bar closes — it never stays on screen. Skill text
+        // comes from SkillCatalog's Blurb, so it cannot drift
+        // from the real effect.
+        private void ShowActionTooltip(int actionIndex)
+        {
+            if (_actionTooltip == null || _actionTooltipText == null) return;
+            var selected = SelectedHeroState();
+            if (_turnFight == null || selected == null || !_actionBarOpen)
+            {
+                HideActionTooltip();
+                return;
+            }
+            string text;
+            if (actionIndex == 0)
+            {
+                text = "Attack — a basic strike: this hero's ATK against the target's DEF.";
+            }
+            else if (actionIndex == 1)
+            {
+                text = "Defend — brace: this hero takes half damage until their next turn.";
+            }
+            else
+            {
+                int slot = actionIndex - 2;
+                var skills = SkillCatalog.ForHero(selected.Member.Definition.Id);
+                var skill = skills != null && slot < skills.Length ? skills[slot] : null;
+                if (skill == null)
+                {
+                    HideActionTooltip();
+                    return;
+                }
+                int cd = slot < selected.Cooldowns.Length ? selected.Cooldowns[slot] : 0;
+                text = cd > 0
+                    ? $"{skill.Name} — {skill.Blurb} (ready in {cd} {(cd == 1 ? "round" : "rounds")})"
+                    : $"{skill.Name} — {skill.Blurb}";
+            }
+            _actionTooltipText.text = text;
+            _actionTooltip.SetActive(true);
+        }
+
+        private void HideActionTooltip()
+        {
+            if (_actionTooltip != null) _actionTooltip.SetActive(false);
+        }
+
         // World taps during a turn fight: raycast the hero
         // figures' hit areas (the same pointer pattern as
         // ExteriorView; UI taps are filtered by the EventSystem).
@@ -2064,6 +2140,10 @@ namespace LunarDominion.UI
             bool canAct = selected != null && selected.Alive && !selected.Acted
                 && !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished
                 && _actionBarOpen;
+            // The hover tooltip only lives while the player can
+            // act; the moment an action resolves (Busy) or the
+            // bar closes, it goes away.
+            if (!canAct) HideActionTooltip();
             var skills = selected != null ? SkillCatalog.ForHero(selected.Member.Definition.Id) : null;
             for (int i = 0; i < _turnActionButtons.Count; i++)
             {
