@@ -69,6 +69,12 @@ namespace LunarDominion.Save
         // with all 0/"" and the field is populated on first sync.
         public int[] CampSlotTier = new int[15];
         public string[] CampSlotRespawnUtc = new string[15];
+        // Standing armies (2026-11-12): one entry per army, the
+        // roster as unit serials (see OwnedUnit.Serial), plus
+        // the next serial to hand out. Old saves without these
+        // load with empty rosters and serials assigned on load.
+        public int[][] ArmyRosters;
+        public int NextUnitSerial = 1;
     }
 
     public class SaveService
@@ -127,7 +133,9 @@ namespace LunarDominion.Save
                 BossRespawnUtc = state.BossRespawnUtc ?? "",
                 BossLevelDefeated = Math.Max(0, Math.Min(state.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
                 CampSlotTier = ValidateCampSlotTiers(state.CampSlotTier),
-                CampSlotRespawnUtc = ValidateCampSlotRespawns(state.CampSlotRespawnUtc)
+                CampSlotRespawnUtc = ValidateCampSlotRespawns(state.CampSlotRespawnUtc),
+                ArmyRosters = SerializeRosters(state),
+                NextUnitSerial = Math.Max(1, state.NextUnitSerial)
             };
             string json = JsonUtility.ToJson(data, true);
             string temp = SavePath + ".tmp";
@@ -191,6 +199,27 @@ namespace LunarDominion.Save
                         state.Injured.RemoveAt(i);
                     }
                 }
+                // Standing armies (2026-11-12): every unit needs a
+                // unique serial before rosters can resolve. Units
+                // from older saves arrive with Serial 0 (or, after
+                // ValidateArmy, whatever the save carried); assign
+                // fresh serials to any missing or duplicated ones,
+                // keeping the saved ones stable where possible.
+                state.NextUnitSerial = Math.Max(1, data.NextUnitSerial);
+                var usedSerials = new System.Collections.Generic.HashSet<int>();
+                foreach (var list in new[] { state.Army, state.Injured, state.Heroes })
+                {
+                    foreach (var unit in list)
+                    {
+                        if (unit.Serial <= 0 || usedSerials.Contains(unit.Serial))
+                        {
+                            while (usedSerials.Contains(state.NextUnitSerial)) state.NextUnitSerial++;
+                            unit.Serial = state.NextUnitSerial++;
+                        }
+                        usedSerials.Add(unit.Serial);
+                    }
+                }
+                ResolveRosters(data, state);
                 // Clamp levels: 0-30, and no building above the Nexus.
                 int nexus = Math.Max(1, Math.Min(state.NexusLevel, _balance.MaxBuildingLevel));
                 state.SetLevel(BuildingId.CommandNexus, nexus);
@@ -290,21 +319,22 @@ namespace LunarDominion.Save
             return index;
         }
 
-        // Per-slot occupation arrays (two armies, 2026-11-11): copy a
-        // GameState array into a SaveData array of exactly 2 slots,
-        // padding with the slot's empty value.
+        // Per-slot occupation arrays (one per standing army —
+        // 3 since 2026-11-12): copy a GameState array into a
+        // SaveData array of exactly MaxArmies slots, padding
+        // with the slot's empty value.
         private static int[] CopyIntSlots(int[] source, int emptyValue)
         {
-            var result = new int[2];
-            for (int i = 0; i < 2; i++)
+            var result = new int[GameState.MaxArmies];
+            for (int i = 0; i < GameState.MaxArmies; i++)
                 result[i] = source != null && i < source.Length ? source[i] : emptyValue;
             return result;
         }
 
         private static string[] CopyStringSlots(string[] source)
         {
-            var result = new string[2];
-            for (int i = 0; i < 2; i++)
+            var result = new string[GameState.MaxArmies];
+            for (int i = 0; i < GameState.MaxArmies; i++)
                 result[i] = source != null && i < source.Length && source[i] != null ? source[i] : "";
             return result;
         }
@@ -327,7 +357,9 @@ namespace LunarDominion.Save
         // migrated, not lost.
         private void ApplyOccupations(SaveData data, GameState state)
         {
-            for (int slot = 0; slot < 2; slot++)
+            // One slot per standing army (3 since 2026-11-12);
+            // legacy singular fields still feed slot 0.
+            for (int slot = 0; slot < GameState.MaxArmies; slot++)
             {
                 int index = SlotValue(data.OccupiedNodeIndices, slot, slot == 0 ? data.OccupiedNodeIndex : -1);
                 string end = SlotValue(data.OccupationEndUtcs, slot, slot == 0 ? data.OccupationEndUtc : "");
@@ -377,10 +409,67 @@ namespace LunarDominion.Save
                 {
                     Id = unit.Id,
                     Level = Math.Max(1, Math.Min(unit.Level, _balance.MaxUnitLevel)),
-                    XP = Math.Max(0, unit.XP)
+                    XP = Math.Max(0, unit.XP),
+                    Serial = unit.Serial
                 });
             }
             return result;
+        }
+
+        // Standing armies (2026-11-12): rosters persist as unit
+        // serials. A roster entry whose unit no longer exists is
+        // dropped on load, never the whole save.
+        private static int[][] SerializeRosters(GameState state)
+        {
+            var result = new int[GameState.MaxArmies][];
+            for (int army = 0; army < GameState.MaxArmies; army++)
+            {
+                var roster = state.GetRoster(army);
+                var serials = new System.Collections.Generic.List<int>();
+                if (roster != null)
+                {
+                    foreach (var unit in roster)
+                    {
+                        if (unit != null && unit.Serial > 0) serials.Add(unit.Serial);
+                    }
+                }
+                result[army] = serials.ToArray();
+            }
+            return result;
+        }
+
+        private static void ResolveRosters(SaveData data, GameState state)
+        {
+            state.ArmyRosters = new System.Collections.Generic.List<OwnedUnit>[GameState.MaxArmies];
+            if (data.ArmyRosters == null) return;
+            var bySerial = new System.Collections.Generic.Dictionary<int, OwnedUnit>();
+            foreach (var list in new[] { state.Army, state.Injured, state.Heroes })
+            {
+                foreach (var unit in list)
+                {
+                    if (unit.Serial > 0 && !bySerial.ContainsKey(unit.Serial))
+                        bySerial[unit.Serial] = unit;
+                }
+            }
+            var claimed = new System.Collections.Generic.HashSet<int>();
+            for (int army = 0; army < GameState.MaxArmies && army < data.ArmyRosters.Length; army++)
+            {
+                var roster = state.GetRoster(army);
+                var serials = data.ArmyRosters[army];
+                if (serials == null) continue;
+                int heroes = 0;
+                foreach (int serial in serials)
+                {
+                    if (roster.Count >= 8) break;
+                    if (claimed.Contains(serial)) continue;
+                    if (!bySerial.TryGetValue(serial, out var unit)) continue;
+                    bool isHero = unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor;
+                    if (isHero && heroes >= 1) continue;
+                    roster.Add(unit);
+                    claimed.Add(serial);
+                    if (isHero) heroes++;
+                }
+            }
         }
 
         public void DeleteSave()

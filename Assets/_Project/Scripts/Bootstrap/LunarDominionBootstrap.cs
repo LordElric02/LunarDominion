@@ -20,7 +20,7 @@ namespace LunarDominion.Bootstrap
         private BaseView _baseView;
         private ExteriorView _exteriorView;
         private MapInfoView _mapInfoView;
-        private SquadPickerView _squadPicker;
+        private ArmyView _armyView;
         private BossLairView _lairView;
         private MapExcursionService _excursions;
         private MapPointData _selectedPoint;
@@ -74,12 +74,13 @@ namespace LunarDominion.Bootstrap
             _mapInfoView = new GameObject("MapInfoView").AddComponent<MapInfoView>();
             _mapInfoView.Build(canvas);
 
-            // Squad picker (2026-11-09): choosing which units to send.
-            // Built with the map views; hidden until Send is tapped.
-            _squadPicker = new GameObject("SquadPickerView").AddComponent<SquadPickerView>();
-            _squadPicker.Build(canvas, _controller);
-            _squadPicker.OnConfirmClicked += OnSquadPickerConfirm;
-            _squadPicker.OnCancelClicked += OnSquadPickerCancel;
+            // Army tab (2026-11-12, standing armies): build and
+            // edit the standing armies. The excursion service is
+            // created further down, so the out-check is a lazy
+            // lambda read at refresh time.
+            _armyView = new GameObject("ArmyView").AddComponent<ArmyView>();
+            _armyView.Build(canvas, _controller);
+            _armyView.IsArmyOut = army => _excursions != null && _excursions.IsArmyOut(army);
 
             // Boss lair interior (2026-11-10): a full-screen view inside
             // the War Robot's lair, separate from the exterior map.
@@ -99,7 +100,7 @@ namespace LunarDominion.Bootstrap
                 _exteriorView, () => _controller.SaveGame(), () => _controller.NotifyChanged());
             _excursions.OnExcursionResult += OnExcursionResult;
             _excursions.OnExcursionStateChanged += OnExcursionStateChanged;
-            _mapInfoView.OnSendClicked += OnSendExcursionClicked;
+            _mapInfoView.OnArmySendClicked += OnArmySendClicked;
 
             _buildingPanel = new GameObject("BuildingPanelView").AddComponent<BuildingPanelView>();
             _buildingPanel.Build(canvas, _controller);
@@ -201,7 +202,8 @@ namespace LunarDominion.Bootstrap
         {
             if (point == null) return;
             string info = point.Info;
-            bool showSend = false;
+            bool sendable = false;
+            var armyCanSend = new bool[GameState.MaxArmies];
             if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair && _excursions.IsNodeOccupied(point.Index))
             {
                 if (_excursions.OccupationInfo(point.Index, out int army, out int troops, out var remaining))
@@ -217,13 +219,24 @@ namespace LunarDominion.Bootstrap
             {
                 info = $"{point.Info}\nDepleted — regenerates in {MapExcursionService.FormatRemaining(remaining)}.";
             }
-            else if (_excursions.CanSend(point, out var reason))
+            else if (_excursions.CanSendToPoint(point, out var targetReason))
             {
-                showSend = true;
+                // Standing armies (2026-11-12): one send button
+                // per army; each army's own blocker (locked, out,
+                // empty, all injured) is listed under the info.
+                sendable = true;
+                for (int army = 0; army < GameState.MaxArmies; army++)
+                {
+                    armyCanSend[army] = _excursions.CanSendArmy(point, army, out var armyReason);
+                    if (!armyCanSend[army] && armyReason != "Ready to send.")
+                    {
+                        info = $"{info}\n{armyReason}";
+                    }
+                }
             }
-            else if (reason != "Ready to send.")
+            else
             {
-                info = $"{point.Info}\n{reason}";
+                info = $"{point.Info}\n{targetReason}";
             }
             // A camp above the player's Nexus is sendable (the fight
             // proceeds and likely fails) — show the too-strong warning
@@ -233,8 +246,14 @@ namespace LunarDominion.Bootstrap
             {
                 info = $"{info}\n{warning}";
             }
-            _mapInfoView.Show(point.Title, info, showSend);
-            _mapInfoView.SetSendEnabled(showSend);
+            _mapInfoView.Show(point.Title, info);
+            if (sendable)
+            {
+                for (int army = 0; army < GameState.MaxArmies; army++)
+                {
+                    _mapInfoView.SetArmyButton(army, $"Army {army + 1}", true, armyCanSend[army]);
+                }
+            }
         }
 
         // Tap on empty map ground hides the info panel.
@@ -244,81 +263,19 @@ namespace LunarDominion.Bootstrap
             _mapInfoView.Hide();
         }
 
-        // Send Excursion tapped in the info panel: show the squad
-        // picker (pre-filled with the strongest available units)
-        // instead of sending immediately, so the player chooses which
-        // units go. Units already out with the other army (two
-        // armies, 2026-11-11) are excluded from the picker.
-        private void OnSendExcursionClicked()
+        // An army button tapped in the info panel (standing
+        // armies, 2026-11-12): send that standing army as built
+        // in the Army tab — no squad picking at send time.
+        private void OnArmySendClicked(int army)
         {
             if (_selectedPoint == null) return;
-            _squadPicker.Show(_selectedPoint.Title, _excursions.DefaultSquadCounts(), _excursions.DeployedUnits());
-        }
-
-        // Squad picker confirmed: convert the chosen counts to army
-        // indices (first N of each type, in army order — same as the
-        // Expeditions menu) and hero indices (each hero is unique), and
-        // send that mixed squad. Heroes march with the army now
-        // (2026-11-10) and gain XP from camp fights.
-        private void OnSquadPickerConfirm(Dictionary<UnitId, int> counts)
-        {
-            _squadPicker.Hide();
-            if (_selectedPoint == null) return;
-            var squad = SquadIndicesForCounts(counts);
-            var heroes = HeroIndicesForCounts(counts);
-            if (squad.Count == 0 && heroes.Count == 0) return;
+            var point = _selectedPoint;
             // The point's info panel goes away as the army heads
             // out (Patrick 2026-11-12) — hidden BEFORE the start
             // call so a failure result can still pop over it.
             _mapInfoView.Hide();
-            _excursions.StartExcursion(_selectedPoint, squad, heroes);
             _selectedPoint = null;
-        }
-
-        private void OnSquadPickerCancel()
-        {
-            _squadPicker.Hide();
-        }
-
-        private List<int> SquadIndicesForCounts(Dictionary<UnitId, int> counts)
-        {
-            var remaining = new Dictionary<UnitId, int>(counts);
-            var indices = new List<int>();
-            if (_controller.State.Army == null) return indices;
-            for (int i = 0; i < _controller.State.Army.Count; i++)
-            {
-                var unit = _controller.State.Army[i];
-                if (unit == null) continue;
-                // Units out with the other army cannot be picked again.
-                if (_excursions != null && _excursions.IsDeployed(unit)) continue;
-                if (remaining.ContainsKey(unit.Id) && remaining[unit.Id] > 0)
-                {
-                    remaining[unit.Id]--;
-                    indices.Add(i);
-                }
-            }
-            return indices;
-        }
-
-        // Hero indices for the chosen counts: each hero is unique, so a
-        // count of 1 for a hero id means include that hero (by its
-        // position in State.Heroes).
-        private List<int> HeroIndicesForCounts(Dictionary<UnitId, int> counts)
-        {
-            var indices = new List<int>();
-            if (_controller.State.Heroes == null) return indices;
-            for (int i = 0; i < _controller.State.Heroes.Count; i++)
-            {
-                var hero = _controller.State.Heroes[i];
-                if (hero == null) continue;
-                // A hero out with the other army cannot be picked again.
-                if (_excursions != null && _excursions.IsDeployed(hero)) continue;
-                if (counts.ContainsKey(hero.Id) && counts[hero.Id] > 0)
-                {
-                    indices.Add(i);
-                }
-            }
-            return indices;
+            _excursions.StartExcursion(point, army);
         }
 
         // An excursion resolved (collection / battle) or could not start:
@@ -399,7 +356,7 @@ namespace LunarDominion.Bootstrap
             _selectedPoint = null;
             _buildingPanel.Hide();
             _mapInfoView.Hide();
-            _squadPicker.Hide();
+            _armyView.Hide();
             _lairView?.Hide();
             _heroesView.Hide();
             _researchView.Hide();
@@ -415,6 +372,12 @@ namespace LunarDominion.Bootstrap
                     _baseView.SetVisible(false);
                     _baseView.SetMountainsVisible(true);
                     _heroesView.Show();
+                    break;
+                case NavTab.Army:
+                    _exteriorView.SetVisible(false);
+                    _baseView.SetVisible(false);
+                    _baseView.SetMountainsVisible(true);
+                    _armyView.Show();
                     break;
                 case NavTab.Research:
                     _exteriorView.SetVisible(false);
@@ -442,6 +405,7 @@ namespace LunarDominion.Bootstrap
             _topBar?.Refresh();
             _buildingPanel?.Refresh();
             _heroesView?.Refresh();
+            _armyView?.Refresh();
             _researchView?.Refresh();
             // An occupation may have ended (its timer is real-time, and
             // it can end while the app was closed — the harvest is

@@ -100,10 +100,13 @@ namespace LunarDominion.UI
         // Excursion march markers, one per army slot (two armies,
         // 2026-11-11): slot 0 = Army 1 (cyan), slot 1 = Army 2
         // (orange). Each slot marches independently.
-        private readonly GameObject[] _marchMarkers = new GameObject[2];
-        private readonly bool[] _marching = new bool[2];
-        private readonly Vector3[] _marchTargets = new Vector3[2];
-        private readonly Action[] _marchCallbacks = new Action[2];
+        // One marker set per standing army (3 since 2026-11-12;
+        // sized from GameState.MaxArmies so a future army cap
+        // raise only touches the data).
+        private readonly GameObject[] _marchMarkers = new GameObject[GameState.MaxArmies];
+        private readonly bool[] _marching = new bool[GameState.MaxArmies];
+        private readonly Vector3[] _marchTargets = new Vector3[GameState.MaxArmies];
+        private readonly Action[] _marchCallbacks = new Action[GameState.MaxArmies];
         // March speed: 20 u/s when the map enlarged (positions
         // doubled, so trip times matched the old map's 10 u/s);
         // slowed to 14 u/s for Phase 2 (Patrick 2026-11-12) — real
@@ -123,16 +126,24 @@ namespace LunarDominion.UI
         private const int SquadModeMarching = 0;
         private const int SquadModeParked = 1;
         private const int SquadModeFighting = 2;
-        private readonly List<GameObject>[] _squadFigures = { new List<GameObject>(), new List<GameObject>() };
-        private readonly List<UnitId>[] _squadMembers = { new List<UnitId>(), new List<UnitId>() };
-        private readonly string[] _squadKeys = { "", "" };
-        private readonly int[] _squadModes = new int[2];
-        private readonly bool[] _squadAnimOwned = new bool[2];
-        private readonly TextMesh[] _squadChips = new TextMesh[2];
-        private readonly List<GameObject>[] _routeDots = { new List<GameObject>(), new List<GameObject>() };
-        private readonly Material[] _routeDotMats = new Material[2];
+        private readonly List<GameObject>[] _squadFigures = CreateSlotLists<GameObject>();
+        private readonly List<UnitId>[] _squadMembers = CreateSlotLists<UnitId>();
+        private readonly string[] _squadKeys = new string[GameState.MaxArmies];
+        private readonly int[] _squadModes = new int[GameState.MaxArmies];
+        private readonly bool[] _squadAnimOwned = new bool[GameState.MaxArmies];
+        private readonly TextMesh[] _squadChips = new TextMesh[GameState.MaxArmies];
+        private readonly List<GameObject>[] _routeDots = CreateSlotLists<GameObject>();
+        private readonly Material[] _routeDotMats = new Material[GameState.MaxArmies];
+
+        private static List<T>[] CreateSlotLists<T>()
+        {
+            var lists = new List<T>[GameState.MaxArmies];
+            for (int i = 0; i < lists.Length; i++) lists[i] = new List<T>();
+            return lists;
+        }
         private float _squadAnimTime;
-        private static readonly Color[] ArmyColors = { new Color(0.2f, 0.9f, 1.0f), new Color(1.0f, 0.55f, 0.15f) };
+        // Army colours: 1 cyan, 2 orange, 3 violet (2026-11-12).
+        private static readonly Color[] ArmyColors = { new Color(0.2f, 0.9f, 1.0f), new Color(1.0f, 0.55f, 0.15f), new Color(0.62f, 0.38f, 1.0f) };
         // The mini models were authored facing +X in Blender; after
         // the FBX import the visual front sits at -Z, so the facing
         // pivot flips 180 degrees to put it on the wrapper's +Z.

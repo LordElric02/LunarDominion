@@ -12,6 +12,11 @@ namespace LunarDominion.Core
         public UnitId Id;
         public int Level = 1;
         public int XP;
+        // Standing armies (2026-11-12): a permanent per-unit
+        // serial, assigned at recruitment (or on load for older
+        // saves), so an army roster can name THIS unit across
+        // saves, hospital trips and list moves. 0 = unassigned.
+        public int Serial;
 
         public OwnedUnit() { }
 

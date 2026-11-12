@@ -137,15 +137,19 @@ namespace LunarDominion.Units
             if (status != RecruitStatus.CanRecruit) return false;
             if (!_economy.Spend(cost)) { reason = "Not enough resources."; return false; }
             // Heroes go to the Heroes list, regular units to the Army.
+            var unit = new OwnedUnit(def.Id);
+            // Standing armies (2026-11-12): every unit gets a
+            // permanent serial at birth so rosters can name it.
+            unit.Serial = _state.NextUnitSerial++;
             if (def.IsHero)
             {
                 if (_state.Heroes == null) _state.Heroes = new List<OwnedUnit>();
-                _state.Heroes.Add(new OwnedUnit(def.Id));
+                _state.Heroes.Add(unit);
             }
             else
             {
                 if (_state.Army == null) _state.Army = new List<OwnedUnit>();
-                _state.Army.Add(new OwnedUnit(def.Id));
+                _state.Army.Add(unit);
             }
             reason = $"{def.DisplayName} recruited at level 1.";
             return true;

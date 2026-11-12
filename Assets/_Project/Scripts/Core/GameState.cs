@@ -89,11 +89,43 @@ namespace LunarDominion.Core
         // occupation survives an app restart; if the end time passes
         // while the app is closed, the harvest is granted on the
         // next load.
-        public int[] OccupiedNodeIndex = { -1, -1 };
-        public string[] OccupationEndUtc = { "", "" };
-        public int[] OccupationAmount = new int[2];
-        public int[] OccupationKind = new int[2];
-        public int[] OccupationTroops = new int[2];
+        public int[] OccupiedNodeIndex = { -1, -1, -1 };
+        public string[] OccupationEndUtc = { "", "", "" };
+        public int[] OccupationAmount = new int[MaxArmies];
+        public int[] OccupationKind = new int[MaxArmies];
+        public int[] OccupationTroops = new int[MaxArmies];
+
+        // Standing armies (2026-11-12, Patrick — replaces the
+        // send-time squads): up to MaxArmies standing armies are
+        // built in the Army tab — a hero pick plus assigned
+        // troops — and the player picks which army to send from
+        // the map. The count is data-driven (gates array) so
+        // more armies can be added later by extending the
+        // arrays; MaxArmies is the current cap.
+        public const int MaxArmies = 3;
+        public static readonly int[] ArmyNexusGates = { 1, 10, 20 };
+        // One roster per army: the actual OwnedUnit instances
+        // (troops from Army, at most one hero from Heroes),
+        // capped at 8 including the hero. Saved as unit serials
+        // (see SaveService). Entries may be null until GetRoster.
+        public List<OwnedUnit>[] ArmyRosters = new List<OwnedUnit>[MaxArmies];
+        public int NextUnitSerial = 1;
+
+        /// <summary>The roster list for an army (created on first
+        /// use). Null for an out-of-range army index.</summary>
+        public List<OwnedUnit> GetRoster(int army)
+        {
+            if (army < 0 || army >= MaxArmies) return null;
+            if (ArmyRosters == null) ArmyRosters = new List<OwnedUnit>[MaxArmies];
+            if (ArmyRosters[army] == null) ArmyRosters[army] = new List<OwnedUnit>();
+            return ArmyRosters[army];
+        }
+
+        /// <summary>True when this Nexus level unlocks the army.</summary>
+        public bool ArmyUnlocked(int army)
+        {
+            return army >= 0 && army < MaxArmies && NexusLevel >= ArmyNexusGates[army];
+        }
         public float ProductionCarryBiomass;
         public float ProductionCarryAlloy;
         public float ProductionCarryHelium3;

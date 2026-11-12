@@ -71,7 +71,10 @@ namespace LunarDominion.Expeditions
         // slot 1 = Army 2. The second army is gated at this Nexus
         // level (Patrick's pick) — below it the game plays exactly
         // as the single-army version.
-        public const int ArmySlotCount = 2;
+        // Standing armies (2026-11-12): one slot per standing
+        // army, sized from GameState so raising the army cap
+        // later is a data change, not a rewrite.
+        public const int ArmySlotCount = GameState.MaxArmies;
         public const int SecondArmyNexusGate = 10;
 
         /// <summary>One army's excursion: its target, its squad
@@ -95,11 +98,46 @@ namespace LunarDominion.Expeditions
         // panel can refresh its Send button.
         public event Action OnExcursionStateChanged;
 
-        public bool IsMarching => _slots[0].Marching || _slots[1].Marching;
+        public bool IsMarching
+        {
+            get { foreach (var s in _slots) if (s.Marching) return true; return false; }
+        }
         // True while any army is out — marching or farming a node.
         // CanSend refuses a send with no free slot; the Expeditions
         // menu is untouched.
-        public bool IsBusy => _slots[0].Busy || _slots[1].Busy;
+        public bool IsBusy
+        {
+            get { foreach (var s in _slots) if (s.Busy) return true; return false; }
+        }
+
+        /// <summary>True when the given standing army can be
+        /// unlocked at the current Nexus level (Army 1 at Nexus
+        /// 1, Army 2 at 10, Army 3 at 20 — GameState gates).</summary>
+        public bool ArmyUnlocked(int army) => _state.ArmyUnlocked(army);
+
+        /// <summary>True while the given army is out — marching,
+        /// fighting, or farming a node.</summary>
+        public bool IsArmyOut(int army)
+        {
+            return army >= 0 && army < ArmySlotCount && _slots[army].Busy;
+        }
+
+        /// <summary>The standing army's roster members that can
+        /// march right now: assigned and not injured. Heroes are
+        /// never injured, so they always count when assigned.</summary>
+        public List<OwnedUnit> HealthyRoster(int army)
+        {
+            var result = new List<OwnedUnit>();
+            var roster = _state.GetRoster(army);
+            if (roster == null) return result;
+            foreach (var unit in roster)
+            {
+                if (unit == null) continue;
+                if (_state.Injured != null && _state.Injured.Contains(unit)) continue;
+                result.Add(unit);
+            }
+            return result;
+        }
 
         /// <summary>True once the second army is unlocked (the Nexus
         /// gate, Patrick 2026-11-11).</summary>
@@ -115,7 +153,14 @@ namespace LunarDominion.Expeditions
         private readonly Action _saveGame;
         private readonly Action _notifyChanged;
 
-        private readonly ExcursionSlot[] _slots = { new ExcursionSlot(), new ExcursionSlot() };
+        private readonly ExcursionSlot[] _slots = CreateSlots();
+
+        private static ExcursionSlot[] CreateSlots()
+        {
+            var slots = new ExcursionSlot[ArmySlotCount];
+            for (int i = 0; i < slots.Length; i++) slots[i] = new ExcursionSlot();
+            return slots;
+        }
 
         public MapExcursionService(GameState state, EconomyService economy, ExpeditionService expeditions,
             BalanceData balance, List<UnitDefinition> units, List<EncounterDefinition> encounters,
@@ -190,7 +235,7 @@ namespace LunarDominion.Expeditions
         /// the player may attack a camp or the boss above their Nexus
         /// and the fight proceeds (and likely fails) — WarningFor
         /// carries the too-strong warning instead.</summary>
-        public bool CanSend(MapPointData point, out string reason)
+        public bool CanSendToPoint(MapPointData point, out string reason)
         {
             reason = "";
             if (point == null)
@@ -215,21 +260,6 @@ namespace LunarDominion.Expeditions
                     reason = $"Army {slot + 1} is already headed there.";
                     return false;
                 }
-            }
-            if (FreeSlot() < 0)
-            {
-                reason = !SecondArmyUnlocked
-                    ? $"Your army is deployed — a second army unlocks at Nexus {SecondArmyNexusGate} (you are Nexus {_state.NexusLevel})."
-                    : "Both armies are deployed.";
-                return false;
-            }
-            if (!HasAvailableUnits())
-            {
-                reason = (_state.Army == null || _state.Army.Count == 0)
-                    && (_state.Heroes == null || _state.Heroes.Count == 0)
-                    ? "Recruit units first — your army is empty."
-                    : "All your units are already deployed.";
-                return false;
             }
             if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair)
             {
@@ -280,6 +310,60 @@ namespace LunarDominion.Expeditions
             return true;
         }
 
+        /// <summary>Can this standing army be sent to this point
+        /// right now? Combines the target rules (CanSendToPoint)
+        /// with the army's own state: unlocked, home, and with at
+        /// least one healthy unit in its roster.</summary>
+        public bool CanSendArmy(MapPointData point, int army, out string reason)
+        {
+            if (!CanSendToPoint(point, out reason)) return false;
+            if (army < 0 || army >= ArmySlotCount)
+            {
+                reason = "No such army.";
+                return false;
+            }
+            if (!ArmyUnlocked(army))
+            {
+                reason = $"Army {army + 1} unlocks at Nexus {GameState.ArmyNexusGates[army]} (you are Nexus {_state.NexusLevel}).";
+                return false;
+            }
+            if (_slots[army].Busy)
+            {
+                reason = $"Army {army + 1} is already out.";
+                return false;
+            }
+            var roster = _state.GetRoster(army);
+            if (roster == null || roster.Count == 0)
+            {
+                reason = $"Army {army + 1} has no units — build it in the Army tab.";
+                return false;
+            }
+            if (HealthyRoster(army).Count == 0)
+            {
+                reason = $"Every unit in Army {army + 1} is injured — heal them at the Hospital.";
+                return false;
+            }
+            reason = "Ready to send.";
+            return true;
+        }
+
+        /// <summary>Legacy any-army check, kept for callers that
+        /// only need to know whether a send is possible at all:
+        /// the target must be valid and at least one unlocked,
+        /// home army must have a healthy unit.</summary>
+        public bool CanSend(MapPointData point, out string reason)
+        {
+            if (!CanSendToPoint(point, out reason)) return false;
+            string firstReason = null;
+            for (int army = 0; army < ArmySlotCount; army++)
+            {
+                if (CanSendArmy(point, army, out var armyReason)) return true;
+                if (firstReason == null) firstReason = armyReason;
+            }
+            reason = firstReason ?? "No army can be sent.";
+            return false;
+        }
+
         /// <summary>Warning shown in the panel for a camp or the boss
         /// above the player's Nexus (2026-11-09): the fight is allowed,
         /// but the enemy is far stronger. Null when there is nothing to
@@ -302,38 +386,37 @@ namespace LunarDominion.Expeditions
             return $"Warning: this enemy is far stronger than your army — Tier {point.Tier} unlocks at Nexus {encounter.RequiredNexusLevel} (you are Nexus {_state.NexusLevel}). Your squad is likely to be wiped out.";
         }
 
-        public void StartExcursion(MapPointData point)
-        {
-            StartExcursion(point, null);
-        }
 
-        /// <summary>Send a chosen squad (army indices + hero indices)
-        /// with the first free army slot. Null or empty falls back to
-        /// the whole army + heroes, strongest first, capped — the
-        /// previous default. The squad is snapshotted as unit
-        /// references for arrival, so the farming duration and the
-        /// fight both use the units the player picked, not the whole
-        /// army — and the other army's fight cannot shift this
-        /// squad's indices while it is out. Heroes march with the
-        /// army now (2026-11-10) and gain XP from camp fights.</summary>
-        public void StartExcursion(MapPointData point, List<int> squadIndices, List<int> heroIndices = null)
+        /// <summary>Send a standing army (2026-11-12): the
+        /// army's healthy roster, built in the Army tab, marches
+        /// as one. The roster is snapshotted as unit references
+        /// for arrival, so the farming duration and the fight use
+        /// exactly those units — and another army's fight cannot
+        /// shift this squad while it is out.</summary>
+        public void StartExcursion(MapPointData point, int armyIndex)
         {
-            if (!CanSend(point, out var reason))
+            if (!CanSendArmy(point, armyIndex, out var reason))
             {
                 OnExcursionResult?.Invoke(point != null ? point.Title : "Excursion", reason);
                 return;
             }
-            int slotIndex = FreeSlot();
+            int slotIndex = armyIndex;
             var slot = _slots[slotIndex];
             slot.Point = point;
-            var armyIndices = squadIndices != null && squadIndices.Count > 0
-                ? squadIndices
-                : BuildSquadIndices();
-            var heroIdx = heroIndices != null && heroIndices.Count > 0
-                ? heroIndices
-                : BuildSquadHeroIndices();
-            slot.Squad = UnitsAt(_state.Army, armyIndices);
-            slot.HeroSquad = UnitsAt(_state.Heroes, heroIdx);
+            // The standing army marches as built in the Army tab:
+            // its healthy roster members, snapshotted as unit
+            // references so the fight and the farming duration
+            // use exactly those units. Injured members stay
+            // assigned but sit this one out.
+            slot.Squad = new List<OwnedUnit>();
+            slot.HeroSquad = new List<OwnedUnit>();
+            foreach (var unit in HealthyRoster(armyIndex))
+            {
+                if (unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor)
+                    slot.HeroSquad.Add(unit);
+                else
+                    slot.Squad.Add(unit);
+            }
             // Phase 2: the view builds the marching figures from the
             // squad (heroes first — they lead the formation).
             _view.SetSquadComposition(slotIndex, CompositionOf(slot));

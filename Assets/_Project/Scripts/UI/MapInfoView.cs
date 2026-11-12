@@ -1,4 +1,5 @@
 using System;
+using LunarDominion.Core;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,8 +18,11 @@ namespace LunarDominion.UI
     /// group measured it as zero, so the text vanished).</summary>
     public class MapInfoView : MonoBehaviour
     {
-        // Raised when the Send Excursion button is tapped.
-        public event Action OnSendClicked;
+        // Raised with the army index when one of the per-army
+        // send buttons is tapped (standing armies, 2026-11-12:
+        // the player picks WHICH army goes, not a squad — the
+        // squad picker is retired).
+        public event Action<int> OnArmySendClicked;
 
         // True while the panel is showing an excursion result rather
         // than a point's info — the Bootstrap does not overwrite a
@@ -29,7 +33,7 @@ namespace LunarDominion.UI
         private GameObject _root;
         private Text _titleText;
         private Text _infoText;
-        private Button _sendButton;
+        private readonly Button[] _armyButtons = new Button[GameState.MaxArmies];
         private ScrollRect _scroll;
         private RectTransform _contentRt;
         private bool _showingResult;
@@ -45,16 +49,24 @@ namespace LunarDominion.UI
             _titleText = UIHelpers.LabelInRect(_root, "Title", "", 36, Color.white,
                 new Rect(0.04f, 0.80f, 0.96f, 0.97f));
             BuildInfoScroll();
-            // Send button in the bottom strip, below the info text.
-            _sendButton = UIHelpers.Button(_root, "SendButton", "Choose Squad", 28,
-                UIHelpers.Hex("#2E7D32"), Color.white);
-            var rt = _sendButton.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.04f, 0.02f);
-            rt.anchorMax = new Vector2(0.96f, 0.12f);
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-            _sendButton.onClick.AddListener(() => OnSendClicked?.Invoke());
-            _sendButton.gameObject.SetActive(false);
+            // One send button per standing army in the bottom
+            // strip, below the info text. The Bootstrap sets each
+            // button's label/visibility/enabled state per point.
+            for (int i = 0; i < GameState.MaxArmies; i++)
+            {
+                int army = i;
+                var btn = UIHelpers.Button(_root, "ArmyButton" + i, "Army " + (i + 1), 26,
+                    UIHelpers.Hex("#2E7D32"), Color.white);
+                var rt = btn.GetComponent<RectTransform>();
+                float step = 0.92f / GameState.MaxArmies;
+                rt.anchorMin = new Vector2(0.04f + i * step, 0.02f);
+                rt.anchorMax = new Vector2(0.04f + (i + 1) * step - 0.015f, 0.12f);
+                rt.offsetMin = Vector2.zero;
+                rt.offsetMax = Vector2.zero;
+                btn.onClick.AddListener(() => OnArmySendClicked?.Invoke(army));
+                btn.gameObject.SetActive(false);
+                _armyButtons[i] = btn;
+            }
             _root.SetActive(false);
         }
 
@@ -136,15 +148,36 @@ namespace LunarDominion.UI
             _scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
         }
 
-        public void Show(string title, string info, bool showSend)
+        public void Show(string title, string info)
         {
             _showingResult = false;
             _resultHideAt = -1f;
             _titleText.text = title;
             _infoText.text = info;
-            _sendButton.gameObject.SetActive(showSend);
+            HideArmyButtons();
             _root.SetActive(true);
             ResetScroll();
+        }
+
+        /// <summary>Configure one army's send button. Called by
+        /// the Bootstrap after Show, once per army.</summary>
+        public void SetArmyButton(int army, string label, bool visible, bool enabled)
+        {
+            if (army < 0 || army >= _armyButtons.Length) return;
+            var btn = _armyButtons[army];
+            if (btn == null) return;
+            btn.gameObject.SetActive(visible);
+            var text = btn.GetComponentInChildren<Text>();
+            if (text != null) text.text = label;
+            UIHelpers.SetButtonEnabled(btn, enabled);
+        }
+
+        private void HideArmyButtons()
+        {
+            foreach (var btn in _armyButtons)
+            {
+                if (btn != null) btn.gameObject.SetActive(false);
+            }
         }
 
         // Show an excursion outcome (collection / battle) in the same
@@ -160,14 +193,9 @@ namespace LunarDominion.UI
             _resultHideAt = Time.time + ResultSeconds;
             _titleText.text = title;
             _infoText.text = body;
-            _sendButton.gameObject.SetActive(false);
+            HideArmyButtons();
             _root.SetActive(true);
             ResetScroll();
-        }
-
-        public void SetSendEnabled(bool enabled)
-        {
-            if (_sendButton != null) UIHelpers.SetButtonEnabled(_sendButton, enabled);
         }
 
         public void Hide()
