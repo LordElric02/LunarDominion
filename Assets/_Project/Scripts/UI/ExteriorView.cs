@@ -506,6 +506,26 @@ namespace LunarDominion.UI
             }
         }
 
+        // The creature FBXs are authored around their centres,
+        // so placed at y=0 they sit sunk into the ground by half
+        // their height (Patrick 2026-11-12: the crawlers and
+        // stalkers looked buried in moon sand). Lift the
+        // instance so its lowest rendered point rests exactly
+        // on the ground. Measured from the real bounds, so it
+        // is right for every creature model whatever its origin.
+        private static void GroundSnap(GameObject go)
+        {
+            float minY = float.MaxValue;
+            foreach (var rend in go.GetComponentsInChildren<Renderer>())
+            {
+                if (rend.bounds.min.y < minY) minY = rend.bounds.min.y;
+            }
+            if (minY < -0.001f && minY != float.MaxValue)
+            {
+                go.transform.position += new Vector3(0f, -minY, 0f);
+            }
+        }
+
         private void BuildSlotCreatures(int slot, int tier)
         {
             var template = CampCreatureTemplates[tier - 1];
@@ -530,6 +550,7 @@ namespace LunarDominion.UI
                 go.name = title + " Creature";
                 go.transform.position = CampSlotPositions[slot] + def.Offset;
                 go.transform.localScale = Vector3.one * def.Scale;
+                GroundSnap(go);
                 if (go.GetComponentInChildren<Collider>() == null)
                 {
                     var box = go.AddComponent<BoxCollider>();
@@ -1062,6 +1083,7 @@ namespace LunarDominion.UI
                 // Same rotation rule as the terrain: leave the imported
                 // rotation alone (Bake Axis Conversion).
                 go.transform.localScale = Vector3.one * def.Scale;
+                GroundSnap(go);
                 // Tappable like the nodes/camps: a generous BoxCollider
                 // so the creature shows its camp's info when tapped.
                 if (go.GetComponentInChildren<Collider>() == null)
