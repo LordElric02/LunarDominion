@@ -1616,18 +1616,28 @@ namespace LunarDominion.UI
             if (_bottomNavGo != null) _bottomNavGo.SetActive(!fight);
             if (_bossHpText != null && _bossHpText.transform.parent is RectTransform barRt)
             {
-                barRt.anchorMin = fight ? new Vector2(0.22f, 0.925f) : new Vector2(0.22f, 0.845f);
-                barRt.anchorMax = fight ? new Vector2(0.78f, 0.975f) : new Vector2(0.78f, 0.90f);
+                // Fight height: level with the DEV button (Patrick
+                // 2026-11-11). DEV is a canvas child at canvas
+                // y 0.88-0.93, but this HUD lives inside the lair
+                // panel, which spans only canvas y 200-920 of
+                // 1080 (0.185-0.852) — so panel anchors above 1.0
+                // are required to reach DEV's band: panel 1.04-
+                // 1.12 == canvas 0.879-0.932. (The earlier fight
+                // band, panel 0.925-0.975, is only canvas 0.80-
+                // 0.835 — visibly below DEV.) No mask on the lair
+                // root, so the overflow renders fine.
+                barRt.anchorMin = fight ? new Vector2(0.22f, 1.04f) : new Vector2(0.22f, 0.845f);
+                barRt.anchorMax = fight ? new Vector2(0.78f, 1.12f) : new Vector2(0.78f, 0.90f);
             }
             SetHudRect(_turnOrderText,
-                fight ? new Vector2(0.22f, 0.855f) : new Vector2(0.22f, 0.78f),
-                fight ? new Vector2(0.78f, 0.915f) : new Vector2(0.78f, 0.84f));
+                fight ? new Vector2(0.22f, 0.97f) : new Vector2(0.22f, 0.78f),
+                fight ? new Vector2(0.78f, 1.03f) : new Vector2(0.78f, 0.84f));
             SetHudRect(_turnIntentText,
-                fight ? new Vector2(0.22f, 0.805f) : new Vector2(0.22f, 0.73f),
-                fight ? new Vector2(0.78f, 0.85f) : new Vector2(0.78f, 0.775f));
+                fight ? new Vector2(0.22f, 0.925f) : new Vector2(0.22f, 0.73f),
+                fight ? new Vector2(0.78f, 0.97f) : new Vector2(0.78f, 0.775f));
             SetHudRect(_warningText,
-                fight ? new Vector2(0.25f, 0.68f) : new Vector2(0.25f, 0.605f),
-                fight ? new Vector2(0.75f, 0.80f) : new Vector2(0.75f, 0.725f));
+                fight ? new Vector2(0.25f, 0.80f) : new Vector2(0.25f, 0.605f),
+                fight ? new Vector2(0.75f, 0.92f) : new Vector2(0.75f, 0.725f));
         }
 
         private static void SetHudRect(Text label, Vector2 min, Vector2 max)
