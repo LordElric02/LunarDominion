@@ -320,13 +320,23 @@ namespace LunarDominion.UI
                     textLeft = 0.15f;
                 }
                 UIHelpers.LabelInRect(rowGo, "Name", $"{def.DisplayName}  ★ HERO  •  {def.Class}", 28, Color.white,
-                    new Rect(textLeft, 0.67f, 0.72f, 0.98f));
+                    new Rect(textLeft, 0.70f, 0.72f, 0.99f));
+                // NOTE (2026-11-12): UIHelpers.Label sets
+                // verticalOverflow = Truncate, and a Legacy Text
+                // whose single line is taller than its rect is
+                // culled whole — that is why the stats/cost lines
+                // vanished when the row bands were tightened for
+                // the XP bar. These row texts opt into Overflow
+                // so they can never be culled by band height.
                 var stats = UIHelpers.LabelInRect(rowGo, "Stats", "", 24, UIHelpers.Hex("#C0C8D0"),
-                    new Rect(textLeft, 0.42f, 0.72f, 0.67f));
+                    new Rect(textLeft, 0.30f, 0.72f, 0.525f));
+                stats.verticalOverflow = VerticalWrapMode.Overflow;
                 var cost = UIHelpers.LabelInRect(rowGo, "Cost", "", 24, UIHelpers.Hex("#FFD166"),
-                    new Rect(textLeft, 0.215f, 0.72f, 0.42f));
+                    new Rect(textLeft, 0.05f, 0.72f, 0.275f));
+                cost.verticalOverflow = VerticalWrapMode.Overflow;
                 // XP-to-next-level bar (Patrick 2026-11-12): a
-                // thin horizontal bar under the cost line so each
+                // thin horizontal bar under the name line, with
+                // the stats and cost lines below it, so each
                 // hero's progress to the next level is visible at
                 // a glance. The fill is driven by anchor (a
                 // sprite-less Filled image does not clip in this
@@ -338,8 +348,8 @@ namespace LunarDominion.UI
                 barBg.color = UIHelpers.Hex("#0A0F16");
                 barBg.raycastTarget = false;
                 var barRt = barGo.GetComponent<RectTransform>();
-                barRt.anchorMin = new Vector2(textLeft, 0.05f);
-                barRt.anchorMax = new Vector2(0.72f, 0.175f);
+                barRt.anchorMin = new Vector2(textLeft, 0.55f);
+                barRt.anchorMax = new Vector2(0.72f, 0.675f);
                 barRt.offsetMin = Vector2.zero;
                 barRt.offsetMax = Vector2.zero;
                 var fillGo = new GameObject("XpFill");
@@ -355,6 +365,7 @@ namespace LunarDominion.UI
                 var barLabel = UIHelpers.LabelInRect(barGo, "XpText", "", 16, Color.white,
                     new Rect(0f, 0f, 1f, 1f), TextAnchor.MiddleCenter);
                 barLabel.raycastTarget = false;
+                barLabel.verticalOverflow = VerticalWrapMode.Overflow;
                 var btn = UIHelpers.Button(rowGo, "RecruitBtn", "Recruit", 26,
                     UIHelpers.Hex("#2E7D32"), Color.white);
                 var rt = btn.GetComponent<RectTransform>();
