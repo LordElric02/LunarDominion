@@ -334,10 +334,41 @@ namespace LunarDominion.Expeditions
                 : BuildSquadHeroIndices();
             slot.Squad = UnitsAt(_state.Army, armyIndices);
             slot.HeroSquad = UnitsAt(_state.Heroes, heroIdx);
+            // Phase 2: the view builds the marching figures from the
+            // squad (heroes first — they lead the formation).
+            _view.SetSquadComposition(slotIndex, CompositionOf(slot));
             slot.Marching = true;
             OnExcursionStateChanged?.Invoke();
             // Outbound: castle (origin) to the point, 1 unit above ground.
             _view.StartMarch(slotIndex, new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), () => OnArrivedAtTarget(slotIndex));
+        }
+
+        /// <summary>The slot's squad as unit ids for the view's
+        /// marching figures (Phase 2): heroes first, then troops.
+        /// A slot restored from a save has no squad snapshot — the
+        /// occupation kept only its troop count — so it marches as
+        /// that many generic infantry figures.</summary>
+        private List<UnitId> CompositionOf(ExcursionSlot slot, int slotIndex = -1)
+        {
+            var members = new List<UnitId>();
+            if (slot != null && (slot.Squad != null || slot.HeroSquad != null))
+            {
+                if (slot.HeroSquad != null)
+                    foreach (var u in slot.HeroSquad) if (u != null) members.Add(u.Id);
+                if (slot.Squad != null)
+                    foreach (var u in slot.Squad) if (u != null) members.Add(u.Id);
+                return members;
+            }
+            int troops = 4;
+            if (slotIndex >= 0)
+            {
+                EnsureOccupationArrays();
+                if (_state.OccupationTroops != null && slotIndex < _state.OccupationTroops.Length)
+                    troops = _state.OccupationTroops[slotIndex];
+            }
+            troops = Math.Max(1, Math.Min(8, troops));
+            for (int i = 0; i < troops; i++) members.Add(UnitId.ScoutMarine);
+            return members;
         }
 
         /// <summary>The first slot that can take an excursion, or -1.
@@ -537,6 +568,7 @@ namespace LunarDominion.Expeditions
             _saveGame?.Invoke();
             slot.Marching = false;
             slot.Occupying = true;
+            _view.SetSquadParked(slotIndex);
             _notifyChanged?.Invoke();
             OnExcursionStateChanged?.Invoke();
             string resourceName = ResourceName(point.Kind);
@@ -878,6 +910,7 @@ namespace LunarDominion.Expeditions
                 {
                     continue;
                 }
+                _view.SetSquadComposition(slot, CompositionOf(_slots[slot], slot));
                 _view.ShowMarkerAt(slot, pos + new Vector3(0f, 1f, 0f));
             }
         }

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using LunarDominion.Core;
 
 namespace LunarDominion.UI
 {
@@ -106,6 +107,40 @@ namespace LunarDominion.UI
         // (positions doubled, so trip times match the old map's
         // deliberate 10 u/s pace — a far node still takes ~13s).
         private static readonly float MarchSpeed = 20f; // units/second
+
+        // Map Phase 2 (2026-11-12, Patrick's pick: real Blender mini
+        // troops over code-built figures): each slot's marker root
+        // carries a formation of mini troop figures — one per squad
+        // member, heroes leading on their full models — plus an army
+        // banner with a floating count chip and a dotted route line
+        // while marching. The root marches exactly as the old capsule
+        // did; everything here is presentation. Figure modes:
+        // 0 marching (two columns), 1 parked (ring around the node,
+        // farming), 2 fighting (ring around the camp).
+        private const int SquadModeMarching = 0;
+        private const int SquadModeParked = 1;
+        private const int SquadModeFighting = 2;
+        private readonly List<GameObject>[] _squadFigures = { new List<GameObject>(), new List<GameObject>() };
+        private readonly List<UnitId>[] _squadMembers = { new List<UnitId>(), new List<UnitId>() };
+        private readonly string[] _squadKeys = { "", "" };
+        private readonly int[] _squadModes = new int[2];
+        private readonly bool[] _squadAnimOwned = new bool[2];
+        private readonly TextMesh[] _squadChips = new TextMesh[2];
+        private readonly List<GameObject>[] _routeDots = { new List<GameObject>(), new List<GameObject>() };
+        private readonly Material[] _routeDotMats = new Material[2];
+        private float _squadAnimTime;
+        private static readonly Color[] ArmyColors = { new Color(0.2f, 0.9f, 1.0f), new Color(1.0f, 0.55f, 0.15f) };
+        // The mini models were authored facing +X in Blender; after
+        // the FBX import the visual front sits at -Z, so the facing
+        // pivot flips 180 degrees to put it on the wrapper's +Z.
+        // If a Play check ever shows troops marching backwards, this
+        // constant is the one-line fix.
+        private const float FigureFacingOffsetDeg = 180f;
+        private const float TroopFigureScale = 1.25f;
+        private GameObject _miniInfantryPrefab;
+        private GameObject _miniRangedPrefab;
+        private GameObject _miniMechPrefab;
+        private Dictionary<UnitId, UnitClass> _classById;
 
         // Map camera pan (Patrick 2026-11-09): the Map view is 5x the
         // base, so the camera can be panned across it — arrow keys on
@@ -613,38 +648,351 @@ namespace LunarDominion.UI
             BuildMapPoints();
             BuildCreatures();
             BuildCampSlots();
-            BuildMarchMarker();
+            BuildSquads();
         }
 
-        // Excursion march markers (2026-11-09; two armies 2026-11-11):
-        // a bright capsule per army slot, big enough to read from the
-        // far exterior camera — cyan for Army 1, orange for Army 2.
-        // No collider — the tap raycast only checks map points, so a
-        // marker can never be tapped by mistake. Hidden until a march
-        // starts.
-        private void BuildMarchMarker()
+        // Excursion squad roots (2026-11-09 as capsule markers; Map
+        // Phase 2 2026-11-12: empty roots carrying the troop figures,
+        // banner and count chip). One per army slot — cyan Army 1,
+        // orange Army 2. Hidden until a march starts. Nothing in a
+        // squad keeps a collider: the tap raycast only checks map
+        // points, and a figure standing in front of a camp must never
+        // shadow its tap.
+        private void BuildSquads()
         {
-            _marchMarkers[0] = MakeMarchMarker("ExcursionMarker", new Color(0.2f, 0.9f, 1.0f));
-            _marchMarkers[1] = MakeMarchMarker("ExcursionMarker2", new Color(1.0f, 0.55f, 0.15f));
+            _marchMarkers[0] = MakeSquadRoot("ExcursionMarker");
+            _marchMarkers[1] = MakeSquadRoot("ExcursionMarker2");
+            BuildBanner(0, _marchMarkers[0]);
+            BuildBanner(1, _marchMarkers[1]);
         }
 
-        private GameObject MakeMarchMarker(string markerName, Color color)
+        private GameObject MakeSquadRoot(string rootName)
         {
-            var marker = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            marker.name = markerName;
-            var renderer = marker.GetComponent<Renderer>();
-            if (renderer != null)
+            var root = new GameObject(rootName);
+            root.SetActive(false);
+            return root;
+        }
+
+        // URP Lit material in a flat colour (the project's pipeline,
+        // in Always Included Shaders) so runtime-built pieces never
+        // render magenta. Optional emission for glows.
+        private static Material MakeLitMaterial(Color color, float emission = 0f)
+        {
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null) return null;
+            var m = new Material(lit);
+            m.color = color;
+            if (emission > 0f)
             {
-                // URP Lit (the project's pipeline) so the marker never
-                // renders magenta; fall back to the primitive's own
-                // material if the shader lookup fails.
-                var lit = Shader.Find("Universal Render Pipeline/Lit");
-                if (lit != null) renderer.material = new Material(lit);
-                renderer.material.color = color;
+                m.SetColor("_EmissionColor", color * emission);
+                m.EnableKeyword("_EMISSION");
             }
-            marker.transform.localScale = Vector3.one * 2f;
-            marker.SetActive(false);
-            return marker;
+            return m;
+        }
+
+        private static void StripCollider(GameObject go)
+        {
+            var col = go.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+        }
+
+        // Army banner: a pole behind the leader, a flag in the army
+        // colour, and a floating TextMesh count chip (built-in font,
+        // like the boss fight's damage numbers — nothing new for the
+        // Android build to strip). The chip is billboarded toward the
+        // camera every frame in TickSquads.
+        private void BuildBanner(int slot, GameObject root)
+        {
+            var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pole.name = "SquadBannerPole";
+            pole.transform.SetParent(root.transform, false);
+            pole.transform.localPosition = new Vector3(-1.7f, 2.3f, -1.7f);
+            pole.transform.localScale = new Vector3(0.09f, 2.3f, 0.09f);
+            var poleRenderer = pole.GetComponent<Renderer>();
+            if (poleRenderer != null) poleRenderer.material = MakeLitMaterial(new Color(0.12f, 0.12f, 0.14f));
+            StripCollider(pole);
+
+            var flag = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            flag.name = "SquadBannerFlag";
+            flag.transform.SetParent(root.transform, false);
+            flag.transform.localPosition = new Vector3(-1.7f, 4.15f, -1.05f);
+            flag.transform.localScale = new Vector3(0.06f, 0.75f, 1.3f);
+            var flagRenderer = flag.GetComponent<Renderer>();
+            if (flagRenderer != null) flagRenderer.material = MakeLitMaterial(ArmyColors[slot], 0.5f);
+            StripCollider(flag);
+
+            var chipGo = new GameObject("SquadCountChip");
+            chipGo.transform.SetParent(root.transform, false);
+            chipGo.transform.localPosition = new Vector3(0f, 5.2f, 0f);
+            var chip = chipGo.AddComponent<TextMesh>();
+            chip.text = "0";
+            chip.fontSize = 64;
+            chip.characterSize = 0.55f;
+            chip.anchor = TextAnchor.MiddleCenter;
+            chip.alignment = TextAlignment.Center;
+            chip.color = Color.white;
+            chip.fontStyle = FontStyle.Bold;
+            _squadChips[slot] = chip;
+        }
+
+        private static bool IsHeroId(UnitId id)
+        {
+            return id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor;
+        }
+
+        private static string HeroModelPath(UnitId id)
+        {
+            switch (id)
+            {
+                case UnitId.HeroReyes: return "Models/HeroReyes";
+                case UnitId.HeroVega: return "Models/HeroVega";
+                case UnitId.HeroOkafor: return "Models/HeroOkafor";
+                default: return null;
+            }
+        }
+
+        private UnitClass ClassOf(UnitId id)
+        {
+            if (_classById == null)
+            {
+                _classById = new Dictionary<UnitId, UnitClass>();
+                foreach (var def in UnitCatalog.CreateDefaultDefinitions())
+                    if (def != null) _classById[def.Id] = def.Class;
+            }
+            UnitClass cls;
+            return _classById.TryGetValue(id, out cls) ? cls : UnitClass.Infantry;
+        }
+
+        private static Color ClassColor(UnitId id, UnitClass cls)
+        {
+            switch (cls)
+            {
+                case UnitClass.Ranged: return new Color(0.95f, 0.50f, 0.15f);
+                case UnitClass.Mechanized: return new Color(0.40f, 0.60f, 0.35f);
+                default: return new Color(0.40f, 0.55f, 0.80f);
+            }
+        }
+
+        /// <summary>The service tells the view who is in a slot's
+        /// squad (heroes first — they lead). Figures are rebuilt only
+        /// when the membership actually changes, so refresh calls are
+        /// cheap. Restored occupations pass generic infantry by count
+        /// (the save keeps only the troop count).</summary>
+        public void SetSquadComposition(int slot, List<UnitId> members)
+        {
+            if (slot < 0 || slot >= _marchMarkers.Length) return;
+            if (members == null) members = new List<UnitId>();
+            var ordered = new List<UnitId>();
+            foreach (var id in members) if (IsHeroId(id)) ordered.Add(id);
+            foreach (var id in members) if (!IsHeroId(id)) ordered.Add(id);
+            _squadMembers[slot] = ordered;
+            if (_squadChips[slot] != null) _squadChips[slot].text = ordered.Count.ToString();
+            string key = string.Join(",", ordered);
+            if (key == _squadKeys[slot]) return;
+            _squadKeys[slot] = key;
+            var root = _marchMarkers[slot];
+            foreach (var fig in _squadFigures[slot]) if (fig != null) Destroy(fig);
+            _squadFigures[slot].Clear();
+            if (root == null) return;
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                var fig = BuildFigure(ordered[i]);
+                fig.transform.SetParent(root.transform, false);
+                fig.transform.localPosition = FormationOffset(slot, i, ordered.Count);
+                _squadFigures[slot].Add(fig);
+            }
+        }
+
+        // One squad member's figure: a wrapper (formation position +
+        // yaw) holding a facing pivot holding the model. The model's
+        // own transform is never touched — the FBX root carries
+        // Blender's axis-conversion rotation (project rule).
+        private GameObject BuildFigure(UnitId id)
+        {
+            bool hero = IsHeroId(id);
+            var fig = new GameObject("SquadFigure");
+            var pivot = new GameObject("Facing");
+            pivot.transform.SetParent(fig.transform, false);
+            pivot.transform.localRotation = Quaternion.Euler(0f, FigureFacingOffsetDeg, 0f);
+
+            GameObject prefab = null;
+            float scale = TroopFigureScale;
+            if (hero)
+            {
+                var path = HeroModelPath(id);
+                if (path != null) prefab = Resources.Load<GameObject>(path);
+                scale = 1.0f; // heroes are ~3.2 tall — natural leader size
+            }
+            if (prefab == null)
+            {
+                if (_miniInfantryPrefab == null) _miniInfantryPrefab = Resources.Load<GameObject>("Models/MiniInfantry");
+                if (_miniRangedPrefab == null) _miniRangedPrefab = Resources.Load<GameObject>("Models/MiniRanged");
+                if (_miniMechPrefab == null) _miniMechPrefab = Resources.Load<GameObject>("Models/MiniMech");
+                switch (ClassOf(id))
+                {
+                    case UnitClass.Ranged: prefab = _miniRangedPrefab; break;
+                    case UnitClass.Mechanized: prefab = _miniMechPrefab; break;
+                    default: prefab = _miniInfantryPrefab; break;
+                }
+            }
+            if (prefab != null)
+            {
+                var model = Instantiate(prefab);
+                model.transform.SetParent(pivot.transform, false);
+                model.transform.localScale = Vector3.one * scale;
+                foreach (var col in model.GetComponentsInChildren<Collider>(true)) Destroy(col);
+            }
+            else
+            {
+                // Fallback if an FBX is missing: a class-coloured
+                // capsule (the pre-Phase-2 marker look), so a march
+                // still reads on the map.
+                var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                body.transform.SetParent(pivot.transform, false);
+                body.transform.localPosition = new Vector3(0f, 1.1f, 0f);
+                body.transform.localScale = new Vector3(0.9f, 1.1f, 0.9f);
+                var r = body.GetComponent<Renderer>();
+                if (r != null) r.material = MakeLitMaterial(ClassColor(id, ClassOf(id)));
+                StripCollider(body);
+            }
+            if (hero)
+            {
+                // A gold ring marks the leader.
+                var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                ring.name = "HeroRing";
+                ring.transform.SetParent(fig.transform, false);
+                ring.transform.localPosition = new Vector3(0f, 0.06f, 0f);
+                ring.transform.localScale = new Vector3(1.7f, 0.06f, 1.7f);
+                var r = ring.GetComponent<Renderer>();
+                if (r != null) r.material = MakeLitMaterial(new Color(1.0f, 0.78f, 0.25f), 0.8f);
+                StripCollider(ring);
+            }
+            return fig;
+        }
+
+        // Where figure i stands in the root's local space for the
+        // slot's current mode (y is set by the terrain ride in
+        // TickSquads, not here).
+        private Vector3 FormationOffset(int slot, int i, int n)
+        {
+            int mode = _squadModes[slot];
+            if (mode == SquadModeMarching)
+            {
+                if (i == 0) return Vector3.zero;
+                int row = (i + 1) / 2;
+                float x = (i % 2 == 1) ? -1.6f : 1.6f;
+                return new Vector3(x, 0f, -2.3f * row);
+            }
+            float radius = mode == SquadModeFighting ? 6.5f : 5.0f;
+            if (n <= 1) return new Vector3(0f, 0f, radius);
+            float angle = i * (Mathf.PI * 2f / n);
+            return new Vector3(Mathf.Sin(angle) * radius, 0f, Mathf.Cos(angle) * radius);
+        }
+
+        // The yaw a figure should hold (local, degrees): marching
+        // figures face the travel direction (the root's forward);
+        // parked and fighting figures face the point they are
+        // working on — the root's centre.
+        private float FigureTargetYaw(int slot, Vector3 offset)
+        {
+            if (_squadModes[slot] == SquadModeMarching) return 0f;
+            return Mathf.Atan2(-offset.x, -offset.z) * Mathf.Rad2Deg;
+        }
+
+        // Per-frame squad presentation: face the march direction,
+        // ease figures into their formation, ride each figure on the
+        // terrain at its own position, bob while marching, billboard
+        // the count chips, pulse the route dots.
+        private void TickSquads(float dt)
+        {
+            _squadAnimTime += dt;
+            var cam = Camera.main;
+            for (int slot = 0; slot < _marchMarkers.Length; slot++)
+            {
+                var root = _marchMarkers[slot];
+                if (root == null || !root.activeSelf) continue;
+                if (_squadChips[slot] != null && cam != null)
+                    _squadChips[slot].transform.rotation = cam.transform.rotation;
+                var dots = _routeDots[slot];
+                for (int d = 0; d < dots.Count; d++)
+                {
+                    if (dots[d] == null) continue;
+                    float pulse = 1f + 0.18f * Mathf.Sin(_squadAnimTime * 4f + d * 0.7f);
+                    dots[d].transform.localScale = new Vector3(1.1f * pulse, 0.08f, 1.1f * pulse);
+                }
+                if (_squadAnimOwned[slot]) continue; // the fight animation owns the figures
+                if (_marching[slot])
+                {
+                    Vector3 to = _marchTargets[slot] - root.transform.position;
+                    to.y = 0f;
+                    if (to.sqrMagnitude > 0.04f)
+                    {
+                        float targetYaw = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+                        float yaw = Mathf.LerpAngle(root.transform.eulerAngles.y, targetYaw, Mathf.Clamp01(dt * 8f));
+                        root.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                    }
+                }
+                var figs = _squadFigures[slot];
+                int n = figs.Count;
+                for (int i = 0; i < n; i++)
+                {
+                    var fig = figs[i];
+                    if (fig == null) continue;
+                    Vector3 target = FormationOffset(slot, i, n);
+                    Vector3 lp = fig.transform.localPosition;
+                    float step = Mathf.Clamp01(dt * 6f);
+                    float nx = Mathf.Lerp(lp.x, target.x, step);
+                    float nz = Mathf.Lerp(lp.z, target.z, step);
+                    Vector3 world = root.transform.TransformPoint(new Vector3(nx, 0f, nz));
+                    float bob = (_squadModes[slot] == SquadModeMarching && _marching[slot])
+                        ? Mathf.Abs(Mathf.Sin(_squadAnimTime * 9f + i * 1.3f)) * 0.14f
+                        : 0f;
+                    float ny = TerrainHeight(world.x, world.z) - root.transform.position.y + bob;
+                    fig.transform.localPosition = new Vector3(nx, ny, nz);
+                    float targetYaw = FigureTargetYaw(slot, target);
+                    float yaw = Mathf.LerpAngle(fig.transform.localEulerAngles.y, targetYaw, step);
+                    fig.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+                }
+            }
+        }
+
+        // Dotted route line in the army colour from the march start
+        // to its target, laid over the terrain. Rebuilt per march.
+        private void BuildRouteDots(int slot, Vector3 from, Vector3 to)
+        {
+            HideRouteDots(slot);
+            Vector3 a = new Vector3(from.x, 0f, from.z);
+            Vector3 b = new Vector3(to.x, 0f, to.z);
+            float dist = Vector3.Distance(a, b);
+            int count = Mathf.Clamp(Mathf.RoundToInt(dist / 9f), 3, 18);
+            if (_routeDotMats[slot] == null) _routeDotMats[slot] = MakeLitMaterial(ArmyColors[slot], 0.7f);
+            for (int i = 1; i <= count; i++)
+            {
+                Vector3 p = Vector3.Lerp(a, b, (float)i / (count + 1));
+                var dot = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                dot.name = "RouteDot";
+                dot.transform.position = new Vector3(p.x, TerrainHeight(p.x, p.z) + 0.32f, p.z);
+                dot.transform.localScale = new Vector3(1.1f, 0.08f, 1.1f);
+                var r = dot.GetComponent<Renderer>();
+                if (r != null && _routeDotMats[slot] != null) r.material = _routeDotMats[slot];
+                StripCollider(dot);
+                _routeDots[slot].Add(dot);
+            }
+        }
+
+        private void HideRouteDots(int slot)
+        {
+            foreach (var dot in _routeDots[slot]) if (dot != null) Destroy(dot);
+            _routeDots[slot].Clear();
+        }
+
+        /// <summary>The slot's army has arrived at a node and is
+        /// farming it: figures spread into a ring around the point.
+        /// Called by the service from BeginOccupation.</summary>
+        public void SetSquadParked(int slot)
+        {
+            if (slot < 0 || slot >= _marchMarkers.Length) return;
+            _squadModes[slot] = SquadModeParked;
         }
 
         // Fixed creatures on the map: only the War Robot at the boss
@@ -809,11 +1157,13 @@ namespace LunarDominion.UI
                 if (dxz * dxz + dzz * dzz < 0.01f)
                 {
                     _marching[slot] = false;
+                    HideRouteDots(slot);
                     var callback = _marchCallbacks[slot];
                     _marchCallbacks[slot] = null;
                     callback?.Invoke();
                 }
             }
+            TickSquads(Time.deltaTime);
             // Arrow keys pan the map camera (PC). Same pattern as the
             // tap input below: Keyboard when the Input System is
             // enabled, legacy Input otherwise.
@@ -990,7 +1340,34 @@ namespace LunarDominion.UI
                     }
                 }
             }
-            if (!hitPoint) OnEmptyMapTapped?.Invoke();
+            // Tap-to-focus (Phase 2): a tap near one of your own
+            // squads centres the camera on it instead of dismissing
+            // the panel — on a map this size a marching army is easy
+            // to lose.
+            bool focused = false;
+            if (!hitPoint)
+            {
+                for (int slot = 0; slot < _marchMarkers.Length && !focused; slot++)
+                {
+                    var root = _marchMarkers[slot];
+                    if (root == null || !root.activeSelf) continue;
+                    if (ray.direction.y > -0.001f) continue;
+                    float tHit = (root.transform.position.y - ray.origin.y) / ray.direction.y;
+                    if (tHit <= 0f) continue;
+                    Vector3 p = ray.GetPoint(tHit);
+                    float dx = p.x - root.transform.position.x;
+                    float dz = p.z - root.transform.position.z;
+                    if (dx * dx + dz * dz < 81f)
+                    {
+                        _panOffset.x = Mathf.Clamp(root.transform.position.x, -PanLimitX, PanLimitX);
+                        _panOffset.z = Mathf.Clamp(root.transform.position.z, -PanLimitZ, PanLimitZ);
+                        _panOffset.y = 0f;
+                        ApplyCamera();
+                        focused = true;
+                    }
+                }
+            }
+            if (!hitPoint && !focused) OnEmptyMapTapped?.Invoke();
         }
 
         // Start the march marker for an army slot at `from`, walking
@@ -1006,6 +1383,8 @@ namespace LunarDominion.UI
             from.y = TerrainHeight(from.x, from.z) + MarkerRideHeight;
             marker.transform.position = from;
             marker.SetActive(true);
+            _squadModes[slot] = SquadModeMarching;
+            BuildRouteDots(slot, from, to);
             _marchTargets[slot] = to;
             _marchCallbacks[slot] = onArrive;
             _marching[slot] = true;
@@ -1020,6 +1399,7 @@ namespace LunarDominion.UI
             if (slot < 0 || slot >= _marchMarkers.Length) return;
             _marching[slot] = false;
             _marchCallbacks[slot] = null;
+            HideRouteDots(slot);
             if (_marchMarkers[slot] != null) _marchMarkers[slot].SetActive(false);
         }
 
@@ -1030,18 +1410,19 @@ namespace LunarDominion.UI
             for (int slot = 0; slot < _marchMarkers.Length; slot++) CancelMarch(slot);
         }
 
-        // Fight animation (2026-11-09, last feature of the phase): a
+        // Fight animation (2026-11-09, last feature of the phase;
+        // Phase 2 2026-11-12: the squad figures do the fighting): a
         // short (~2s) clash on the map when the army reaches a camp.
-        // No new FBX — the existing creature models and the march marker
-        // are animated in code. Phase 1 (~0.9s) is the clash: the marker
-        // pulses and the creatures shake. Phase 2 (~1.1s) is the
-        // outcome: on victory the creatures tip over and sink away; on
-        // defeat the marker shakes and shrinks while the creatures hop.
-        // Transforms are restored at the end (so a respawned camp is
-        // upright), then onComplete fires — the service shows the result
-        // panel, vanishes the camp on victory, and starts the return
-        // march. The restore + hide happen in the same frame, so the
-        // player never sees the creatures pop back upright.
+        // Phase 1 (~0.9s) is the clash: the figures jitter in their
+        // ring and the creatures shake. Phase 2 (~1.1s) is the
+        // outcome: on victory the creatures tip over and sink away
+        // while the figures bounce; on defeat the figures shake and
+        // sink while the creatures hop. Transforms are restored at
+        // the end (so a respawned camp is upright), then onComplete
+        // fires — the service shows the result panel, vanishes the
+        // camp on victory, and starts the return march. The restore +
+        // hide happen in the same frame, so the player never sees
+        // the creatures pop back upright.
         public void PlayFightAnimation(int slot, int campIndex, bool victory, Action onComplete)
         {
             StartCoroutine(FightAnimationRoutine(slot, campIndex, victory, onComplete));
@@ -1066,9 +1447,17 @@ namespace LunarDominion.UI
                 origPos.Add(point.Go.transform.position);
                 origRot.Add(point.Go.transform.rotation);
             }
-            var marker = slot >= 0 && slot < _marchMarkers.Length ? _marchMarkers[slot] : null;
-            Vector3 markerPos = marker != null ? marker.transform.position : Vector3.zero;
-            Vector3 markerScale = marker != null ? marker.transform.localScale : Vector3.one;
+            // The squad figures ring the camp and fight it (Phase 2).
+            // The per-frame squad tick hands them over for the length
+            // of the animation and gets them back at the end.
+            var figures = slot >= 0 && slot < _marchMarkers.Length ? _squadFigures[slot] : new List<GameObject>();
+            var figOrig = new List<Vector3>();
+            foreach (var fig in figures) figOrig.Add(fig != null ? fig.transform.localPosition : Vector3.zero);
+            if (slot >= 0 && slot < _marchMarkers.Length)
+            {
+                _squadModes[slot] = SquadModeFighting;
+                _squadAnimOwned[slot] = true;
+            }
 
             // Phase 1 — clash (~0.9s): marker pulses, creatures shake.
             float clashTime = 0.9f;
@@ -1080,10 +1469,14 @@ namespace LunarDominion.UI
                 while (!_visible) yield return null;
                 t += Time.deltaTime;
                 float p = Mathf.Clamp01(t / clashTime);
-                if (marker != null)
+                for (int f = 0; f < figures.Count; f++)
                 {
-                    float pulse = 1f + 0.18f * Mathf.Abs(Mathf.Sin(t * 18f));
-                    marker.transform.localScale = markerScale * pulse;
+                    var fig = figures[f];
+                    if (fig == null) continue;
+                    Vector3 jitter = new Vector3(
+                        UnityEngine.Random.Range(-0.35f, 0.35f), 0f,
+                        UnityEngine.Random.Range(-0.35f, 0.35f));
+                    fig.transform.localPosition = figOrig[f] + jitter;
                 }
                 for (int i = 0; i < creatures.Count; i++)
                 {
@@ -1117,26 +1510,30 @@ namespace LunarDominion.UI
                         pos.y = origPos[i].y - 2f * p;
                         go.transform.position = pos;
                     }
-                    // Marker does a small victory bounce.
-                    if (marker != null)
+                    // Figures do a small victory bounce.
+                    for (int f = 0; f < figures.Count; f++)
                     {
-                        marker.transform.localScale = markerScale;
-                        Vector3 pos = markerPos;
-                        pos.y = markerPos.y + Mathf.Sin(p * Mathf.PI) * 1.5f;
-                        marker.transform.position = pos;
+                        var fig = figures[f];
+                        if (fig == null) continue;
+                        Vector3 pos = figOrig[f];
+                        pos.y = figOrig[f].y + Mathf.Sin(p * Mathf.PI) * 1.1f;
+                        fig.transform.localPosition = pos;
                     }
                 }
                 else
                 {
-                    // Marker shakes hard and shrinks (the army is broken);
+                    // Figures shake and sink (the army is broken);
                     // creatures hop once (they won).
-                    if (marker != null)
+                    for (int f = 0; f < figures.Count; f++)
                     {
+                        var fig = figures[f];
+                        if (fig == null) continue;
                         Vector3 jitter = new Vector3(
-                            UnityEngine.Random.Range(-1.2f, 1.2f), 0f,
-                            UnityEngine.Random.Range(-1.2f, 1.2f));
-                        marker.transform.position = markerPos + jitter;
-                        marker.transform.localScale = markerScale * Mathf.Lerp(1f, 0.55f, p);
+                            UnityEngine.Random.Range(-0.8f, 0.8f), 0f,
+                            UnityEngine.Random.Range(-0.8f, 0.8f));
+                        Vector3 pos = figOrig[f] + jitter;
+                        pos.y = figOrig[f].y - 0.6f * p;
+                        fig.transform.localPosition = pos;
                     }
                     for (int i = 0; i < creatures.Count; i++)
                     {
@@ -1160,11 +1557,13 @@ namespace LunarDominion.UI
                 go.transform.position = origPos[i];
                 go.transform.rotation = origRot[i];
             }
-            if (marker != null)
+            for (int f = 0; f < figures.Count; f++)
             {
-                marker.transform.position = markerPos;
-                marker.transform.localScale = markerScale;
+                var fig = figures[f];
+                if (fig == null) continue;
+                fig.transform.localPosition = figOrig[f];
             }
+            if (slot >= 0 && slot < _marchMarkers.Length) _squadAnimOwned[slot] = false;
             onComplete?.Invoke();
         }
 
@@ -1199,6 +1598,8 @@ namespace LunarDominion.UI
             position.y = TerrainHeight(position.x, position.z) + MarkerRideHeight;
             _marchMarkers[slot].transform.position = position;
             _marchMarkers[slot].SetActive(true);
+            _squadModes[slot] = SquadModeParked;
+            HideRouteDots(slot);
         }
 
         // Mark a resource node as occupied (being farmed): its renderers
