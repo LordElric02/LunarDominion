@@ -319,8 +319,9 @@ namespace LunarDominion.UI
                     irt.offsetMax = Vector2.zero;
                     textLeft = 0.15f;
                 }
-                UIHelpers.LabelInRect(rowGo, "Name", $"{def.DisplayName}  ★ HERO  •  {def.Class}", 28, Color.white,
+                var nameLabel = UIHelpers.LabelInRect(rowGo, "Name", $"{def.DisplayName}  ★ HERO  •  {def.Class}", 28, Color.white,
                     new Rect(textLeft, 0.70f, 0.72f, 0.99f));
+                nameLabel.verticalOverflow = VerticalWrapMode.Overflow;
                 // NOTE (2026-11-12): UIHelpers.Label sets
                 // verticalOverflow = Truncate, and a Legacy Text
                 // whose single line is taller than its rect is
