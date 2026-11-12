@@ -25,6 +25,7 @@
 
 import bpy
 import math
+from mathutils import Matrix
 import os
 import random
 
@@ -71,45 +72,72 @@ def _finish(obj, material, flat=False):
     return obj
 
 
+def _snapshot():
+    return set(bpy.data.objects)
+
+
+def _created(before):
+    # The object a primitive-add just made, found through bpy.data.
+    # Reading the active object back through the context raises
+    # AttributeError in Blender 5.2 GUI Text Editor runs in
+    # Patrick's setup (hit 2026-11-12), so avoid the context here.
+    new = [o for o in bpy.data.objects if o not in before]
+    return new[0]
+
+
+def _bake_scale(obj):
+    # transform_apply without the operator (same reason): bake the
+    # object's scale into its mesh data along the local axes.
+    sx, sy, sz = obj.scale
+    if (sx, sy, sz) != (1.0, 1.0, 1.0):
+        obj.data.transform(Matrix(((sx, 0, 0, 0), (0, sy, 0, 0), (0, 0, sz, 0), (0, 0, 0, 1))))
+        obj.scale = (1.0, 1.0, 1.0)
+
+
 def ico(name, loc, scale, material, subdiv=1, flat=True):
+    before = _snapshot()
     bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=subdiv, radius=1.0, location=loc)
-    obj = bpy.context.active_object
+    obj = _created(before)
     obj.name = name
     obj.scale = scale
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    _bake_scale(obj)
     return _finish(obj, material, flat)
 
 
 def sphere(name, loc, scale, material):
+    before = _snapshot()
     bpy.ops.mesh.primitive_uv_sphere_add(radius=1.0, location=loc)
-    obj = bpy.context.active_object
+    obj = _created(before)
     obj.name = name
     obj.scale = scale
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    _bake_scale(obj)
     return _finish(obj, material)
 
 
 def box(name, loc, scale, material, rot=(0.0, 0.0, 0.0)):
+    before = _snapshot()
     bpy.ops.mesh.primitive_cube_add(location=loc)
-    obj = bpy.context.active_object
+    obj = _created(before)
     obj.name = name
     obj.scale = scale
     obj.rotation_euler = rot
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    _bake_scale(obj)
     return _finish(obj, material, flat=True)
 
 
 def cone(name, loc, radius, depth, material, rot=(0.0, 0.0, 0.0), vertices=7):
+    before = _snapshot()
     bpy.ops.mesh.primitive_cone_add(vertices=vertices, radius1=radius, radius2=0.0, depth=depth, location=loc)
-    obj = bpy.context.active_object
+    obj = _created(before)
     obj.name = name
     obj.rotation_euler = rot
     return _finish(obj, material, flat=True)
 
 
 def cyl(name, loc, radius, depth, material, vertices=20):
+    before = _snapshot()
     bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=depth, location=loc)
-    obj = bpy.context.active_object
+    obj = _created(before)
     obj.name = name
     return _finish(obj, material)
 
@@ -185,8 +213,9 @@ def build_lair(rng):
     for i, (x, y, s) in enumerate(arc):
         ico("Lair_Rock%d" % i, (x, y, s * 0.38), (s * 0.62, s * 0.62, s * 0.55), BASALT, subdiv=2)
     # The opening: a black disc, recessed into the arc.
+    before = _snapshot()
     bpy.ops.mesh.primitive_circle_add(vertices=24, radius=1.9, fill_type="NGON", location=(0, -0.9, 1.55))
-    disc = bpy.context.active_object
+    disc = _created(before)
     disc.name = "Lair_Mouth"
     disc.rotation_euler = (math.radians(90), 0.0, 0.0)
     disc.scale = (1.0, 1.25, 1.0)
