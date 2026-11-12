@@ -487,11 +487,13 @@ namespace LunarDominion.UI
                     // INSIDE the tube: the arena is an enclosed set
                     // (walls r~29.5, ceiling ~27 in v3), so the camera
                     // sits within it — south end, above the heroes,
-                    // looking down the tube toward the boss. Pulled
-                    // back in the 2x boss package (2026-11-11) so the
-                    // 17.8-unit boss stays framed.
-                    cam.transform.position = new Vector3(500f, 11f, -32f);
-                    cam.transform.LookAt(new Vector3(500f, 4.5f, 6f));
+                    // looking down the tube toward the boss. HARD
+                    // RULE: the camera must stay INSIDE the wall ring
+                    // (r < ~28) — the first 2x framing put it at
+                    // z -32, inside the south wall itself, and the
+                    // fight view was solid rock (Patrick, 2026-11-11).
+                    cam.transform.position = new Vector3(500f, 10f, -26f);
+                    cam.transform.LookAt(new Vector3(500f, 5f, 6f));
                 }
                 else
                 {
@@ -1677,14 +1679,16 @@ namespace LunarDominion.UI
             // camera up and back a little and aim it down the
             // tube so the whole squad reads clearly above the
             // slim HUD. PresentSceneForMode restores the
-            // standard framings on the next Show. Pulled further
-            // back and raised in the 2x boss package (2026-11-11)
-            // so the 17.8-unit boss stays in frame.
+            // standard framings on the next Show. Raised and
+            // re-aimed in the 2x boss package (2026-11-11) so the
+            // 17.8-unit boss stays in frame — but the camera stays
+            // at z -26, INSIDE the wall ring: z -40 put it inside
+            // the south wall and the view was solid rock.
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.transform.position = new Vector3(500f, 16f, -40f);
-                cam.transform.LookAt(new Vector3(500f, 3.5f, 4f));
+                cam.transform.position = new Vector3(500f, 15f, -26f);
+                cam.transform.LookAt(new Vector3(500f, 5f, 5f));
             }
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
             SetBossBarFraction(1f);
