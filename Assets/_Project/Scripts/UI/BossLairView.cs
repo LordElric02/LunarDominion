@@ -1617,6 +1617,47 @@ namespace LunarDominion.UI
             _turnTargetRow.SetActive(false);
         }
 
+        private GameObject _topBarGo;
+        private GameObject _bottomNavGo;
+
+        // Fight chrome (Patrick 2026-11-11): during a turn fight
+        // the TopBar and BottomNav hide — the tabs can't be used
+        // mid-fight anyway, and their bands were dead space
+        // squeezing the arena view top and bottom. The fight
+        // stack (boss bar, order, intent, warning) shifts up
+        // into the freed band while they are gone and drops
+        // back to its normal anchors when they return.
+        private void SetFightChrome(bool fight)
+        {
+            if (_topBarGo == null) _topBarGo = GameObject.Find("TopBarView");
+            if (_bottomNavGo == null) _bottomNavGo = GameObject.Find("BottomNavView");
+            if (_topBarGo != null) _topBarGo.SetActive(!fight);
+            if (_bottomNavGo != null) _bottomNavGo.SetActive(!fight);
+            if (_bossHpText != null && _bossHpText.transform.parent is RectTransform barRt)
+            {
+                barRt.anchorMin = fight ? new Vector2(0.22f, 0.925f) : new Vector2(0.22f, 0.845f);
+                barRt.anchorMax = fight ? new Vector2(0.78f, 0.975f) : new Vector2(0.78f, 0.90f);
+            }
+            SetHudRect(_turnOrderText,
+                fight ? new Vector2(0.22f, 0.855f) : new Vector2(0.22f, 0.78f),
+                fight ? new Vector2(0.78f, 0.915f) : new Vector2(0.78f, 0.84f));
+            SetHudRect(_turnIntentText,
+                fight ? new Vector2(0.22f, 0.805f) : new Vector2(0.22f, 0.73f),
+                fight ? new Vector2(0.78f, 0.85f) : new Vector2(0.78f, 0.775f));
+            SetHudRect(_warningText,
+                fight ? new Vector2(0.25f, 0.68f) : new Vector2(0.25f, 0.605f),
+                fight ? new Vector2(0.75f, 0.80f) : new Vector2(0.75f, 0.725f));
+        }
+
+        private static void SetHudRect(Text label, Vector2 min, Vector2 max)
+        {
+            if (label == null) return;
+            var rt = label.GetComponent<RectTransform>();
+            if (rt == null) return;
+            rt.anchorMin = min;
+            rt.anchorMax = max;
+        }
+
         private void OnSurrenderClicked()
         {
             if (_turnFight == null || _turnFight.Finished) return;
@@ -1687,17 +1728,21 @@ namespace LunarDominion.UI
             // touch higher again the same evening: at 6x the boss's
             // head reached into the boss HP bar's screen band, so
             // the aim point rose (y 6.5) and the boss sits ~4%
-            // lower in frame, head clear of the bar.
+            // lower in frame, head clear of the bar. Aim 7.2 with
+            // the fight-chrome change: the bar stack rides higher
+            // while the menus are hidden, so the boss drops a
+            // touch more to stay clear of it.
             var cam = Camera.main;
             if (cam != null)
             {
                 cam.transform.position = new Vector3(500f, 15f, -26f);
-                cam.transform.LookAt(new Vector3(500f, 6.5f, 5f));
+                cam.transform.LookAt(new Vector3(500f, 7.2f, 5f));
             }
             if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
             SetBossBarFraction(1f);
             if (_hudRoot != null) _hudRoot.SetActive(true);
             if (_turnHud != null) _turnHud.SetActive(true);
+            SetFightChrome(true);
             _actionBarOpen = false;
             _barForHero = -1;
             _surrenderArmUntil = 0f;
@@ -2197,6 +2242,7 @@ namespace LunarDominion.UI
         private void EndTurnUiCleanup()
         {
             _turnActive = false;
+            SetFightChrome(false);
             _actionBarOpen = false;
             _barForHero = -1;
             _surrenderArmUntil = 0f;
