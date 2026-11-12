@@ -66,6 +66,10 @@ namespace LunarDominion.Bootstrap
             _exteriorView.Build();
             _exteriorView.OnMapPointSelected += OnMapPointSelected;
             _exteriorView.OnEmptyMapTapped += OnEmptyMapTapped;
+            // Map search (Phase 3, 2026-11-12): the FIND bar lives
+            // on the shared canvas; the view shows/hides it with
+            // the Map tab.
+            _exteriorView.BuildSearchUi(canvas);
 
             _mapInfoView = new GameObject("MapInfoView").AddComponent<MapInfoView>();
             _mapInfoView.Build(canvas);

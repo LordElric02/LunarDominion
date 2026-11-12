@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 using LunarDominion.Core;
 
 namespace LunarDominion.UI
@@ -1208,6 +1209,7 @@ namespace LunarDominion.UI
                 }
             }
             TickSquads(Time.deltaTime);
+            TickSearch(Time.deltaTime);
             // Arrow keys pan the map camera (PC). Same pattern as the
             // tap input below: Keyboard when the Input System is
             // enabled, legacy Input otherwise.
@@ -1348,6 +1350,7 @@ namespace LunarDominion.UI
 
         private void AddPan(Vector3 delta)
         {
+            _gliding = false;
             _panOffset += delta;
             _panOffset.x = Mathf.Clamp(_panOffset.x, -PanLimitX, PanLimitX);
             _panOffset.z = Mathf.Clamp(_panOffset.z, -PanLimitZ, PanLimitZ);
@@ -1403,6 +1406,7 @@ namespace LunarDominion.UI
                     float dz = p.z - root.transform.position.z;
                     if (dx * dx + dz * dz < 81f)
                     {
+                        _gliding = false;
                         _panOffset.x = Mathf.Clamp(root.transform.position.x, -PanLimitX, PanLimitX);
                         _panOffset.z = Mathf.Clamp(root.transform.position.z, -PanLimitZ, PanLimitZ);
                         _panOffset.y = 0f;
@@ -1653,6 +1657,7 @@ namespace LunarDominion.UI
         // alone keeps them out.
         public void SetNodeOccupied(int nodeIndex, bool occupied)
         {
+            if (nodeIndex >= 0 && nodeIndex < _nodeOccupied.Length) _nodeOccupied[nodeIndex] = occupied;
             foreach (var point in _mapPoints)
             {
                 if (point.Data == null || point.Data.Index != nodeIndex) continue;
@@ -1674,6 +1679,7 @@ namespace LunarDominion.UI
         // selected, which is the point: it is gone until it comes back.
         public void SetNodeVisible(int nodeIndex, bool visible)
         {
+            if (nodeIndex >= 0 && nodeIndex < _nodeHidden.Length) _nodeHidden[nodeIndex] = !visible;
             foreach (var point in _mapPoints)
             {
                 if (point.Data == null || point.Data.Index != nodeIndex) continue;
@@ -1697,6 +1703,374 @@ namespace LunarDominion.UI
             }
         }
 
+        // ---- Map search (Phase 3, 2026-11-12, Patrick) ----
+        // A FIND button on the Map view expands into category
+        // chips (resources by type, camps by tier, the lair).
+        // Tapping a chip rings and beams every match, glides the
+        // camera to the nearest one, and tapping the same chip
+        // again cycles to the next. Only usable places match:
+        // nodes that are neither depleted (hidden) nor being
+        // farmed, and camp slots currently holding creatures.
+        private enum SearchCategory { None, Biomass, Alloy, Helium, Tier1, Tier2, Tier3, Lair }
+
+        private static readonly SearchCategory[] ChipCategories =
+        {
+            SearchCategory.Biomass, SearchCategory.Alloy, SearchCategory.Helium,
+            SearchCategory.Tier1, SearchCategory.Tier2, SearchCategory.Tier3,
+            SearchCategory.Lair
+        };
+
+        private GameObject _findRoot;
+        private GameObject _findBar;
+        private Text _findStatus;
+        private readonly Button[] _findChips = new Button[ChipCategories.Length];
+        private bool _findBarOpen;
+        private SearchCategory _searchCategory = SearchCategory.None;
+        private readonly List<Vector3> _searchMatches = new List<Vector3>();
+        private int _searchIndex = -1;
+        private GameObject _searchRoot;
+        private readonly List<GameObject> _searchRings = new List<GameObject>();
+        private readonly List<float> _searchRingBase = new List<float>();
+        private readonly List<Material> _searchMats = new List<Material>();
+        private readonly List<Material> _searchBeamMats = new List<Material>();
+        private bool _gliding;
+        private Vector3 _glideTarget;
+        private float _searchTime;
+        private readonly bool[] _nodeOccupied = new bool[9];
+        private readonly bool[] _nodeHidden = new bool[9];
+
+        private static Color SearchColor(SearchCategory cat)
+        {
+            switch (cat)
+            {
+                case SearchCategory.Biomass: return new Color(0.30f, 0.95f, 0.45f);
+                case SearchCategory.Alloy: return new Color(0.65f, 0.82f, 1.00f);
+                case SearchCategory.Helium: return new Color(0.30f, 0.92f, 1.00f);
+                case SearchCategory.Lair: return new Color(1.00f, 0.68f, 0.18f);
+                default: return new Color(1.00f, 0.38f, 0.22f); // camp tiers
+            }
+        }
+
+        private static string SearchSingular(SearchCategory cat)
+        {
+            switch (cat)
+            {
+                case SearchCategory.Biomass: return "Biomass node";
+                case SearchCategory.Alloy: return "Alloy node";
+                case SearchCategory.Helium: return "Helium-3 node";
+                case SearchCategory.Tier1: return "Tier 1 camp";
+                case SearchCategory.Tier2: return "Tier 2 camp";
+                case SearchCategory.Tier3: return "Tier 3 camp";
+                case SearchCategory.Lair: return "Boss Lair";
+                default: return "";
+            }
+        }
+
+        private static string SearchEmptyText(SearchCategory cat)
+        {
+            switch (cat)
+            {
+                case SearchCategory.Biomass: return "No unfarmed Biomass nodes on the map";
+                case SearchCategory.Alloy: return "No unfarmed Alloy nodes on the map";
+                case SearchCategory.Helium: return "No unfarmed Helium-3 nodes on the map";
+                case SearchCategory.Tier1: return "No Tier 1 camps on the map right now";
+                case SearchCategory.Tier2: return "No Tier 2 camps on the map right now";
+                case SearchCategory.Tier3: return "No Tier 3 camps on the map right now";
+                default: return "Nothing found";
+            }
+        }
+
+        /// <summary>Build the Find UI on the shared canvas. Called
+        /// by the Bootstrap right after Build(); the bar itself is
+        /// shown and hidden with the Map (see SetVisible).</summary>
+        public void BuildSearchUi(Canvas canvas)
+        {
+            var safe = SafeArea.Get(canvas);
+            float baseY = 196f + safe.Bottom;
+            var barColor = new Color(0.06f, 0.09f, 0.15f, 0.94f);
+
+            _findRoot = UIHelpers.Panel(canvas.gameObject, "FindButton", barColor,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(-95f, baseY), new Vector2(95f, baseY + 62f));
+            var findBtn = UIHelpers.Button(_findRoot, "Find", "FIND", 30,
+                UIHelpers.Hex("#1A2436"), Color.white);
+            var frt = findBtn.GetComponent<RectTransform>();
+            frt.anchorMin = Vector2.zero;
+            frt.anchorMax = Vector2.one;
+            frt.offsetMin = Vector2.zero;
+            frt.offsetMax = Vector2.zero;
+            findBtn.onClick.AddListener(() => SetFindBarOpen(true));
+
+            _findBar = UIHelpers.Panel(canvas.gameObject, "FindBar", barColor,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(-660f, baseY), new Vector2(660f, baseY + 128f));
+            _findStatus = UIHelpers.LabelInRect(_findBar, "FindStatus", "", 26, Color.white,
+                new Rect(0.02f, 0.55f, 0.98f, 0.97f), TextAnchor.MiddleCenter);
+            _findStatus.verticalOverflow = VerticalWrapMode.Overflow;
+
+            string[] chipLabels = { "BIO", "ALLOY", "HE-3", "T1", "T2", "T3", "LAIR", "\u00D7" };
+            for (int i = 0; i < chipLabels.Length; i++)
+            {
+                bool isClear = i == chipLabels.Length - 1;
+                var chip = UIHelpers.Button(_findBar, "FindChip" + i, chipLabels[i], 26,
+                    UIHelpers.Hex("#1A2436"), Color.white);
+                var rt = chip.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.012f + i * 0.1235f, 0.07f);
+                rt.anchorMax = new Vector2(0.012f + i * 0.1235f + 0.111f, 0.47f);
+                rt.offsetMin = Vector2.zero;
+                rt.offsetMax = Vector2.zero;
+                if (isClear)
+                {
+                    chip.onClick.AddListener(() => SetFindBarOpen(false));
+                }
+                else
+                {
+                    int idx = i;
+                    chip.onClick.AddListener(() => OnSearchChip(ChipCategories[idx]));
+                    _findChips[i] = chip;
+                }
+            }
+
+            _searchRoot = new GameObject("SearchHighlights");
+            _searchRoot.SetActive(false);
+            _findBar.SetActive(false);
+            _findRoot.SetActive(false);
+            UpdateSearchStatus();
+        }
+
+        private void SetFindBarOpen(bool open)
+        {
+            _findBarOpen = open;
+            if (!open) ClearSearch();
+            if (_findRoot != null) _findRoot.SetActive(_visible && !open);
+            if (_findBar != null) _findBar.SetActive(_visible && open);
+        }
+
+        private void OnSearchChip(SearchCategory cat)
+        {
+            bool sameCategory = cat == _searchCategory;
+            Vector3 previousFocus = Vector3.zero;
+            bool hadFocus = sameCategory && _searchIndex >= 0 && _searchIndex < _searchMatches.Count;
+            if (hadFocus) previousFocus = _searchMatches[_searchIndex];
+
+            _searchCategory = cat;
+            RebuildSearchMatches();
+
+            if (_searchMatches.Count == 0)
+            {
+                _searchIndex = -1;
+            }
+            else if (hadFocus)
+            {
+                int found = _searchMatches.IndexOf(previousFocus);
+                _searchIndex = found >= 0 ? (found + 1) % _searchMatches.Count : 0;
+            }
+            else
+            {
+                _searchIndex = 0;
+            }
+
+            RebuildSearchHighlights();
+            RefreshChipColors();
+            UpdateSearchStatus();
+            if (_searchIndex >= 0) GlideTo(_searchMatches[_searchIndex]);
+        }
+
+        private void RebuildSearchMatches()
+        {
+            _searchMatches.Clear();
+            switch (_searchCategory)
+            {
+                case SearchCategory.Biomass:
+                case SearchCategory.Alloy:
+                case SearchCategory.Helium:
+                    var kind = _searchCategory == SearchCategory.Biomass ? MapPointKind.Biomass
+                        : _searchCategory == SearchCategory.Alloy ? MapPointKind.Alloy
+                        : MapPointKind.Helium3;
+                    for (int i = 0; i < 9 && i < NodeDefs.Length; i++)
+                    {
+                        if (NodeDefs[i].Kind != kind) continue;
+                        if (_nodeHidden[i] || _nodeOccupied[i]) continue;
+                        _searchMatches.Add(NodeDefs[i].Position);
+                    }
+                    break;
+                case SearchCategory.Tier1:
+                case SearchCategory.Tier2:
+                case SearchCategory.Tier3:
+                    int tier = _searchCategory == SearchCategory.Tier1 ? 1
+                        : _searchCategory == SearchCategory.Tier2 ? 2 : 3;
+                    for (int slot = 0; slot < CampSlotCount; slot++)
+                    {
+                        if (_campSlotTier[slot] == tier) _searchMatches.Add(CampSlotPositions[slot]);
+                    }
+                    break;
+                case SearchCategory.Lair:
+                    _searchMatches.Add(NodeDefs[12].Position);
+                    break;
+            }
+            // Nearest first, measured from where the camera is
+            // currently centred.
+            Vector2 focus = new Vector2(_panOffset.x, _panOffset.z);
+            _searchMatches.Sort((a, b) =>
+            {
+                float da = (new Vector2(a.x, a.z) - focus).sqrMagnitude;
+                float db = (new Vector2(b.x, b.z) - focus).sqrMagnitude;
+                return da.CompareTo(db);
+            });
+        }
+
+        private static Material MakeBeamMaterial(Color color)
+        {
+            var unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlit == null) return null;
+            var m = new Material(unlit);
+            m.color = new Color(color.r, color.g, color.b, 0.32f);
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 0f);
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.renderQueue = 3000;
+            return m;
+        }
+
+        private void RebuildSearchHighlights()
+        {
+            ClearSearchHighlights();
+            if (_searchRoot == null || _searchMatches.Count == 0) return;
+            var color = SearchColor(_searchCategory);
+            for (int i = 0; i < _searchMatches.Count; i++)
+            {
+                Vector3 p = _searchMatches[i];
+                float ground = TerrainHeight(p.x, p.z);
+                float baseScale = i == _searchIndex ? 20f : 15f;
+
+                var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                ring.name = "SearchRing";
+                ring.transform.SetParent(_searchRoot.transform, false);
+                ring.transform.position = new Vector3(p.x, ground + 0.35f, p.z);
+                ring.transform.localScale = new Vector3(baseScale, 0.3f, baseScale);
+                var ringMat = MakeLitMaterial(color, 1.5f);
+                var rr = ring.GetComponent<Renderer>();
+                if (rr != null && ringMat != null) rr.material = ringMat;
+                if (ringMat != null) _searchMats.Add(ringMat);
+                StripCollider(ring);
+                _searchRings.Add(ring);
+                _searchRingBase.Add(baseScale);
+
+                var beam = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                beam.name = "SearchBeam";
+                beam.transform.SetParent(_searchRoot.transform, false);
+                beam.transform.position = new Vector3(p.x, ground + 30f, p.z);
+                beam.transform.localScale = new Vector3(1.7f, 60f, 1.7f);
+                var beamMat = MakeBeamMaterial(color);
+                var br = beam.GetComponent<Renderer>();
+                if (br != null && beamMat != null) br.material = beamMat;
+                if (beamMat != null) _searchBeamMats.Add(beamMat);
+                StripCollider(beam);
+            }
+            _searchRoot.SetActive(_visible);
+        }
+
+        private void ClearSearchHighlights()
+        {
+            foreach (var ring in _searchRings) if (ring != null) Destroy(ring);
+            _searchRings.Clear();
+            _searchRingBase.Clear();
+            if (_searchRoot != null)
+            {
+                // Beams are children of the root alongside the rings.
+                var beams = new List<Transform>();
+                foreach (Transform child in _searchRoot.transform)
+                {
+                    if (child.name == "SearchBeam") beams.Add(child);
+                }
+                foreach (var beam in beams) Destroy(beam.gameObject);
+            }
+            foreach (var m in _searchMats) if (m != null) Destroy(m);
+            _searchMats.Clear();
+            foreach (var m in _searchBeamMats) if (m != null) Destroy(m);
+            _searchBeamMats.Clear();
+        }
+
+        private void ClearSearch()
+        {
+            _searchCategory = SearchCategory.None;
+            _searchMatches.Clear();
+            _searchIndex = -1;
+            ClearSearchHighlights();
+            RefreshChipColors();
+            UpdateSearchStatus();
+        }
+
+        private void RefreshChipColors()
+        {
+            for (int i = 0; i < _findChips.Length; i++)
+            {
+                var chip = _findChips[i];
+                if (chip == null) continue;
+                var img = chip.GetComponent<Image>();
+                if (img == null) continue;
+                img.color = ChipCategories[i] == _searchCategory
+                    ? SearchColor(_searchCategory)
+                    : UIHelpers.Hex("#1A2436");
+            }
+        }
+
+        private void UpdateSearchStatus()
+        {
+            if (_findStatus == null) return;
+            if (_searchCategory == SearchCategory.None)
+            {
+                _findStatus.text = "Tap a category to find it on the map";
+            }
+            else if (_searchMatches.Count == 0)
+            {
+                _findStatus.text = SearchEmptyText(_searchCategory);
+            }
+            else
+            {
+                _findStatus.text = SearchSingular(_searchCategory) + " \u2014 "
+                    + (_searchIndex + 1) + " of " + _searchMatches.Count;
+            }
+        }
+
+        private void GlideTo(Vector3 target)
+        {
+            _glideTarget = new Vector3(
+                Mathf.Clamp(target.x, -PanLimitX, PanLimitX), 0f,
+                Mathf.Clamp(target.z, -PanLimitZ, PanLimitZ));
+            _gliding = true;
+        }
+
+        private void TickSearch(float dt)
+        {
+            if (_gliding)
+            {
+                _panOffset = Vector3.MoveTowards(_panOffset, _glideTarget, 340f * dt);
+                _panOffset.y = 0f;
+                ApplyCamera();
+                if ((_panOffset - _glideTarget).sqrMagnitude < 1f) _gliding = false;
+            }
+            if (_searchRings.Count == 0) return;
+            _searchTime += dt;
+            for (int i = 0; i < _searchRings.Count; i++)
+            {
+                var ring = _searchRings[i];
+                if (ring == null) continue;
+                float s = _searchRingBase[i] * (1f + 0.06f * Mathf.Sin(_searchTime * 3.2f + i * 0.7f));
+                ring.transform.localScale = new Vector3(s, 0.3f, s);
+            }
+            for (int i = 0; i < _searchBeamMats.Count; i++)
+            {
+                var m = _searchBeamMats[i];
+                if (m == null) continue;
+                var c = m.color;
+                c.a = 0.30f + 0.10f * Mathf.Sin(_searchTime * 3.2f + i * 0.7f);
+                m.color = c;
+            }
+        }
+
         public void SetVisible(bool visible)
         {
             _visible = visible;
@@ -1715,6 +2089,17 @@ namespace LunarDominion.UI
             // service cancels the excursion on tab switch, and this is
             // the backstop so the markers never linger in the Base view.
             if (!visible) CancelAllMarches();
+            // Search (Phase 3): the Find UI lives and dies with the
+            // Map, and leaving the Map clears any active search.
+            if (!visible)
+            {
+                _gliding = false;
+                ClearSearch();
+                _findBarOpen = false;
+            }
+            if (_findRoot != null) _findRoot.SetActive(visible && !_findBarOpen);
+            if (_findBar != null) _findBar.SetActive(visible && _findBarOpen);
+            if (_searchRoot != null) _searchRoot.SetActive(visible);
             var cam = Camera.main;
             if (cam == null) return;
             if (visible)
