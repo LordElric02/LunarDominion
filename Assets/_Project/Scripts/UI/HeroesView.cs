@@ -27,6 +27,10 @@ namespace LunarDominion.UI
             public Text StatsText;
             public Text CostText;
             public Button RecruitButton;
+            public GameObject XpBar;
+            public RectTransform XpFill;
+            public Image XpFillImg;
+            public Text XpLabel;
         }
 
         private GameObject _root;
@@ -180,6 +184,32 @@ namespace LunarDominion.UI
                     ? $"Cost: {costText}"
                     : $"{reason}  Cost: {costText}";
                 UIHelpers.SetButtonEnabled(row.RecruitButton, status == RecruitStatus.CanRecruit);
+
+                // XP bar state: hidden for unrecruited heroes;
+                // otherwise the fraction of XP toward the next
+                // level, full and gold at the level cap.
+                if (row.XpBar != null)
+                {
+                    var unit = _controller.State.Heroes != null
+                        ? _controller.State.Heroes.Find(u => u.Id == row.Def.Id)
+                        : null;
+                    if (unit == null)
+                    {
+                        row.XpBar.SetActive(false);
+                    }
+                    else
+                    {
+                        row.XpBar.SetActive(true);
+                        bool maxed = unit.Level >= 20;
+                        int need = UnitStats.XpToNextLevel(unit.Level);
+                        float frac = maxed ? 1f : Mathf.Clamp01(unit.XP / (float)need);
+                        row.XpFill.anchorMax = new Vector2(Mathf.Max(frac, 0.003f), 1f);
+                        if (row.XpFillImg != null)
+                            row.XpFillImg.color = maxed ? UIHelpers.Hex("#C49000") : UIHelpers.Hex("#1E88E5");
+                        if (row.XpLabel != null)
+                            row.XpLabel.text = maxed ? "MAX LEVEL" : $"XP {unit.XP} / {need}";
+                    }
+                }
             }
 
             // Selected hero's detail panel.
@@ -266,7 +296,7 @@ namespace LunarDominion.UI
                 var rowImg = rowGo.AddComponent<Image>();
                 rowImg.color = UIHelpers.Hex("#1A2436");
                 var layout = rowGo.AddComponent<LayoutElement>();
-                layout.preferredHeight = 120;
+                layout.preferredHeight = 140;
                 var rowRt = rowGo.GetComponent<RectTransform>();
                 rowRt.anchorMin = Vector2.zero;
                 rowRt.anchorMax = Vector2.one;
@@ -290,11 +320,41 @@ namespace LunarDominion.UI
                     textLeft = 0.15f;
                 }
                 UIHelpers.LabelInRect(rowGo, "Name", $"{def.DisplayName}  ★ HERO  •  {def.Class}", 28, Color.white,
-                    new Rect(textLeft, 0.62f, 0.72f, 0.97f));
+                    new Rect(textLeft, 0.67f, 0.72f, 0.98f));
                 var stats = UIHelpers.LabelInRect(rowGo, "Stats", "", 24, UIHelpers.Hex("#C0C8D0"),
-                    new Rect(textLeft, 0.32f, 0.72f, 0.62f));
+                    new Rect(textLeft, 0.42f, 0.72f, 0.67f));
                 var cost = UIHelpers.LabelInRect(rowGo, "Cost", "", 24, UIHelpers.Hex("#FFD166"),
-                    new Rect(textLeft, 0.03f, 0.72f, 0.32f));
+                    new Rect(textLeft, 0.215f, 0.72f, 0.42f));
+                // XP-to-next-level bar (Patrick 2026-11-12): a
+                // thin horizontal bar under the cost line so each
+                // hero's progress to the next level is visible at
+                // a glance. The fill is driven by anchor (a
+                // sprite-less Filled image does not clip in this
+                // Unity version — same lesson as the boss bar).
+                // Hidden until the hero is recruited.
+                var barGo = new GameObject("XpBar");
+                barGo.transform.SetParent(rowGo.transform, false);
+                var barBg = barGo.AddComponent<Image>();
+                barBg.color = UIHelpers.Hex("#0A0F16");
+                barBg.raycastTarget = false;
+                var barRt = barGo.GetComponent<RectTransform>();
+                barRt.anchorMin = new Vector2(textLeft, 0.05f);
+                barRt.anchorMax = new Vector2(0.72f, 0.175f);
+                barRt.offsetMin = Vector2.zero;
+                barRt.offsetMax = Vector2.zero;
+                var fillGo = new GameObject("XpFill");
+                fillGo.transform.SetParent(barGo.transform, false);
+                var fillImg = fillGo.AddComponent<Image>();
+                fillImg.color = UIHelpers.Hex("#1E88E5");
+                fillImg.raycastTarget = false;
+                var fillRt = fillGo.GetComponent<RectTransform>();
+                fillRt.anchorMin = Vector2.zero;
+                fillRt.anchorMax = new Vector2(0f, 1f);
+                fillRt.offsetMin = Vector2.zero;
+                fillRt.offsetMax = Vector2.zero;
+                var barLabel = UIHelpers.LabelInRect(barGo, "XpText", "", 16, Color.white,
+                    new Rect(0f, 0f, 1f, 1f), TextAnchor.MiddleCenter);
+                barLabel.raycastTarget = false;
                 var btn = UIHelpers.Button(rowGo, "RecruitBtn", "Recruit", 26,
                     UIHelpers.Hex("#2E7D32"), Color.white);
                 var rt = btn.GetComponent<RectTransform>();
@@ -309,7 +369,7 @@ namespace LunarDominion.UI
                 var rowBtn = rowGo.AddComponent<Button>();
                 rowBtn.targetGraphic = rowImg;
                 rowBtn.onClick.AddListener(() => SelectHero(heroDef));
-                _rows.Add(new Row { Root = rowGo, Def = def, Bg = rowImg, StatsText = stats, CostText = cost, RecruitButton = btn });
+                _rows.Add(new Row { Root = rowGo, Def = def, Bg = rowImg, StatsText = stats, CostText = cost, RecruitButton = btn, XpBar = barGo, XpFill = fillRt, XpFillImg = fillImg, XpLabel = barLabel });
             }
             if (_selectedDef == null && heroes.Count > 0) _selectedDef = heroes[0];
         }
