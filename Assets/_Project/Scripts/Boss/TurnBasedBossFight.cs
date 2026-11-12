@@ -830,6 +830,9 @@ namespace LunarDominion.Boss
             if (_ventActive) dmg = Mathf.RoundToInt(dmg * VentVulnMult);
             BossHp = Mathf.Max(0, BossHp - dmg);
             _recoil = Mathf.Min(1f, _recoil + 0.55f);
+            if (dmg > 0 && _bossRoot != null)
+                SpawnDamageNumber(_bossRoot.position + Vector3.up * 12.2f, dmg,
+                    new Color(1f, 0.95f, 0.6f), 2.6f);
             AddLog($"{hero.Name} — {label}: {dmg} dmg" + (_ventActive ? " (core exposed!)" : "") + ".");
             if (!_phase2 && BossHp > 0 && BossHp <= BossMaxHp / 2)
             {
@@ -849,6 +852,9 @@ namespace LunarDominion.Boss
         {
             drone.Hp = Mathf.Max(0, drone.Hp - dmg);
             RefreshDroneBar(drone);
+            if (dmg > 0 && drone.Figure != null)
+                SpawnDamageNumber(drone.Figure.transform.position + Vector3.up * 2.2f, dmg,
+                    new Color(1f, 0.8f, 0.4f), 0.85f);
             AddLog($"{hero.Name} — {label} {drone.Name}: {dmg} dmg.");
             if (drone.Hp <= 0 && drone.Alive)
             {
@@ -931,11 +937,18 @@ namespace LunarDominion.Boss
                 + (absorbed > 0 ? $" ({absorbed} absorbed by shield)" : "")
                 + (defended ? " (defending)" : "") + ".");
             StartCoroutine(FlashRoutine(hero.Figure.transform, 1.10f));
+            if (dmg > 0)
+                SpawnDamageNumber(hero.Figure.transform.position + Vector3.up * 4.1f, dmg,
+                    new Color(1f, 0.45f, 0.3f), 1.15f);
             if (hero.Hp <= 0)
             {
                 hero.Alive = false;
                 AddLog($"{hero.Name} is DOWN!");
                 StartCoroutine(TipOverRoutine(hero));
+            }
+            else if (dmg > 0 || absorbed > 0)
+            {
+                StartCoroutine(FlinchRoutine(hero));
             }
             OnChanged?.Invoke();
         }
@@ -1042,6 +1055,11 @@ namespace LunarDominion.Boss
             dir.y = 0f;
             Vector3 stop = home + dir.normalized * 2.4f;
             yield return MoveRoutine(_bossRoot, home, stop, 0.18f);
+            // Point-blank cannon blast: the shot covers the
+            // last stretch into the target; damage lands with it.
+            yield return StartCoroutine(BlastRoutine(
+                _bossRoot.position + Vector3.up * 7.5f,
+                FigureChest(target.Figure.transform)));
             int dmg = CombatService.Damage(BossEffAtk, target.EffDef,
                 UnitClass.Mechanized, target.Class, BossLevel, target.Level);
             ApplyHeroDamage(target, dmg, "A.R.E.S.");
@@ -1053,42 +1071,39 @@ namespace LunarDominion.Boss
         {
             AddLog("A.R.E.S. fires THERMAL SWEEP!");
             OnChanged?.Invoke();
-            // A broad beam flash across the hero line.
-            Vector3 bossPos = _bossRoot.position;
-            Vector3 heroPos = Heroes.Count > 0 ? Heroes[0].Home : bossPos + Vector3.back * 20f;
-            Vector3 mid = (bossPos + heroPos) / 2f;
-            mid.y = 7.0f;
-            var beam = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            beam.name = "TurnSweepBeam";
-            Destroy(beam.GetComponent<Collider>());
-            var rend = beam.GetComponent<Renderer>();
-            var lit = Shader.Find("Universal Render Pipeline/Lit");
-            if (lit != null)
-            {
-                var mat = new Material(lit);
-                var beamColor = new Color(1f, 0.42f, 0.12f);
-                mat.color = beamColor;
-                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", beamColor * 2.2f);
-                rend.material = mat;
-            }
-            beam.transform.position = mid;
-            beam.transform.LookAt(new Vector3(heroPos.x, 1.2f, heroPos.z));
-            beam.transform.localScale = new Vector3(14f, 2.4f, Vector3.Distance(bossPos, heroPos));
-            // The sweep arm swings across the hero line (rig).
-            SetPose(0f, -20f, 26f);
-            yield return new WaitForSeconds(0.14f);
-            SetPose(0f, 20f, 26f);
-            yield return new WaitForSeconds(0.14f);
-            Destroy(beam);
-            SetPose(0f, 0f, 0f);
+            // Phase 4 presentation: a target marker lights up
+            // under every living hero, then a bolt strikes each
+            // hero in turn — damage lands with each hero's own
+            // bolt (the old single fat beam is gone). The sweep
+            // arm pose swings with the shots.
             int atk = Mathf.RoundToInt(BossEffAtk * SweepAtkMult);
+            var targets = new List<TurnHeroState>();
+            var damages = new List<int>();
             foreach (var hero in Heroes)
             {
                 if (!hero.Alive) continue;
-                int dmg = CombatService.Damage(atk, hero.EffDef,
-                    UnitClass.Mechanized, hero.Class, BossLevel, hero.Level);
-                ApplyHeroDamage(hero, dmg, "THERMAL SWEEP");
+                targets.Add(hero);
+                damages.Add(CombatService.Damage(atk, hero.EffDef,
+                    UnitClass.Mechanized, hero.Class, BossLevel, hero.Level));
             }
+            var markers = new List<GameObject>();
+            foreach (var hero in targets)
+                markers.Add(MakeTargetMarker(hero.Home));
+            SetPose(0f, -20f, 26f);
+            yield return new WaitForSeconds(0.38f);
+            SetPose(0f, 20f, 26f);
+            Vector3 origin = _bossRoot.position + Vector3.up * 7.5f;
+            var boltColor = new Color(1f, 0.42f, 0.12f);
+            for (int i = 0; i < targets.Count; i++)
+            {
+                StartCoroutine(BoltRoutine(origin,
+                    FigureChest(targets[i].Figure.transform), boltColor, 0.14f));
+                ApplyHeroDamage(targets[i], damages[i], "THERMAL SWEEP");
+                if (i + 1 < targets.Count)
+                    yield return new WaitForSeconds(0.09f);
+            }
+            foreach (var m in markers) Destroy(m);
+            SetPose(0f, 0f, 0f);
         }
 
         private IEnumerator SlamRoutine()
@@ -1118,6 +1133,9 @@ namespace LunarDominion.Boss
                 yield return null;
             }
             _bossVisual.localPosition = orig;
+            // The landing shockwave rolls out across the floor
+            // as the damage lands (Phase 4).
+            StartCoroutine(ShockwaveRoutine(_bossRoot.position));
             int atk = Mathf.RoundToInt(BossEffAtk * SlamAtkMult);
             foreach (var hero in Heroes)
             {
@@ -1372,6 +1390,169 @@ namespace LunarDominion.Boss
                 if (hero.Alive) StartCoroutine(FlashRoutine(hero.Figure.transform, 1.08f));
             }
             yield return new WaitForSeconds(0.25f);
+        }
+
+        // ================= Phase 4 presentation =================
+        // Traveling/impact effects sequenced so the damage frame
+        // is the impact frame. Presentation only.
+
+        /// <summary>A floating damage number: rises and fades
+        /// over ~0.9s, facing the (static) fight camera. TextMesh
+        /// uses the built-in font material — no runtime shader
+        /// lookup, so nothing new can be stripped on Android.</summary>
+        private void SpawnDamageNumber(Vector3 pos, int dmg, Color color, float size)
+        {
+            var go = new GameObject("DamageNumber");
+            go.transform.SetParent(transform, true);
+            pos.x += UnityEngine.Random.Range(-0.7f, 0.7f);
+            go.transform.position = pos;
+            var tm = go.AddComponent<TextMesh>();
+            tm.text = dmg.ToString();
+            tm.fontSize = 64;
+            tm.characterSize = size;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.fontStyle = FontStyle.Bold;
+            tm.color = color;
+            if (Camera.main != null)
+                go.transform.rotation = Camera.main.transform.rotation;
+            StartCoroutine(DamageNumberRoutine(go));
+        }
+
+        private IEnumerator DamageNumberRoutine(GameObject go)
+        {
+            var tm = go.GetComponent<TextMesh>();
+            Vector3 start = go.transform.position;
+            Color baseColor = tm.color;
+            float t = 0f;
+            while (t < 0.9f)
+            {
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / 0.9f);
+                go.transform.position = start + Vector3.up * (1.7f * p);
+                var c = baseColor;
+                c.a = 1f - p * p;
+                tm.color = c;
+                yield return null;
+            }
+            Destroy(go);
+        }
+
+        /// <summary>A hit reaction: the hero rocks back and
+        /// recovers. Rotation only, composed on the figure's
+        /// original rotation — position and scale belong to the
+        /// move/flash routines, so nothing fights them.</summary>
+        private IEnumerator FlinchRoutine(TurnHeroState hero)
+        {
+            var fig = hero.Figure.transform;
+            float t = 0f;
+            while (t < 0.26f)
+            {
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / 0.26f);
+                float s = Mathf.Sin(p * Mathf.PI);
+                fig.rotation = hero.OrigRot * Quaternion.Euler(-10f * s, 0f, 0f);
+                yield return null;
+            }
+            fig.rotation = hero.OrigRot;
+        }
+
+        /// <summary>A glowing shot that travels from -> to and
+        /// is destroyed on arrival; the caller applies damage
+        /// right after this completes.</summary>
+        private IEnumerator BlastRoutine(Vector3 from, Vector3 to)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = "BossBlast";
+            go.transform.SetParent(transform, true);
+            Destroy(go.GetComponent<Collider>());
+            go.transform.localScale = Vector3.one * 0.65f;
+            var rend = go.GetComponent<Renderer>();
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit != null)
+            {
+                var mat = new Material(lit);
+                var c = new Color(1f, 0.5f, 0.15f);
+                mat.color = c;
+                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", c * 2.6f);
+                rend.material = mat;
+            }
+            float t = 0f;
+            while (t < 0.09f)
+            {
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / 0.09f);
+                go.transform.position = Vector3.Lerp(from, to, p);
+                yield return null;
+            }
+            Destroy(go);
+        }
+
+        /// <summary>The slam's ground shockwave: an additive
+        /// disc (URP Unlit recipe, the ambience's proven
+        /// transparent setup) expanding to ~17 units and fading
+        /// over half a second.</summary>
+        private IEnumerator ShockwaveRoutine(Vector3 centre)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = "SlamShockwave";
+            go.transform.SetParent(transform, true);
+            Destroy(go.GetComponent<Collider>());
+            go.transform.position = centre + Vector3.up * 0.18f;
+            var rend = go.GetComponent<Renderer>();
+            var sh = Shader.Find("Universal Render Pipeline/Unlit");
+            var col = new Color(1f, 0.52f, 0.18f, 0.38f);
+            Material mat = null;
+            if (sh != null)
+            {
+                mat = new Material(sh);
+                mat.SetColor("_BaseColor", col);
+                mat.SetFloat("_Surface", 1f);
+                mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                mat.SetFloat("_ZWrite", 0f);
+                mat.renderQueue = 3000;
+                rend.material = mat;
+            }
+            float t = 0f;
+            while (t < 0.5f)
+            {
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / 0.5f);
+                float r = 1f + 16f * (1f - (1f - p) * (1f - p));
+                go.transform.localScale = new Vector3(2f * r, 0.12f, 2f * r);
+                if (mat != null)
+                {
+                    var c = col;
+                    c.a = col.a * (1f - p);
+                    mat.SetColor("_BaseColor", c);
+                }
+                yield return null;
+            }
+            Destroy(go);
+        }
+
+        /// <summary>A red target disc under a hero (Thermal
+        /// Sweep's lock-on marker).</summary>
+        private GameObject MakeTargetMarker(Vector3 pos)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = "SweepTargetMarker";
+            go.transform.SetParent(transform, true);
+            Destroy(go.GetComponent<Collider>());
+            go.transform.position = pos + Vector3.up * 0.09f;
+            go.transform.localScale = new Vector3(2.2f, 0.07f, 2.2f);
+            var rend = go.GetComponent<Renderer>();
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit != null)
+            {
+                var mat = new Material(lit);
+                var c = new Color(1f, 0.25f, 0.08f);
+                mat.color = c;
+                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", c * 2.4f);
+                rend.material = mat;
+            }
+            return go;
         }
 
         private IEnumerator TipOverRoutine(TurnHeroState hero)
