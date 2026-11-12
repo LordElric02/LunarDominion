@@ -1,4 +1,4 @@
-# BuildHeroOkafor.py — Lunar Dominion: Lieutenant Ada Okafor,
+# BuildHeroOkafor.py — Lunar Dominion: Lieutenant Obinna Okafor,
 # Mechanized hero (one of the three named heroes). Replaces the
 # primitive capsule figure in the boss fight; portrait renders of
 # this model are the Heroes-menu icon source.

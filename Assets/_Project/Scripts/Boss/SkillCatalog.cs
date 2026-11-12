@@ -80,7 +80,7 @@ namespace LunarDominion.Boss
                 Cooldown = 4, IsAttack = false,
                 Blurb = "The boss's ATK -20% for 2 rounds.",
             },
-            // Lieutenant Ada Okafor — Mechanized: the tank.
+            // Lieutenant Obinna Okafor — Mechanized: the tank.
             new SkillDefinition
             {
                 Id = HeroSkillId.AegisProtocol, Hero = UnitId.HeroOkafor, Name = "Aegis Protocol",
