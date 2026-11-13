@@ -73,7 +73,18 @@ namespace LunarDominion.Save
         // roster as unit serials (see OwnedUnit.Serial), plus
         // the next serial to hand out. Old saves without these
         // load with empty rosters and serials assigned on load.
-        public int[][] ArmyRosters;
+        // The wrapper class matters: JsonUtility silently drops
+        // jagged arrays (int[][]), which is exactly what the first
+        // version used — rosters saved as nothing and loaded back
+        // empty (found by Patrick's restart check 2026-11-12).
+        // An array of serializable slots, each holding a flat
+        // int[], serializes correctly.
+        [Serializable]
+        public class RosterSlot
+        {
+            public int[] Serials = new int[0];
+        }
+        public RosterSlot[] ArmyRosters;
         public int NextUnitSerial = 1;
     }
 
@@ -419,9 +430,9 @@ namespace LunarDominion.Save
         // Standing armies (2026-11-12): rosters persist as unit
         // serials. A roster entry whose unit no longer exists is
         // dropped on load, never the whole save.
-        private static int[][] SerializeRosters(GameState state)
+        private static SaveData.RosterSlot[] SerializeRosters(GameState state)
         {
-            var result = new int[GameState.MaxArmies][];
+            var result = new SaveData.RosterSlot[GameState.MaxArmies];
             for (int army = 0; army < GameState.MaxArmies; army++)
             {
                 var roster = state.GetRoster(army);
@@ -433,7 +444,7 @@ namespace LunarDominion.Save
                         if (unit != null && unit.Serial > 0) serials.Add(unit.Serial);
                     }
                 }
-                result[army] = serials.ToArray();
+                result[army] = new SaveData.RosterSlot { Serials = serials.ToArray() };
             }
             return result;
         }
@@ -455,8 +466,9 @@ namespace LunarDominion.Save
             for (int army = 0; army < GameState.MaxArmies && army < data.ArmyRosters.Length; army++)
             {
                 var roster = state.GetRoster(army);
-                var serials = data.ArmyRosters[army];
-                if (serials == null) continue;
+                var slot = data.ArmyRosters[army];
+                if (slot == null || slot.Serials == null) continue;
+                var serials = slot.Serials;
                 int heroes = 0;
                 foreach (int serial in serials)
                 {
