@@ -433,7 +433,14 @@ namespace LunarDominion.Boss
                 _prevFogMode = RenderSettings.fogMode;
                 _prevFogDensity = RenderSettings.fogDensity;
                 _prevReflectionMode = RenderSettings.defaultReflectionMode;
-                _prevCustomReflection = RenderSettings.customReflection;
+                // The customReflection GETTER throws an
+                // ArgumentException when no cubemap is assigned
+                // (the project's default Skybox mode) — guard the
+                // read, or the whole capture (and every set after
+                // it) dies on lair entry.
+                _prevCustomReflection = null;
+                try { _prevCustomReflection = RenderSettings.customReflection; }
+                catch (System.ArgumentException) { _prevCustomReflection = null; }
                 _prevReflectionIntensity = RenderSettings.reflectionIntensity;
                 _captured = true;
             }
@@ -503,7 +510,8 @@ namespace LunarDominion.Boss
             RenderSettings.fogMode = _prevFogMode;
             RenderSettings.fogDensity = _prevFogDensity;
             RenderSettings.defaultReflectionMode = _prevReflectionMode;
-            RenderSettings.customReflection = _prevCustomReflection;
+            if (_prevCustomReflection != null)
+                RenderSettings.customReflection = _prevCustomReflection;
             RenderSettings.reflectionIntensity = _prevReflectionIntensity;
             _captured = false;
         }
