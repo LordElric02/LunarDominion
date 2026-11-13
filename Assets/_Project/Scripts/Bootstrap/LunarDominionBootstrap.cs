@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using LunarDominion.Audio;
 using LunarDominion.Core;
 using LunarDominion.Expeditions;
 using LunarDominion.UI;
@@ -22,6 +23,7 @@ namespace LunarDominion.Bootstrap
         private MapInfoView _mapInfoView;
         private ArmyView _armyView;
         private BossLairView _lairView;
+        private MusicDirector _music;
         private MapExcursionService _excursions;
         private MapPointData _selectedPoint;
         private BuildingPanelView _buildingPanel;
@@ -119,6 +121,12 @@ namespace LunarDominion.Bootstrap
             _devHud = new GameObject("DevHUDView").AddComponent<DevHUDView>();
             _devHud.Build(canvas, _controller);
 
+            // Background music (2026-11-13): one director, three loops.
+            // Starts on the Base theme under the splash; tab switches
+            // and the lair hooks below crossfade it from there.
+            _music = new GameObject("MusicDirector").AddComponent<MusicDirector>();
+            _music.PlayBase();
+
             _controller.OnStateChanged += RefreshAll;
             RefreshAll();
 
@@ -171,6 +179,7 @@ namespace LunarDominion.Bootstrap
             _selectedPoint = null;
             _exteriorView.SetVisible(false);
             _lairView.Show();
+            _music?.PlayLair();
         }
 
         // A boss fight finished in the lair view. The boss never
@@ -191,6 +200,7 @@ namespace LunarDominion.Bootstrap
             _selectedPoint = null;
             _exteriorView.SetVisible(true);
             RefreshMapNodeStates();
+            _music?.PlayExterior();
         }
 
         // Show the selected point's info + Send button state. An occupied
@@ -398,6 +408,11 @@ namespace LunarDominion.Bootstrap
                     RefreshMapNodeStates();
                     break;
             }
+            // Music follows the area: the Map gets the Exterior theme;
+            // every management tab keeps the Base theme. (Entering the
+            // lair overrides this via OpenLairView.)
+            if (tab == NavTab.Map) _music?.PlayExterior();
+            else _music?.PlayBase();
         }
 
         private void RefreshAll()
