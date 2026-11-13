@@ -92,6 +92,24 @@ namespace LunarDominion.UI
         // alpha decays per-frame in Update).
         private readonly List<Image> _vignetteStrips = new List<Image>();
         private float _vignetteAlpha;
+
+        // Cinematic C3 (fight UI dressing, presentation only): the
+        // boss bar's phase marker + slam icon, the hero portrait
+        // medallions, and the action-bar card state.
+        private Image _bossPhaseMarker;
+        private Text _slamIcon;
+        private readonly Image[] _portraitFrames = new Image[3];
+        private readonly RawImage[] _portraitImages = new RawImage[3];
+        private readonly Image[] _portraitHpFills = new Image[3];
+        private readonly GameObject[] _portraitSlashes = new GameObject[3];
+        private readonly UnitId[] _portraitIds = new UnitId[3];
+        private int _actingPortrait = -1;
+        private readonly Image[] _cardFrames = new Image[5];
+        private readonly Image[] _skillIcons = new Image[3];
+        private readonly Image[] _skillSweeps = new Image[3];
+        private readonly Text[] _skillBadges = new Text[3];
+        private readonly Color[] _skillIconBase = new Color[3];
+        private readonly bool[] _skillHot = new bool[3];
         private float _vignetteApplied = -1f;
         private int _bossPhase = 1;
         private readonly List<Vector4> _coverSpheres = new List<Vector4>();
@@ -1554,6 +1572,53 @@ namespace LunarDominion.UI
             // acting hero is tapped on their 3D figure instead.
             // The action bar below took over the chips' band.
 
+            // Cinematic C3: hero portrait medallions, bottom-left
+            // below the log and clear of the action bar (which
+            // starts at x 0.24). Built once; RefreshPortraits
+            // updates them. Turn state and a second HP read only —
+            // the detail still lives in the Heroes screen.
+            var portraits = new GameObject("TurnPortraits");
+            portraits.transform.SetParent(_turnHud.transform, false);
+            var portraitsRt = portraits.AddComponent<RectTransform>();
+            portraitsRt.anchorMin = new Vector2(0.015f, 0.015f);
+            portraitsRt.anchorMax = new Vector2(0.225f, 0.150f);
+            portraitsRt.offsetMin = Vector2.zero;
+            portraitsRt.offsetMax = Vector2.zero;
+            for (int i = 0; i < 3; i++)
+            {
+                float x0 = i / 3f, x1 = (i + 1) / 3f;
+                var frame = PlatePiece(portraits.transform, "PortraitFrame" + i,
+                    Color.gray,
+                    new Vector2(x0 + 0.006f, 0.04f), new Vector2(x1 - 0.006f, 0.96f),
+                    Vector2.zero, Vector2.zero);
+                _portraitFrames[i] = frame;
+                var portraitGo = new GameObject("Portrait" + i);
+                portraitGo.transform.SetParent(frame.transform, false);
+                var prt = portraitGo.AddComponent<RectTransform>();
+                prt.anchorMin = new Vector2(0.07f, 0.16f);
+                prt.anchorMax = new Vector2(0.93f, 0.93f);
+                prt.offsetMin = Vector2.zero;
+                prt.offsetMax = Vector2.zero;
+                var raw = portraitGo.AddComponent<RawImage>();
+                raw.raycastTarget = false;
+                _portraitImages[i] = raw;
+                PlatePiece(frame.transform, "PortraitHpBg" + i,
+                    new Color(0f, 0f, 0f, 0.55f),
+                    new Vector2(0.07f, 0.045f), new Vector2(0.93f, 0.13f),
+                    Vector2.zero, Vector2.zero);
+                _portraitHpFills[i] = PlatePiece(frame.transform, "PortraitHp" + i,
+                    UIHelpers.Hex("#66BB6A"),
+                    new Vector2(0.07f, 0.045f), new Vector2(0.93f, 0.13f),
+                    Vector2.zero, Vector2.zero);
+                var slash = PlatePiece(frame.transform, "PortraitSlash" + i,
+                    new Color(0.85f, 0.1f, 0.08f, 0.85f),
+                    new Vector2(0.28f, 0.45f), new Vector2(0.72f, 0.55f),
+                    Vector2.zero, Vector2.zero);
+                slash.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -32f);
+                slash.gameObject.SetActive(false);
+                _portraitSlashes[i] = slash.gameObject;
+            }
+
             // The action bar: hidden until the acting hero is
             // tapped; Attack / Defend / the hero's 3 skills.
             _actionBar = new GameObject("TurnActions");
@@ -1596,6 +1661,44 @@ namespace LunarDominion.UI
                 trigger.triggers.Add(exit);
                 _turnActionButtons.Add(btn);
                 _turnActionLabels.Add(label);
+
+                // Cinematic C3: card dressing. Children render
+                // above the button's own graphic, so a slightly
+                // larger frame plus an inset cover in the button
+                // colour reads as a coloured border; both are
+                // non-raycast, so clicks still land on the button.
+                var cardFrame = PlatePiece(btn.gameObject, "CardFrame",
+                    UIHelpers.Hex("#546E7A"),
+                    new Vector2(-0.045f, -0.07f), new Vector2(1.045f, 1.07f),
+                    Vector2.zero, Vector2.zero);
+                cardFrame.transform.SetSiblingIndex(0);
+                var cardCover = PlatePiece(btn.gameObject, "CardCover",
+                    UIHelpers.Hex("#1A2436"),
+                    Vector2.zero, Vector2.one,
+                    new Vector2(3f, 3f), new Vector2(-3f, -3f));
+                cardCover.transform.SetSiblingIndex(1);
+                _cardFrames[actionIndex] = cardFrame;
+                if (actionIndex >= 2)
+                {
+                    int slot = actionIndex - 2;
+                    // Keep the skill's name clear of the diamond.
+                    label.rectTransform.anchorMin =
+                        new Vector2(0.17f, label.rectTransform.anchorMin.y);
+                    var icon = PlatePiece(btn.gameObject, "SkillIcon", Color.white,
+                        new Vector2(0.045f, 0.30f), new Vector2(0.155f, 0.70f),
+                        Vector2.zero, Vector2.zero);
+                    icon.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+                    _skillIcons[slot] = icon;
+                    var sweep = PlatePiece(btn.gameObject, "SkillSweep",
+                        new Color(0f, 0f, 0f, 0.62f),
+                        new Vector2(0f, 1f), Vector2.one, Vector2.zero, Vector2.zero);
+                    sweep.gameObject.SetActive(false);
+                    _skillSweeps[slot] = sweep;
+                    _skillBadges[slot] = UIHelpers.LabelInRect(btn.gameObject,
+                        "SkillBadge", "", 20, UIHelpers.Hex("#FFD54F"),
+                        new Rect(0.78f, 0.58f, 0.97f, 0.95f), TextAnchor.MiddleRight);
+                    _skillBadges[slot].verticalOverflow = VerticalWrapMode.Overflow;
+                }
             }
 
             // Target row (boss / drones / cancel), shown only
@@ -2101,6 +2204,26 @@ namespace LunarDominion.UI
                         strip.color = c;
                     }
                 }
+                // Cinematic C3 pulses: the acting hero's portrait
+                // frame breathes gold (RefreshPortraits repaints
+                // the steady colours each tick; this overrides the
+                // acting frame between ticks), and a ready damage
+                // skill's diamond throbs.
+                if (_actingPortrait >= 0 && _portraitFrames[_actingPortrait] != null)
+                {
+                    float t = 0.5f + 0.5f * Mathf.Sin(Time.time * 5f);
+                    _portraitFrames[_actingPortrait].color = Color.Lerp(
+                        new Color(0.80f, 0.60f, 0.12f, 1f),
+                        new Color(1f, 0.85f, 0.25f, 1f), t);
+                }
+                for (int s = 0; s < 3; s++)
+                {
+                    if (_skillIcons[s] == null || !_skillHot[s]) continue;
+                    float t = 0.72f + 0.28f * Mathf.Sin(Time.time * 6f);
+                    var bc = _skillIconBase[s];
+                    _skillIcons[s].color = new Color(
+                        bc.r * t + 0.15f, bc.g * t + 0.15f, bc.b * t + 0.15f, 1f);
+                }
             }
             if (!_turnActive || _turnFight == null || _turnFight.Finished) return;
             bool pressed = false;
@@ -2247,11 +2370,15 @@ namespace LunarDominion.UI
                 {
                     _turnActionLabels[i].text = "Attack";
                     btn.interactable = canAct;
+                    if (_cardFrames[i] != null && selected != null)
+                        _cardFrames[i].color = ClassColour(selected.Member.Definition.Class);
                 }
                 else if (i == 1)
                 {
                     _turnActionLabels[i].text = "Defend";
                     btn.interactable = canAct;
+                    if (_cardFrames[i] != null && selected != null)
+                        _cardFrames[i].color = ClassColour(selected.Member.Definition.Class);
                 }
                 else
                 {
@@ -2261,12 +2388,43 @@ namespace LunarDominion.UI
                     {
                         _turnActionLabels[i].text = "—";
                         btn.interactable = false;
+                        if (_skillSweeps[slot] != null)
+                            _skillSweeps[slot].gameObject.SetActive(false);
+                        if (_skillBadges[slot] != null) _skillBadges[slot].text = "";
+                        _skillHot[slot] = false;
                     }
                     else
                     {
                         int cd = selected.Cooldowns[slot];
-                        _turnActionLabels[i].text = cd > 0 ? $"{skill.Name} ({cd})" : skill.Name;
+                        _turnActionLabels[i].text = skill.Name;
                         btn.interactable = canAct && cd == 0;
+                        // Cinematic C3 card state: the border takes
+                        // the acting hero's class colour, the
+                        // diamond takes the skill's role colour, the
+                        // sweep drains from the top as the cooldown
+                        // ticks, and the badge carries the rounds
+                        // left (the label no longer appends "(cd)").
+                        if (_cardFrames[i] != null)
+                            _cardFrames[i].color = ClassColour(selected.Member.Definition.Class);
+                        if (_skillIcons[slot] != null)
+                        {
+                            _skillIconBase[slot] = SkillIconColour(skill);
+                            _skillIcons[slot].color = _skillIconBase[slot];
+                        }
+                        _skillHot[slot] = canAct && cd == 0 && skill.IsAttack;
+                        if (_skillSweeps[slot] != null)
+                        {
+                            bool cooling = cd > 0 && skill.Cooldown > 0;
+                            _skillSweeps[slot].gameObject.SetActive(cooling);
+                            if (cooling)
+                            {
+                                var srt = _skillSweeps[slot].rectTransform;
+                                srt.anchorMin = new Vector2(0f,
+                                    1f - (float)cd / skill.Cooldown);
+                            }
+                        }
+                        if (_skillBadges[slot] != null)
+                            _skillBadges[slot].text = cd > 0 ? cd.ToString() : "";
                     }
                 }
             }
@@ -2287,6 +2445,9 @@ namespace LunarDominion.UI
                     }
                 }
             }
+
+            // Cinematic C3: portrait medallions track the fight.
+            RefreshPortraits();
         }
 
         private void OnTurnPhase2()
@@ -2319,6 +2480,28 @@ namespace LunarDominion.UI
                     else if (_turnFight != null && _turnFight.SlamCharged) pulse = 1.3f + Mathf.Sin(Time.time * 10f) * 0.7f;
                     _coreMaterial.SetColor("_EmissionColor",
                         pulse > 0f ? _coreBaseEmission * pulse : _coreBaseEmission);
+                }
+                // Cinematic C3: the bar's 50% phase marker glows
+                // while the core vents; the slam icon beside the
+                // bar pulses for as long as a slam is charged.
+                if (_bossPhaseMarker != null)
+                {
+                    var mc = _bossPhaseMarker.color;
+                    mc.a = _turnFight != null && _turnFight.VentActive
+                        ? 0.65f + 0.35f * Mathf.Sin(Time.time * 7f) : 0.9f;
+                    _bossPhaseMarker.color = mc;
+                }
+                if (_slamIcon != null)
+                {
+                    bool charged = _turnFight != null && _turnFight.SlamCharged;
+                    if (_slamIcon.gameObject.activeSelf != charged)
+                        _slamIcon.gameObject.SetActive(charged);
+                    if (charged)
+                    {
+                        var sc = _slamIcon.color;
+                        sc.a = 0.6f + 0.4f * Mathf.Sin(Time.time * 8f);
+                        _slamIcon.color = sc;
+                    }
                 }
                 yield return new WaitForSeconds(0.1f);
             }
@@ -2450,6 +2633,160 @@ namespace LunarDominion.UI
             rt.anchorMax = new Vector2(0.01f + 0.98f * f, rt.anchorMax.y);
         }
 
+        // Cinematic C3 helpers. PlatePiece builds one flat,
+        // non-interactive UI quad; every C3 dressing element is
+        // built once and only recoloured / re-anchored on refresh.
+        private static Image PlatePiece(Transform parent, string name, Color color,
+            Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.offsetMin = offsetMin;
+            rt.offsetMax = offsetMax;
+            var img = go.AddComponent<Image>();
+            img.color = color;
+            img.raycastTarget = false;
+            return img;
+        }
+
+        // The project's class colours (same values as the map's
+        // ClassColor): Infantry steel blue, Ranged orange,
+        // Mechanized green.
+        private static Color ClassColour(UnitClass cls)
+        {
+            switch (cls)
+            {
+                case UnitClass.Ranged: return new Color(0.95f, 0.50f, 0.15f);
+                case UnitClass.Mechanized: return new Color(0.40f, 0.60f, 0.35f);
+                default: return new Color(0.40f, 0.55f, 0.80f);
+            }
+        }
+
+        // Skill-card diamond colour by role: damage burns orange,
+        // enemy-affecting control is violet, ally support is blue.
+        private static Color SkillIconColour(SkillDefinition skill)
+        {
+            if (skill.IsAttack) return UIHelpers.Hex("#FF7043");
+            if (skill.Id == HeroSkillId.SuppressingFire
+                || skill.Id == HeroSkillId.GuardianTaunt)
+                return UIHelpers.Hex("#BA68C8");
+            return UIHelpers.Hex("#42A5F5");
+        }
+
+        // The hero's headshot (same Resources path as HeroesView),
+        // or null when not installed.
+        private static Texture2D HeroPortraitTexture(UnitId id)
+        {
+            string path = null;
+            switch (id)
+            {
+                case UnitId.HeroReyes: path = "Textures/HeroIcon_Reyes"; break;
+                case UnitId.HeroVega: path = "Textures/HeroIcon_Vega"; break;
+                case UnitId.HeroOkafor: path = "Textures/HeroIcon_Okafor"; break;
+            }
+            return path != null ? Resources.Load<Texture2D>(path) : null;
+        }
+
+        // Cinematic C3: industrial plating for the shared boss
+        // bar — steel lips and corner blocks, amber end caps,
+        // segment ticks every 10% across the fill band (the D1
+        // cosmetic segmentation), a brighter phase marker at 50%
+        // that glows while the core vents, and a warning icon
+        // beside the bar that pulses while a slam is charged.
+        // Everything is a child of the bar background, so the
+        // canvas-fraction fight chrome carries it unchanged.
+        private void BuildBarPlating(GameObject barBg)
+        {
+            var parent = barBg.transform;
+            var steel = UIHelpers.Hex("#2A3444");
+            var corner = UIHelpers.Hex("#546E7A");
+            // Lips (pixel overhang past the bar's edges).
+            PlatePiece(parent, "PlateTop", steel,
+                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 0f), new Vector2(0f, 5f));
+            PlatePiece(parent, "PlateBottom", steel,
+                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, -5f), new Vector2(0f, 0f));
+            PlatePiece(parent, "PlateLeft", steel,
+                new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(-5f, 0f), new Vector2(0f, 0f));
+            PlatePiece(parent, "PlateRight", steel,
+                new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 0f), new Vector2(5f, 0f));
+            // Corner blocks.
+            PlatePiece(parent, "PlateCornerBL", corner,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(-7f, -7f), new Vector2(3f, 3f));
+            PlatePiece(parent, "PlateCornerBR", corner,
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-3f, -7f), new Vector2(7f, 3f));
+            PlatePiece(parent, "PlateCornerTL", corner,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(-7f, -3f), new Vector2(3f, 7f));
+            PlatePiece(parent, "PlateCornerTR", corner,
+                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-3f, -3f), new Vector2(7f, 7f));
+            // Hazard end caps.
+            var amber = UIHelpers.Hex("#FF8F00");
+            PlatePiece(parent, "PlateCapL", amber,
+                new Vector2(0f, 0.06f), new Vector2(0.014f, 0.94f), Vector2.zero, Vector2.zero);
+            PlatePiece(parent, "PlateCapR", amber,
+                new Vector2(0.986f, 0.06f), new Vector2(1f, 0.94f), Vector2.zero, Vector2.zero);
+            // Segment ticks across the fill band (fill spans
+            // x 0.01–0.99, y 0.45–0.95 of the bar).
+            var tick = new Color(0f, 0f, 0f, 0.45f);
+            for (int k = 1; k <= 9; k++)
+            {
+                float x = 0.01f + 0.098f * k;
+                PlatePiece(parent, "PlateTick" + k, tick,
+                    new Vector2(x, 0.45f), new Vector2(x, 0.95f),
+                    new Vector2(-1f, 0f), new Vector2(1f, 0f));
+            }
+            _bossPhaseMarker = PlatePiece(parent, "PlatePhaseMarker",
+                UIHelpers.Hex("#FFB300"),
+                new Vector2(0.5f, 0.06f), new Vector2(0.5f, 0.94f),
+                new Vector2(-2f, 0f), new Vector2(2f, 0f));
+            // Slam warning icon just past the bar's right end.
+            _slamIcon = UIHelpers.LabelInRect(barBg, "SlamIcon", "⚠", 30,
+                UIHelpers.Hex("#FF7043"), new Rect(1.01f, 0.05f, 1.08f, 0.95f),
+                TextAnchor.MiddleCenter);
+            _slamIcon.raycastTarget = false;
+            _slamIcon.verticalOverflow = VerticalWrapMode.Overflow;
+            _slamIcon.gameObject.SetActive(false);
+        }
+
+        // Cinematic C3: portrait medallion state — texture set
+        // once per hero, HP sliver and frame colour per refresh,
+        // downed heroes greyed with a red slash. The acting
+        // hero's frame is repainted gold every frame in Update.
+        private void RefreshPortraits()
+        {
+            if (_turnFight == null) return;
+            _actingPortrait = -1;
+            for (int i = 0; i < 3; i++)
+            {
+                if (_portraitFrames[i] == null) continue;
+                bool has = i < _turnFight.Heroes.Count;
+                _portraitFrames[i].gameObject.SetActive(has);
+                if (!has) continue;
+                var hero = _turnFight.Heroes[i];
+                if (_portraitIds[i] != hero.Member.Definition.Id)
+                {
+                    _portraitIds[i] = hero.Member.Definition.Id;
+                    _portraitImages[i].texture =
+                        HeroPortraitTexture(hero.Member.Definition.Id);
+                }
+                var rt = _portraitHpFills[i].rectTransform;
+                float f = hero.MaxHp > 0
+                    ? Mathf.Clamp01((float)hero.Hp / hero.MaxHp) : 0f;
+                rt.anchorMax = new Vector2(0.07f + 0.86f * f, rt.anchorMax.y);
+                _portraitImages[i].color = hero.Alive
+                    ? Color.white : new Color(0.35f, 0.35f, 0.35f, 1f);
+                _portraitSlashes[i].SetActive(!hero.Alive);
+                if (hero.Alive && !hero.Acted && !_turnFight.Finished
+                    && _turnFight.SelectedHero == i)
+                    _actingPortrait = i;
+                _portraitFrames[i].color = !hero.Alive
+                    ? new Color(0.25f, 0.25f, 0.28f, 1f)
+                    : ClassColour(hero.Member.Definition.Class);
+            }
+        }
+
         private void BuildFightHud()
         {
             _hudRoot = new GameObject("FightHud");
@@ -2485,6 +2822,10 @@ namespace LunarDominion.UI
             // Unity version — the bar sat at full width while
             // the boss lost HP (spotted by Patrick 2026-11-10).
             _bossHpFill.type = Image.Type.Simple;
+            // Cinematic C3: plating, segment ticks, phase marker
+            // and the slam icon dress the bar (children of the
+            // background, so they ride the fight chrome).
+            BuildBarPlating(barBg);
             _bossHpText = UIHelpers.LabelInRect(barBg, "BossHpText", "A.R.E.S.-09", 22, Color.white,
                 new Rect(0.02f, 0.02f, 0.98f, 0.98f), TextAnchor.MiddleCenter);
 
