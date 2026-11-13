@@ -13,7 +13,7 @@ namespace LunarDominion.Boss
     /// fake volumetric cones; only one casts shadows), pulsing
     /// amber beacons (2 real point lights; the domes' shared
     /// emissive does the rest), drifting micro-dust, and steam at
-    /// the three vent grates (idle wisps; BurstSteam answers the
+    /// the vent grates (idle wisps; BurstSteam answers the
     /// boss's core venting). All materials are explicit URP shaders
     /// (project magenta rule).</summary>
     public class LavaTubeAmbience : MonoBehaviour
@@ -51,6 +51,7 @@ namespace LunarDominion.Boss
             BuildBeacons(tubeInstance);
             BuildCrystalLights(tubeInstance);
             BuildDust();
+            BuildHeroDust();
             BuildSteam(tubeInstance);
         }
 
@@ -59,31 +60,43 @@ namespace LunarDominion.Boss
             var gradient = MakeGradientTexture();
             for (int i = 0; i < CrackXZ.Length; i++)
             {
-                Vector3 top = new Vector3(CrackXZ[i].x, 25.0f, CrackXZ[i].y);
-                // Spotlight at the crack, aimed straight down.
+                // Cinematic C4: the ceiling rose to ~40, so the
+                // shafts lengthen with it. Shaft 3 (the crack
+                // behind the boss start) becomes the HERO shaft:
+                // wider, harsher, and angled onto the boss.
+                bool hero = i == 2;
+                Vector3 top = new Vector3(CrackXZ[i].x, 37.0f, CrackXZ[i].y);
+                // Spotlight at the crack, aimed down the shaft
+                // (the hero light tilts ~9 degrees to land on the
+                // boss at arena (0, 10) instead of straight down).
                 var lightGo = new GameObject("ShaftLight_" + (i + 1));
                 lightGo.transform.SetParent(transform, false);
                 lightGo.transform.localPosition = top;
                 var spot = lightGo.AddComponent<Light>();
                 spot.type = LightType.Spot;
                 spot.color = new Color(0.96f, 0.97f, 1.0f);
-                spot.intensity = 3.2f;
-                spot.range = 46f;
-                spot.spotAngle = 17f;
-                spot.innerSpotAngle = 9f;
+                spot.intensity = hero ? 4.6f : 3.2f;
+                spot.range = 62f;
+                spot.spotAngle = hero ? 23f : 17f;
+                spot.innerSpotAngle = hero ? 12f : 9f;
                 // A spotlight shines along its transform's +Z —
-                // rotate the light to point straight down the shaft.
-                lightGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                if (i == 2)
+                // rotate the light to point down the shaft.
+                lightGo.transform.localRotation =
+                    Quaternion.Euler(hero ? 99.2f : 90f, 0f, 0f);
+                if (hero)
                 {
                     // One shadow-casting light only (mobile budget).
                     spot.shadows = LightShadows.Soft;
                 }
                 // Fake volumetric cone: additive, gradient alpha.
-                var cone = MakeCone(6.5f, 24.0f, 12);
+                var cone = MakeCone(hero ? 9.5f : 6.5f, 35.0f, 12);
                 cone.name = "ShaftCone_" + (i + 1);
                 cone.transform.SetParent(transform, false);
-                cone.transform.localPosition = new Vector3(CrackXZ[i].x, 12.2f, CrackXZ[i].y);
+                cone.transform.localPosition = hero
+                    ? new Vector3(CrackXZ[i].x, 18.6f, CrackXZ[i].y - 1.5f)
+                    : new Vector3(CrackXZ[i].x, 18.6f, CrackXZ[i].y);
+                if (hero)
+                    cone.transform.localRotation = Quaternion.Euler(9f, 0f, 0f);
                 var renderer = cone.GetComponent<MeshRenderer>();
                 var unlit = Shader.Find("Universal Render Pipeline/Unlit");
                 if (unlit != null && renderer != null)
@@ -94,7 +107,9 @@ namespace LunarDominion.Boss
                     // cones read as solid floating objects; lighter
                     // plus the stronger gradient fade below makes
                     // them read as light falling through the cracks.
-                    mat.SetColor("_BaseColor", new Color(0.85f, 0.90f, 1.0f, 0.09f));
+                    // The hero shaft runs hotter (0.14) — it is the
+                    // one shaft meant to read as a spotlight.
+                    mat.SetColor("_BaseColor", new Color(0.85f, 0.90f, 1.0f, hero ? 0.14f : 0.09f));
                     mat.SetFloat("_Surface", 1f);          // transparent
                     mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
                     mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One); // additive
@@ -108,7 +123,7 @@ namespace LunarDominion.Boss
             // with the black walls + a warm key over the hero side.
             var rimGo = new GameObject("BossRimLight");
             rimGo.transform.SetParent(transform, false);
-            rimGo.transform.localPosition = new Vector3(0f, 13f, 26f);
+            rimGo.transform.localPosition = new Vector3(0f, 17f, 26f);
             var rim = rimGo.AddComponent<Light>();
             rim.type = LightType.Point;
             rim.color = new Color(0.22f, 0.33f, 0.55f);
@@ -247,6 +262,46 @@ namespace LunarDominion.Boss
             }
         }
 
+        /// <summary>Cinematic C4: a denser dust drift inside the
+        /// hero shaft only — the falling light gets visible motes,
+        /// the rest of the cavern keeps the sparse global dust.
+        /// Particle budget: 220 global + 80 here + 5 vents x 60
+        /// steam = 600 alive max in the lair.</summary>
+        private void BuildHeroDust()
+        {
+            var go = new GameObject("HeroShaftDust");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, 18f, 13f);
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.loop = true;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(5f, 9f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.3f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.16f);
+            main.startColor = new Color(0.85f, 0.9f, 1.0f, 0.22f);
+            main.maxParticles = 80;
+            main.gravityModifier = 0.02f;
+            var emission = ps.emission;
+            emission.rateOverTime = 16f;
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(11f, 32f, 11f);
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shader != null && renderer != null)
+            {
+                var mat = new Material(shader);
+                mat.SetTexture("_BaseMap", MakeDotTexture());
+                mat.SetColor("_BaseColor", new Color(0.85f, 0.9f, 1.0f, 0.5f));
+                mat.SetFloat("_Surface", 1f);
+                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                mat.SetInt("_ZWrite", 0);
+                mat.renderQueue = 3000;
+                renderer.material = mat;
+            }
+        }
+
         private void BuildSteam(Transform tubeInstance)
         {
             if (tubeInstance == null) return;
@@ -263,7 +318,10 @@ namespace LunarDominion.Boss
                 main.startSpeed = new ParticleSystem.MinMaxCurve(1.2f, 2.2f);
                 main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 1.0f);
                 main.startColor = new Color(0.75f, 0.8f, 0.85f, 0.20f);
-                main.maxParticles = 90;
+                // Cinematic C4: 60 per vent (was 90) — with five
+                // vents in the V6 set the lair's total alive
+                // particles stay at the ~600 cap.
+                main.maxParticles = 60;
                 var emission = ps.emission;
                 emission.rateOverTime = 6f;
                 var shape = ps.shape;
@@ -334,13 +392,15 @@ namespace LunarDominion.Boss
             // fog, and slightly denser fog so the far walls fall
             // off into haze. The fight area stays readable via
             // the shaft spots, the hero key light and the rim
-            // light, which are unchanged.
-            RenderSettings.ambientSkyColor = new Color(0.14f, 0.12f, 0.30f);
-            RenderSettings.ambientEquatorColor = new Color(0.06f, 0.045f, 0.115f);
-            RenderSettings.ambientGroundColor = new Color(0.030f, 0.018f, 0.05f);
+            // light, which are unchanged. Cinematic C4 deepens
+            // the shadows further toward space-blue now that the
+            // cavern is taller — the hero shaft carries the boss.
+            RenderSettings.ambientSkyColor = new Color(0.11f, 0.11f, 0.31f);
+            RenderSettings.ambientEquatorColor = new Color(0.038f, 0.048f, 0.125f);
+            RenderSettings.ambientGroundColor = new Color(0.014f, 0.02f, 0.048f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = new Color(0.05f, 0.04f, 0.11f);
+            RenderSettings.fogColor = new Color(0.038f, 0.042f, 0.115f);
             RenderSettings.fogDensity = 0.0135f;
         }
 
