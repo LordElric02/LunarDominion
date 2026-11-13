@@ -222,19 +222,31 @@ namespace LunarDominion.Boss
         private int BossEffDef => Mathf.RoundToInt(BossDef * (_bossDefDebuffRounds > 0 ? ArmorBreakDefMult : 1f));
 
         // ================= Camera shake (Phase 5) =================
-        // The fight camera is static, so a shake is a temporary
-        // positional offset driven from Update: while a shake is
-        // active the camera sits at the captured base position
-        // plus Perlin-noise jitter scaled by the remaining
-        // strength; while idle the base tracks the camera, so
-        // any framing the view applies between fights is
-        // adopted automatically. Strengths: slam landing 0.55,
-        // boss collapse 0.45, hero down 0.25, phase 2 onset 0.2,
-        // basic blast impact 0.12. One knob: ShakeGain.
+        // A shake is a temporary positional offset driven from
+        // Update: while a shake is active the camera sits at the
+        // captured base position plus Perlin-noise jitter scaled
+        // by the remaining strength; while idle the base tracks
+        // the camera, so any framing the view applies between
+        // fights is adopted automatically. Since Cinematic C1 the
+        // base pose itself is owned by the BossFightCamera shot
+        // director while a fight runs — the shake offsets from
+        // the director's pose, unchanged. Strengths: slam landing
+        // 0.55, boss collapse 0.45, hero down 0.25, phase 2 onset
+        // 0.2, basic blast impact 0.12. One knob: ShakeGain.
         private const float ShakeGain = 1.4f;
         private Camera _cam;
         private Vector3 _camBasePos;
         private float _shake;
+
+        // Cinematic C1: the shot director (created in Begin).
+        public BossFightCamera Director { get; private set; }
+
+        /// <summary>Tap-to-skip for camera shots: the lair view
+        /// calls this on a non-UI tap while an action plays.</summary>
+        public void SkipShot()
+        {
+            if (Director != null) Director.SnapHome();
+        }
 
         private void AddShake(float strength)
         {
@@ -271,6 +283,8 @@ namespace LunarDominion.Boss
             _droneTemplate = droneTemplate;
             _cam = Camera.main;
             if (_cam != null) _camBasePos = _cam.transform.position;
+            if (Director == null) Director = gameObject.AddComponent<BossFightCamera>();
+            if (_cam != null) Director.CaptureHome(_cam, bossRoot);
             SetupRig();
             AddLog("A.R.E.S.-09 awakens. Choose each hero's action.");
             StartRound();
@@ -686,6 +700,7 @@ namespace LunarDominion.Boss
         {
             Busy = true;
             OnChanged?.Invoke();
+            if (Director != null) Director.PlayShot(BossShot.HeroStrike, hero.Figure.transform);
             Vector3 targetPos = drone != null ? drone.Figure.transform.position : _bossRoot.position;
             if (hero.Class == UnitClass.Ranged)
             {
@@ -725,6 +740,8 @@ namespace LunarDominion.Boss
             OnChanged?.Invoke();
             var skill = SkillCatalog.ForHero(hero.Member.Definition.Id)[slot];
             hero.Cooldowns[slot] = skill.Cooldown;
+            if (Director != null)
+                Director.PlayShot(skill.IsAttack ? BossShot.HeroStrike : BossShot.SkillWide, hero.Figure.transform);
             Vector3 bossPos = _bossRoot.position;
             switch (skill.Id)
             {
@@ -863,6 +880,7 @@ namespace LunarDominion.Boss
                 if (!_dronesSummoned) _pendingSummon = true;
                 AddLog("A.R.E.S. core exposed — PHASE 2. Drones incoming!");
                 OnPhase2?.Invoke();
+                if (Director != null) Director.PlayShot(BossShot.Phase2Push);
             }
             if (BossHp <= 0 && !Finished)
             {
@@ -1039,6 +1057,7 @@ namespace LunarDominion.Boss
                 _slamCharged = true;
                 AddLog("A.R.E.S. is charging SEISMIC SLAM — it lands next turn!");
                 OnChanged?.Invoke();
+                if (Director != null) Director.PlayShot(BossShot.BossCharge);
             }
 
             _orderStep++;
@@ -1069,6 +1088,7 @@ namespace LunarDominion.Boss
         {
             var target = BossBasicTarget();
             if (target == null) yield break;
+            if (Director != null) Director.PlayShot(BossShot.BossStrike);
             // Wind up (rig), then the boss root lunges toward
             // the target and back, striking at the lunge.
             SetPose(-10f, 0f, -12f);
@@ -1095,6 +1115,7 @@ namespace LunarDominion.Boss
         {
             AddLog("A.R.E.S. fires THERMAL SWEEP!");
             OnChanged?.Invoke();
+            if (Director != null) Director.PlayShot(BossShot.BossCharge);
             // Phase 4 presentation: a target marker lights up
             // under every living hero, then a bolt strikes each
             // hero in turn — damage lands with each hero's own
@@ -1134,6 +1155,7 @@ namespace LunarDominion.Boss
         {
             AddLog("SEISMIC SLAM!");
             OnChanged?.Invoke();
+            if (Director != null) Director.PlayShot(BossShot.SlamImpact);
             // The boss rears up (rig leans back, arms raised)
             // and crashes down (rig pitches forward, hips dip).
             SetPose(-18f, 0f, 20f);
@@ -1178,6 +1200,7 @@ namespace LunarDominion.Boss
         {
             AddLog("A.R.E.S. launches sub-drones!");
             OnChanged?.Invoke();
+            if (Director != null) Director.PlayShot(BossShot.BossCharge);
             SetPose(0f, 0f, 30f);
             Vector3 bossPos = _bossRoot.position;
             string[] names = { "Drone A", "Drone B" };
@@ -1296,6 +1319,7 @@ namespace LunarDominion.Boss
             if (victory && _bossVisual != null)
             {
                 AddShake(0.45f);
+                if (Director != null) Director.PlayShot(BossShot.Victory);
                 // Defeat collapse (Phase 3): the rig crumples —
                 // hips sink, knees bend, torso pitches forward,
                 // head droops, shoulders drop — while the wrapper
@@ -1325,12 +1349,22 @@ namespace LunarDominion.Boss
             {
                 // The boss still stands: return the rig to its
                 // authored pose before handing back to the lair.
+                // The defeat shot (C1) gets a beat longer to land.
+                if (Director != null) Director.PlayShot(BossShot.Defeat);
                 RestoreRig();
-                yield return new WaitForSeconds(0.8f);
+                yield return new WaitForSeconds(1.1f);
             }
-            // Hand the camera back exactly as captured (Phase 5).
+            // Hand the camera back exactly as captured (Phase 5);
+            // since C1 the captured pose is the director's home.
             _shake = 0f;
-            if (_cam != null) _cam.transform.position = _camBasePos;
+            if (_cam != null && Director != null)
+            {
+                _cam.transform.position = Director.HomePos;
+                _cam.transform.rotation = Director.HomeRot;
+                _cam.fieldOfView = Director.HomeFov;
+                Director.Release();
+            }
+            else if (_cam != null) _cam.transform.position = _camBasePos;
             var fallen = new List<int>();
             foreach (var hero in Heroes)
             {
@@ -1635,6 +1669,17 @@ namespace LunarDominion.Boss
             // plays during FinishRoutine.
             if (_cam != null)
             {
+                // Cinematic C1: while the shot director is active
+                // it owns the base pose and the shake offsets from
+                // it; inactive, the base tracks the camera exactly
+                // as the pre-C1 code did.
+                if (Director != null && Director.Active)
+                {
+                    Director.Tick(Time.deltaTime);
+                    _camBasePos = Director.BasePos;
+                    _cam.transform.rotation = Director.BaseRot;
+                    _cam.fieldOfView = Director.BaseFov;
+                }
                 if (_shake > 0.002f)
                 {
                     float n = Time.time * 47f;
@@ -1645,6 +1690,10 @@ namespace LunarDominion.Boss
                         (Mathf.PerlinNoise(n * 0.83f, 7.3f) - 0.5f) * m * 0.6f);
                     _shake = Mathf.MoveTowards(_shake, 0f, Time.deltaTime * 1.5f);
                     if (_shake <= 0.002f) _cam.transform.position = _camBasePos;
+                }
+                else if (Director != null && Director.Active)
+                {
+                    _cam.transform.position = _camBasePos;
                 }
                 else
                 {

@@ -2098,6 +2098,9 @@ namespace LunarDominion.UI
                 if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) return;
 #endif
             }
+            // Cinematic C1: a tap on empty space while an action
+            // plays skips the camera shot back to home framing.
+            if (_turnFight.Busy) { _turnFight.SkipShot(); return; }
             var cam = Camera.main;
             if (cam == null) return;
             var ray = cam.ScreenPointToRay(screenPos);
