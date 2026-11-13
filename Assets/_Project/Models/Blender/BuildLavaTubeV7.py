@@ -587,9 +587,13 @@ def build():
     # ================= V7 DRESSING (2026-11-13) =================
     # The working facility (Patrick's mock-up pick A + B): two
     # illuminated transport lift shafts flanking the boss, and
-    # machinery at the heroes' flanks. All scenery — the shafts
-    # stand against the wall (every piece at r >= 26), and the
-    # flank pieces keep clear of the hero spots and combat lanes.
+    # machinery at the heroes' flanks. All scenery. NOTE: the
+    # wall rock's displaced surface reaches in to r ~22.5 behind
+    # the boss (measured on the V7 build — the first V7 placement
+    # at r 26-29 buried the towers inside the chunks), so the
+    # towers stand proud of the wall face at r ~20, rotated to
+    # face the arena centre; verify measures their clearance
+    # from every wall vertex.
 
     def _rot(lx, ly, yaw):
         c, s = math.cos(yaw), math.sin(yaw)
@@ -599,42 +603,30 @@ def build():
     # (the lit interior), two guide rails in front of it, side
     # posts with rungs (the truss), a top beam, a base housing,
     # and a lift cab parked partway up — at different heights in
-    # the two shafts, as in the mock-up. ----
-    def lift_shaft(tag, sx, cab_z):
-        cx, cy = sx, -23.5
-        objects.append(add_box("LiftShaft_%s_Glow" % tag,
-                               (cx, cy - 1.35, 10.5), 0.0,
-                               (1.55, 0.08, 10.0), amber))
-        for side in (-1.0, 1.0):
-            objects.append(add_box("LiftShaft_%s_Post" % tag,
-                                   (cx + side * 1.75, cy, 11.0), 0.0,
-                                   (0.28, 0.28, 11.0), dark))
-            objects.append(add_box("LiftShaft_%s_Rail" % tag,
-                                   (cx + side * 0.8, cy - 1.05, 10.5), 0.0,
-                                   (0.07, 0.07, 10.0), dark))
-        for rz in (4.0, 9.0, 14.0, 19.0):
-            objects.append(add_box("LiftShaft_%s_Rung" % tag,
-                                   (cx, cy, rz), 0.0,
-                                   (1.75, 0.09, 0.09), dark))
-        objects.append(add_box("LiftShaft_%s_Beam" % tag,
-                               (cx, cy, 22.2), 0.0,
-                               (1.9, 0.35, 0.35), dark))
-        objects.append(add_box("LiftShaft_%s_Base" % tag,
-                               (cx, cy + 0.1, 0.5), 0.0,
-                               (2.0, 0.9, 0.5), dark))
-        # The lift cab: deck, back panel, lit front strip.
-        objects.append(add_box("LiftShaft_%s_Cab" % tag,
-                               (cx, cy - 0.75, cab_z), 0.0,
-                               (1.5, 0.55, 0.12), dark))
-        objects.append(add_box("LiftShaft_%s_CabBack" % tag,
-                               (cx, cy - 1.28, cab_z + 1.15), 0.0,
-                               (1.5, 0.06, 1.15), dark))
-        objects.append(add_box("LiftShaft_%s_CabLight" % tag,
-                               (cx, cy - 0.18, cab_z + 0.35), 0.0,
-                               (0.9, 0.05, 0.08), amber))
+    # the two shafts, as in the mock-up. Each tower is built in
+    # local space and rotated to face the arena centre. ----
+    def lift_shaft(tag, cx, cy, yaw, cab_z):
+        def piece(suffix, lx, ly, lz, scale, material):
+            ox, oy = _rot(lx, ly, yaw)
+            objects.append(add_box("LiftShaft_%s_%s" % (tag, suffix),
+                                   (cx + ox, cy + oy, lz), yaw,
+                                   scale, material))
 
-    lift_shaft("01", -13.5, 12.5)
-    lift_shaft("02", 13.5, 7.5)
+        piece("Glow", 0.0, -1.35, 10.5, (1.55, 0.08, 10.0), amber)
+        for side in (-1.0, 1.0):
+            piece("Post", side * 1.75, 0.0, 11.0, (0.28, 0.28, 11.0), dark)
+            piece("Rail", side * 0.8, -1.05, 10.5, (0.07, 0.07, 10.0), dark)
+        for rz in (4.0, 9.0, 14.0, 19.0):
+            piece("Rung", 0.0, 0.0, rz, (1.75, 0.09, 0.09), dark)
+        piece("Beam", 0.0, 0.0, 22.2, (1.9, 0.35, 0.35), dark)
+        piece("Base", 0.0, 0.1, 0.5, (2.0, 0.9, 0.5), dark)
+        # The lift cab: deck, back panel, lit front strip.
+        piece("Cab", 0.0, -0.75, cab_z, (1.5, 0.55, 0.12), dark)
+        piece("CabBack", 0.0, -1.28, cab_z + 1.15, (1.5, 0.06, 1.15), dark)
+        piece("CabLight", 0.0, -0.18, cab_z + 0.35, (0.9, 0.05, 0.08), amber)
+
+    lift_shaft("01", -10.4, -17.3, math.radians(-31.0), 12.5)
+    lift_shaft("02", 10.4, -17.3, math.radians(31.0), 7.5)
 
     # ---- Supply crates: dark boxes with an amber top strip.
     # Two stacks at the flanks, singles by the shaft bases. ----
@@ -652,8 +644,8 @@ def build():
     crate("04", -20.8, 15.8, 0.55)
     crate("05", -18.4, 16.0, 0.55)
     crate("06", -19.6, 15.9, 1.65)
-    crate("07", 17.8, -20.6, 0.55)
-    crate("08", -17.8, -20.6, 0.55)
+    crate("07", 14.8, -14.8, 0.55)
+    crate("08", -14.8, -14.8, 0.55)
 
     # ---- The parked crawler (left flank): two tracks, a hull,
     # a cab, a lit nose strip and a thin mast. ----
@@ -1113,10 +1105,44 @@ def verify(objects):
     check(len(shaft_glow) == 2,
           "lift shaft glow panels: %d (spec 2)" % len(shaft_glow))
     shaft_pieces = [o for o in objects if o.name.startswith("LiftShaft_")]
-    check(len(shaft_pieces) == 28 and all(
-        math.hypot(o.location.x, o.location.y) >= 25.5
-        for o in shaft_pieces),
-        "lift shaft pieces: %d, all at r >= 25.5" % len(shaft_pieces))
+    check(len(shaft_pieces) == 28,
+          "lift shaft pieces: %d (spec 28)" % len(shaft_pieces))
+    # The towers stand proud of the wall face: every shaft
+    # vertex at r <= 22.0 (the wall rock's displaced surface
+    # reaches in to r ~22.5 behind the boss), plus a measured
+    # clearance from the shaft pieces and the crate bodies to
+    # every wall vertex — the check whose absence buried the
+    # first V7 placement inside the chunks.
+    dress_verts = []
+    dress_locs = []
+    for o in objects:
+        if o.name.startswith("LiftShaft_") or (
+                len(o.name) == 8 and o.name.startswith("Crate_")):
+            dress_locs.append(o.location)
+            dress_verts.extend(o.matrix_world @ v.co for v in o.data.vertices)
+    shaft_only_max_r = 0.0
+    for o in shaft_pieces:
+        for v in o.data.vertices:
+            w = o.matrix_world @ v.co
+            shaft_only_max_r = max(shaft_only_max_r, math.hypot(w.x, w.y))
+    check(shaft_only_max_r <= 22.0,
+          "lift shaft max vertex r %.2f (spec <= 22.0)" % shaft_only_max_r)
+    wall_verts = []
+    for o in objects:
+        if o.name.startswith("Lava_Wall_") or o.name.startswith("Lava_WallTop_"):
+            wall_verts.extend(o.matrix_world @ v.co for v in o.data.vertices)
+    near_wall = [w for w in wall_verts
+                 if min(math.hypot(w.x - loc.x, w.y - loc.y)
+                        for loc in dress_locs) < 9.0]
+    min_d2 = 1e18
+    for s in dress_verts:
+        for w in near_wall:
+            d2 = (s.x - w.x) ** 2 + (s.y - w.y) ** 2 + (s.z - w.z) ** 2
+            if d2 < min_d2:
+                min_d2 = d2
+    min_clear = math.sqrt(min_d2)
+    check(min_clear >= 0.35,
+          "dressing clearance to wall rock: %.2f (spec >= 0.35)" % min_clear)
     cabs = [o for o in objects
             if o.name.startswith("LiftShaft_") and o.name.endswith("_Cab")]
     check(len(cabs) == 2, "lift cabs: %d (spec 2)" % len(cabs))

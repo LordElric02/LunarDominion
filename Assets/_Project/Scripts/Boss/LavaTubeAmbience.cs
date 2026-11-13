@@ -87,10 +87,10 @@ namespace LunarDominion.Boss
         {
             for (int i = 0; i < 2; i++)
             {
-                float sx = i == 0 ? -13.5f : 13.5f;
+                float sx = i == 0 ? -10.4f : 10.4f;
                 var go = new GameObject("ShaftGlowLight_" + (i + 1));
                 go.transform.SetParent(transform, false);
-                go.transform.localPosition = new Vector3(sx, 9f, 22.6f);
+                go.transform.localPosition = new Vector3(sx, 9f, 15.9f);
                 var light = go.AddComponent<Light>();
                 light.type = LightType.Point;
                 light.color = new Color(1.0f, 0.72f, 0.38f);
