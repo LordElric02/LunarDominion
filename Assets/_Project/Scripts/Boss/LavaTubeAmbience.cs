@@ -50,9 +50,53 @@ namespace LunarDominion.Boss
             BuildShafts();
             BuildBeacons(tubeInstance);
             BuildCrystalLights(tubeInstance);
+            BuildFloorFinish(tubeInstance);
+            BuildShaftLights();
             BuildDust();
             BuildHeroDust();
             BuildSteam(tubeInstance);
+        }
+
+        /// <summary>V7: the floor's metallic finish. The V7 set's
+        /// floor arrives with the silver plate texture; instance
+        /// its material (never touch the shared FBX asset) and
+        /// drive metallic / smoothness directly, so the plates
+        /// take glossy streaks from the shaft spots, the crystal
+        /// lights and the lift-shaft glow.</summary>
+        private void BuildFloorFinish(Transform tubeInstance)
+        {
+            if (tubeInstance == null) return;
+            foreach (var t in tubeInstance.GetComponentsInChildren<Transform>())
+            {
+                if (t.name != "Lava_Floor") continue;
+                var renderer = t.GetComponent<Renderer>();
+                if (renderer == null) return;
+                var mat = renderer.material;
+                if (mat == null) return;
+                if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.65f);
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.62f);
+                return;
+            }
+        }
+
+        /// <summary>V7: one warm point light inside each lift
+        /// shaft (positions match BuildLavaTubeV7's LiftShaft
+        /// towers, arena-local), so the lit interiors spill onto
+        /// the boss's flanks and pool on the metallic floor.</summary>
+        private void BuildShaftLights()
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                float sx = i == 0 ? -13.5f : 13.5f;
+                var go = new GameObject("ShaftGlowLight_" + (i + 1));
+                go.transform.SetParent(transform, false);
+                go.transform.localPosition = new Vector3(sx, 9f, 22.6f);
+                var light = go.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = new Color(1.0f, 0.72f, 0.38f);
+                light.intensity = 2.4f;
+                light.range = 18f;
+            }
         }
 
         private void BuildShafts()
