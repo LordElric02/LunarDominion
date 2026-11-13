@@ -1667,12 +1667,12 @@ namespace LunarDominion.UI
                 // larger frame plus an inset cover in the button
                 // colour reads as a coloured border; both are
                 // non-raycast, so clicks still land on the button.
-                var cardFrame = PlatePiece(btn.gameObject, "CardFrame",
+                var cardFrame = PlatePiece(btn.transform, "CardFrame",
                     UIHelpers.Hex("#546E7A"),
                     new Vector2(-0.045f, -0.07f), new Vector2(1.045f, 1.07f),
                     Vector2.zero, Vector2.zero);
                 cardFrame.transform.SetSiblingIndex(0);
-                var cardCover = PlatePiece(btn.gameObject, "CardCover",
+                var cardCover = PlatePiece(btn.transform, "CardCover",
                     UIHelpers.Hex("#1A2436"),
                     Vector2.zero, Vector2.one,
                     new Vector2(3f, 3f), new Vector2(-3f, -3f));
@@ -1684,12 +1684,12 @@ namespace LunarDominion.UI
                     // Keep the skill's name clear of the diamond.
                     label.rectTransform.anchorMin =
                         new Vector2(0.17f, label.rectTransform.anchorMin.y);
-                    var icon = PlatePiece(btn.gameObject, "SkillIcon", Color.white,
+                    var icon = PlatePiece(btn.transform, "SkillIcon", Color.white,
                         new Vector2(0.045f, 0.30f), new Vector2(0.155f, 0.70f),
                         Vector2.zero, Vector2.zero);
                     icon.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
                     _skillIcons[slot] = icon;
-                    var sweep = PlatePiece(btn.gameObject, "SkillSweep",
+                    var sweep = PlatePiece(btn.transform, "SkillSweep",
                         new Color(0f, 0f, 0f, 0.62f),
                         new Vector2(0f, 1f), Vector2.one, Vector2.zero, Vector2.zero);
                     sweep.gameObject.SetActive(false);
