@@ -86,6 +86,13 @@ namespace LunarDominion.UI
         private LavaTubeAmbience _ambience;
         private Material _coreMaterial;
         private Color _coreBaseEmission = Color.black;
+
+        // Cinematic C2: red edge vignette pulsed when a hero
+        // takes a heavy hit (the fight raises OnHeroHeavyHit;
+        // alpha decays per-frame in Update).
+        private readonly List<Image> _vignetteStrips = new List<Image>();
+        private float _vignetteAlpha;
+        private float _vignetteApplied = -1f;
         private int _bossPhase = 1;
         private readonly List<Vector4> _coverSpheres = new List<Vector4>();
         private readonly List<AresHeroCombatant> _combatants = new List<AresHeroCombatant>();
@@ -1496,6 +1503,21 @@ namespace LunarDominion.UI
         // The only HUD: the shared boss bar, a slim status
         // group (round + order + intent + recent events), the
         // hero chips along the bottom, and the on-demand bar.
+        private void BuildVignetteStrip(string name, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_turnHud.transform, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            var img = go.AddComponent<Image>();
+            img.color = new Color(0.85f, 0.08f, 0.05f, 0f);
+            img.raycastTarget = false;
+            _vignetteStrips.Add(img);
+        }
+
         private void BuildTurnUi()
         {
             _turnHud = new GameObject("TurnHud");
@@ -1505,6 +1527,15 @@ namespace LunarDominion.UI
             turnHudRt.anchorMax = Vector2.one;
             turnHudRt.offsetMin = Vector2.zero;
             turnHudRt.offsetMax = Vector2.zero;
+
+            // Cinematic C2 vignette: four red edge strips, the
+            // first children of the turn HUD so every label and
+            // button draws above them. Raycast off — they must
+            // never eat a tap.
+            BuildVignetteStrip("VignetteTop", new Vector2(0f, 0.92f), Vector2.one);
+            BuildVignetteStrip("VignetteBottom", Vector2.zero, new Vector2(1f, 0.08f));
+            BuildVignetteStrip("VignetteLeft", Vector2.zero, new Vector2(0.045f, 1f));
+            BuildVignetteStrip("VignetteRight", new Vector2(0.955f, 0f), Vector2.one);
 
             _turnOrderText = UIHelpers.LabelInRect(_turnHud, "TurnOrder", "", 21, UIHelpers.Hex("#90CAF9"),
                 new Rect(0.22f, 0.78f, 0.78f, 0.84f), TextAnchor.MiddleCenter);
@@ -1779,6 +1810,7 @@ namespace LunarDominion.UI
             _turnFight = fightGo.AddComponent<TurnBasedBossFight>();
             _turnFight.OnChanged += RefreshTurnPanel;
             _turnFight.OnPhase2 += OnTurnPhase2;
+            _turnFight.OnHeroHeavyHit += OnHeroHeavyHit;
             _turnFight.OnEnded += OnTurnFightEnded;
             _turnActive = true;
             // Turn-fight framing: the realtime camera leaves the
@@ -2056,6 +2088,19 @@ namespace LunarDominion.UI
                     if (bar.Root != null && bar.Figure != null)
                         bar.Root.transform.position = bar.Figure.transform.position + new Vector3(0f, 3.55f, 0f);
                 }
+                // Cinematic C2: decay the heavy-hit vignette.
+                if (_vignetteAlpha > 0f)
+                    _vignetteAlpha = Mathf.MoveTowards(_vignetteAlpha, 0f, Time.deltaTime * 1.3f);
+                if (Mathf.Abs(_vignetteAlpha - _vignetteApplied) > 0.005f)
+                {
+                    _vignetteApplied = _vignetteAlpha;
+                    foreach (var strip in _vignetteStrips)
+                    {
+                        var c = strip.color;
+                        c.a = _vignetteApplied;
+                        strip.color = c;
+                    }
+                }
             }
             if (!_turnActive || _turnFight == null || _turnFight.Finished) return;
             bool pressed = false;
@@ -2250,16 +2295,30 @@ namespace LunarDominion.UI
             if (_ambience != null) _ambience.SetPhase2(true);
         }
 
+        private void OnHeroHeavyHit(float fraction)
+        {
+            _vignetteAlpha = Mathf.Max(_vignetteAlpha,
+                0.3f + 0.55f * Mathf.Clamp01(fraction));
+        }
+
         private IEnumerator TurnHudRoutine()
         {
             while (_turnActive)
             {
                 if (_warningText != null && _warningText.gameObject.activeSelf && Time.time > _warningUntil)
                     _warningText.gameObject.SetActive(false);
-                if (_bossPhase == 2 && _coreMaterial != null && _coreMaterial.HasProperty("_EmissionColor"))
+                if (_coreMaterial != null && _coreMaterial.HasProperty("_EmissionColor"))
                 {
-                    float pulse = 1.6f + Mathf.Sin(Time.time * 6f) * 0.9f;
-                    _coreMaterial.SetColor("_EmissionColor", _coreBaseEmission * pulse);
+                    // Phase 2 pulse (existing) plus Cinematic C2:
+                    // the core burns steady-bright while venting
+                    // and throbs faster while the slam is charged;
+                    // otherwise it rests at its authored emission.
+                    float pulse = -1f;
+                    if (_turnFight != null && _turnFight.VentActive) pulse = 2.3f;
+                    else if (_bossPhase == 2) pulse = 1.6f + Mathf.Sin(Time.time * 6f) * 0.9f;
+                    else if (_turnFight != null && _turnFight.SlamCharged) pulse = 1.3f + Mathf.Sin(Time.time * 10f) * 0.7f;
+                    _coreMaterial.SetColor("_EmissionColor",
+                        pulse > 0f ? _coreBaseEmission * pulse : _coreBaseEmission);
                 }
                 yield return new WaitForSeconds(0.1f);
             }
@@ -2355,11 +2414,22 @@ namespace LunarDominion.UI
             {
                 _turnFight.OnChanged -= RefreshTurnPanel;
                 _turnFight.OnPhase2 -= OnTurnPhase2;
+                _turnFight.OnHeroHeavyHit -= OnHeroHeavyHit;
                 _turnFight.OnEnded -= OnTurnFightEnded;
                 Destroy(_turnFight.gameObject);
                 _turnFight = null;
             }
             CleanupTurnFigures();
+            // Cinematic C2: never carry a vignette pulse into the
+            // next fight.
+            _vignetteAlpha = 0f;
+            _vignetteApplied = 0f;
+            foreach (var strip in _vignetteStrips)
+            {
+                var c = strip.color;
+                c.a = 0f;
+                strip.color = c;
+            }
             ResetAresVisual();
             if (_ambience != null) _ambience.SetPhase2(false);
             _bossPhase = 1;

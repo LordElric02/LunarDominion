@@ -140,6 +140,9 @@ namespace LunarDominion.Boss
         public bool AwaitingTarget { get; private set; }
         public int SelectedHero { get; private set; } = -1;
         public bool SlamCharged => _slamCharged;
+        /// <summary>True while the core is venting (Phase 2 vent
+        /// window): the view flares the core material (C2).</summary>
+        public bool VentActive => _ventActive;
         public bool Phase2 => _phase2;
 
         /// <summary>Raised after every state change; the lair
@@ -148,6 +151,11 @@ namespace LunarDominion.Boss
         /// <summary>Raised once when Phase 2 begins (the view
         /// switches the arena ambience / core pulse).</summary>
         public event Action OnPhase2;
+        /// <summary>Raised when a hero takes a heavy hit — actual
+        /// HP damage of at least 25% of their max HP in one blow;
+        /// the payload is the fraction of max HP lost. The view
+        /// pulses its red vignette from this (Cinematic C2).</summary>
+        public event Action<float> OnHeroHeavyHit;
         /// <summary>(victory, timeout, fallen squad indices) —
         /// raised once, after the outro animation.</summary>
         public event Action<bool, bool, List<int>> OnEnded;
@@ -246,6 +254,39 @@ namespace LunarDominion.Boss
         public void SkipShot()
         {
             if (Director != null) Director.SnapHome();
+        }
+
+        // ================= Cinematic C2: hit-stop =================
+        // A 40–70 ms freeze of the whole presentation on the
+        // heaviest impacts. Implemented with Time.timeScale, but
+        // the expiry is tracked in REAL time and checked at the
+        // top of Update, so the freeze always lifts — no routine
+        // can deadlock waiting for scaled time. FinishRoutine and
+        // OnDestroy restore the scale as safety nets.
+        private bool _hitStopActive;
+        private float _hitStopEndRealtime;
+
+        private void HitStop(float seconds)
+        {
+            _hitStopEndRealtime = Mathf.Max(_hitStopEndRealtime,
+                Time.realtimeSinceStartup + seconds);
+            if (!_hitStopActive)
+            {
+                _hitStopActive = true;
+                Time.timeScale = 0f;
+            }
+        }
+
+        private void EndHitStop()
+        {
+            if (!_hitStopActive) return;
+            _hitStopActive = false;
+            Time.timeScale = 1f;
+        }
+
+        private void OnDestroy()
+        {
+            EndHitStop();
         }
 
         private void AddShake(float strength)
@@ -702,9 +743,10 @@ namespace LunarDominion.Boss
             OnChanged?.Invoke();
             if (Director != null) Director.PlayShot(BossShot.HeroStrike, hero.Figure.transform);
             Vector3 targetPos = drone != null ? drone.Figure.transform.position : _bossRoot.position;
+            Vector3 impact = targetPos + Vector3.up * (drone != null ? 2.2f : 8.5f);
             if (hero.Class == UnitClass.Ranged)
             {
-                yield return BoltRoutine(FigureChest(hero.Figure.transform), targetPos + Vector3.up * (drone != null ? 2.2f : 8.5f),
+                yield return BoltRoutine(FigureChest(hero.Figure.transform), impact,
                     new Color(0.6f, 0.9f, 1f));
             }
             else
@@ -712,6 +754,7 @@ namespace LunarDominion.Boss
                 yield return LungeRoutine(hero.Figure.transform, hero.Home, targetPos,
                     drone != null ? 2.6f : 5.2f);
             }
+            StartCoroutine(ContactFlashRoutine(impact, ImpactTint()));
             int dmg = CombatService.Damage(HeroAtk(hero), drone != null ? 0 : BossEffDef,
                 hero.Class, UnitClass.Mechanized, hero.Level, BossLevel);
             if (hero.DeadeyeCharges > 0)
@@ -774,13 +817,17 @@ namespace LunarDominion.Boss
                     yield return LungeRoutine(hero.Figure.transform, hero.Home,
                         drone != null ? drone.Figure.transform.position : bossPos,
                         drone != null ? 2.6f : 5.2f);
+                    HitStop(0.06f);
+                    StartCoroutine(ContactFlashRoutine(
+                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
+                        ImpactTint()));
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * PrecisionMult),
                         drone != null ? 0 : BossEffDef / 2,
                         hero.Class, UnitClass.Mechanized, hero.Level, BossLevel);
                     dmg = ConsumeDeadeye(hero, dmg);
                     if (drone != null) ApplyDroneDamage(hero, drone, dmg, "PRECISION STRIKE");
-                    else ApplyBossDamage(hero, dmg, "PRECISION STRIKE");
+                    else ApplyBossDamage(hero, dmg, "PRECISION STRIKE", true);
                     break;
                 }
 
@@ -789,12 +836,16 @@ namespace LunarDominion.Boss
                     yield return BoltRoutine(FigureChest(hero.Figure.transform),
                         (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         new Color(1f, 0.75f, 0.35f));
+                    HitStop(0.05f);
+                    StartCoroutine(ContactFlashRoutine(
+                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
+                        new Color(0.45f, 0.9f, 1f)));
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * PiercingMult), 0,
                         hero.Class, UnitClass.Mechanized, hero.Level, BossLevel);
                     dmg = ConsumeDeadeye(hero, dmg);
                     if (drone != null) ApplyDroneDamage(hero, drone, dmg, "PIERCING SHOT");
-                    else ApplyBossDamage(hero, dmg, "PIERCING SHOT");
+                    else ApplyBossDamage(hero, dmg, "PIERCING SHOT", true);
                     break;
                 }
 
@@ -832,6 +883,9 @@ namespace LunarDominion.Boss
                     yield return LungeRoutine(hero.Figure.transform, hero.Home,
                         drone != null ? drone.Figure.transform.position : bossPos,
                         drone != null ? 2.6f : 5.2f);
+                    StartCoroutine(ContactFlashRoutine(
+                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
+                        ImpactTint()));
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * ArmorBreakMult),
                         drone != null ? 0 : BossEffDef,
@@ -864,14 +918,16 @@ namespace LunarDominion.Boss
 
         // ================= Damage =================
 
-        private void ApplyBossDamage(TurnHeroState hero, int dmg, string label)
+        private void ApplyBossDamage(TurnHeroState hero, int dmg, string label, bool crit = false)
         {
             if (_ventActive) dmg = Mathf.RoundToInt(dmg * VentVulnMult);
             BossHp = Mathf.Max(0, BossHp - dmg);
             _recoil = Mathf.Min(1f, _recoil + 0.55f);
+            bool isCrit = crit || _ventActive;
             if (dmg > 0 && _bossRoot != null)
                 SpawnDamageNumber(_bossRoot.position + Vector3.up * 12.2f, dmg,
-                    new Color(1f, 0.95f, 0.6f), 0.7f);
+                    isCrit ? new Color(1f, 0.78f, 0.15f) : new Color(1f, 0.95f, 0.6f),
+                    isCrit ? 0.95f : 0.7f);
             AddLog($"{hero.Name} — {label}: {dmg} dmg" + (_ventActive ? " (core exposed!)" : "") + ".");
             if (!_phase2 && BossHp > 0 && BossHp <= BossMaxHp / 2)
             {
@@ -881,6 +937,7 @@ namespace LunarDominion.Boss
                 AddLog("A.R.E.S. core exposed — PHASE 2. Drones incoming!");
                 OnPhase2?.Invoke();
                 if (Director != null) Director.PlayShot(BossShot.Phase2Push);
+                HitStop(0.06f);
             }
             if (BossHp <= 0 && !Finished)
             {
@@ -981,11 +1038,14 @@ namespace LunarDominion.Boss
             if (dmg > 0)
                 SpawnDamageNumber(hero.Figure.transform.position + Vector3.up * 4.1f, dmg,
                     new Color(1f, 0.45f, 0.3f), 0.38f);
+            if (dmg > 0 && hero.MaxHp > 0 && dmg * 4 >= hero.MaxHp)
+                OnHeroHeavyHit?.Invoke(Mathf.Clamp01((float)dmg / hero.MaxHp));
             if (hero.Hp <= 0)
             {
                 hero.Alive = false;
                 AddLog($"{hero.Name} is DOWN!");
                 AddShake(0.25f);
+                HitStop(0.05f);
                 StartCoroutine(TipOverRoutine(hero));
             }
             else if (dmg > 0 || absorbed > 0)
@@ -1104,6 +1164,8 @@ namespace LunarDominion.Boss
             yield return StartCoroutine(BlastRoutine(
                 _bossRoot.position + Vector3.up * 7.5f,
                 FigureChest(target.Figure.transform)));
+            StartCoroutine(ContactFlashRoutine(FigureChest(target.Figure.transform),
+                new Color(1f, 0.45f, 0.2f)));
             int dmg = CombatService.Damage(BossEffAtk, target.EffDef,
                 UnitClass.Mechanized, target.Class, BossLevel, target.Level);
             ApplyHeroDamage(target, dmg, "A.R.E.S.");
@@ -1183,6 +1245,7 @@ namespace LunarDominion.Boss
             // as the damage lands (Phase 4), and the impact
             // shakes the camera (Phase 5).
             AddShake(0.55f);
+            HitStop(0.07f);
             StartCoroutine(ShockwaveRoutine(_bossRoot.position));
             int atk = Mathf.RoundToInt(BossEffAtk * SlamAtkMult);
             foreach (var hero in Heroes)
@@ -1242,6 +1305,8 @@ namespace LunarDominion.Boss
             if (target == null) yield break;
             yield return BoltRoutine(drone.Figure.transform.position,
                 FigureChest(target.Figure.transform), new Color(1f, 0.5f, 0.2f), 0.10f);
+            StartCoroutine(ContactFlashRoutine(FigureChest(target.Figure.transform),
+                new Color(1f, 0.5f, 0.2f)));
             int dmg = CombatService.Damage(drone.Atk, target.EffDef,
                 UnitClass.Mechanized, target.Class, BossLevel, target.Level);
             ApplyHeroDamage(target, dmg, drone.Name);
@@ -1357,6 +1422,7 @@ namespace LunarDominion.Boss
             // Hand the camera back exactly as captured (Phase 5);
             // since C1 the captured pose is the director's home.
             _shake = 0f;
+            EndHitStop();
             if (_cam != null && Director != null)
             {
                 _cam.transform.position = Director.HomePos;
@@ -1405,9 +1471,30 @@ namespace LunarDominion.Boss
             // toes reach ~2.9 units from the root centre, so the
             // old gap put the hero inside the boss's feet.
             Vector3 stop = home + dir.normalized * Mathf.Max(0f, dist - stopGap);
-            yield return MoveRoutine(fig, home, stop, 0.20f);
-            yield return new WaitForSeconds(0.07f);
-            yield return MoveRoutine(fig, stop, home, 0.20f);
+            // Cinematic C2 recoil curves: the approach snaps out
+            // (ease-out cubic, slightly faster) and the return is
+            // quicker still — the old symmetric SmoothStep read
+            // floaty at both ends.
+            yield return LungeMoveRoutine(fig, home, stop, 0.16f, true);
+            yield return new WaitForSeconds(0.06f);
+            yield return LungeMoveRoutine(fig, stop, home, 0.13f, false);
+        }
+
+        private IEnumerator LungeMoveRoutine(Transform fig, Vector3 from, Vector3 to,
+            float duration, bool snapOut)
+        {
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / duration);
+                float e = snapOut
+                    ? 1f - (1f - p) * (1f - p) * (1f - p)
+                    : Mathf.SmoothStep(0f, 1f, p);
+                fig.position = Vector3.Lerp(from, to, e);
+                yield return null;
+            }
+            fig.position = to;
         }
 
         private IEnumerator BoltRoutine(Vector3 from, Vector3 to, Color color, float width = 0.16f)
@@ -1515,15 +1602,81 @@ namespace LunarDominion.Boss
         {
             var fig = hero.Figure.transform;
             float t = 0f;
-            while (t < 0.26f)
+            while (t < 0.30f)
             {
                 t += Time.deltaTime;
-                float p = Mathf.Clamp01(t / 0.26f);
-                float s = Mathf.Sin(p * Mathf.PI);
-                fig.rotation = hero.OrigRot * Quaternion.Euler(-10f * s, 0f, 0f);
+                float p = Mathf.Clamp01(t / 0.30f);
+                // Cinematic C2: snap back fast to -12 degrees,
+                // then recover with a small forward overshoot
+                // that settles at zero (the old symmetric sine
+                // rock read soft).
+                float angle;
+                if (p < 0.35f)
+                {
+                    angle = -12f * (p / 0.35f);
+                }
+                else
+                {
+                    float q = (p - 0.35f) / 0.65f;
+                    angle = -12f * Mathf.Cos(q * Mathf.PI * 0.5f)
+                        + 3f * Mathf.Sin(q * Mathf.PI) * (1f - q);
+                }
+                fig.rotation = hero.OrigRot * Quaternion.Euler(angle, 0f, 0f);
                 yield return null;
             }
             fig.rotation = hero.OrigRot;
+        }
+
+        /// <summary>Contact-flash tint for hits on the boss or a
+        /// drone (Cinematic C2): amber while the core is venting,
+        /// pale otherwise.</summary>
+        private Color ImpactTint()
+        {
+            return _ventActive ? new Color(1f, 0.62f, 0.15f) : new Color(0.95f, 0.97f, 1f);
+        }
+
+        /// <summary>A brief additive flash at the exact impact
+        /// point of a hit (Cinematic C2): a small sphere that
+        /// swells and fades over ~0.12s, using the shockwave's
+        /// proven URP Unlit additive recipe.</summary>
+        private IEnumerator ContactFlashRoutine(Vector3 pos, Color color)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = "ContactFlash";
+            go.transform.SetParent(transform, true);
+            Destroy(go.GetComponent<Collider>());
+            go.transform.position = pos;
+            var rend = go.GetComponent<Renderer>();
+            var sh = Shader.Find("Universal Render Pipeline/Unlit");
+            var col = color;
+            col.a = 0.85f;
+            Material mat = null;
+            if (sh != null)
+            {
+                mat = new Material(sh);
+                mat.SetColor("_BaseColor", col);
+                mat.SetFloat("_Surface", 1f);
+                mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                mat.SetFloat("_ZWrite", 0f);
+                mat.renderQueue = 3000;
+                rend.material = mat;
+            }
+            float t = 0f;
+            while (t < 0.12f)
+            {
+                t += Time.deltaTime;
+                float p = Mathf.Clamp01(t / 0.12f);
+                go.transform.localScale = Vector3.one * (0.6f + 1.8f * p);
+                if (mat != null)
+                {
+                    var c = col;
+                    c.a = col.a * (1f - p);
+                    mat.SetColor("_BaseColor", c);
+                }
+                yield return null;
+            }
+            Destroy(go);
         }
 
         /// <summary>A glowing shot that travels from -> to and
@@ -1664,6 +1817,10 @@ namespace LunarDominion.Boss
 
         private void Update()
         {
+            // Cinematic C2: lift a hit-stop freeze on real time
+            // (scaled time is standing still while it is active).
+            if (_hitStopActive && Time.realtimeSinceStartup >= _hitStopEndRealtime)
+                EndHitStop();
             // Camera shake (Phase 5) — deliberately before the
             // Finished early-out so the victory-collapse shake
             // plays during FinishRoutine.
