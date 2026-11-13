@@ -41,6 +41,10 @@ namespace LunarDominion.Boss
         private Color _prevFogColor;
         private FogMode _prevFogMode;
         private float _prevFogDensity;
+        private DefaultReflectionMode _prevReflectionMode;
+        private Cubemap _prevCustomReflection;
+        private float _prevReflectionIntensity;
+        private Cubemap _lairReflection;
 
         /// <summary>Build the rig under the arena root. tubeInstance
         /// is the instantiated LavaTube model (beacon domes and vent
@@ -73,8 +77,8 @@ namespace LunarDominion.Boss
                 if (renderer == null) return;
                 var mat = renderer.material;
                 if (mat == null) return;
-                if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.65f);
-                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.62f);
+                if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.9f);
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.85f);
                 return;
             }
         }
@@ -428,6 +432,9 @@ namespace LunarDominion.Boss
                 _prevFogColor = RenderSettings.fogColor;
                 _prevFogMode = RenderSettings.fogMode;
                 _prevFogDensity = RenderSettings.fogDensity;
+                _prevReflectionMode = RenderSettings.defaultReflectionMode;
+                _prevCustomReflection = RenderSettings.customReflection;
+                _prevReflectionIntensity = RenderSettings.reflectionIntensity;
                 _captured = true;
             }
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -446,6 +453,42 @@ namespace LunarDominion.Boss
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = new Color(0.038f, 0.042f, 0.115f);
             RenderSettings.fogDensity = 0.0135f;
+            // V8: give the metallic floor (and the boss's
+            // gunmetal) something to reflect — a generated
+            // gradient cubemap: dark space-blue above, a warm
+            // amber horizon band (the facility glow), near-black
+            // below. Without an environment reflection a metal
+            // surface in URP reflects almost nothing and reads
+            // matte no matter how high the smoothness goes.
+            RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
+            RenderSettings.customReflection = GetLairReflection();
+            RenderSettings.reflectionIntensity = 1.15f;
+        }
+
+        private Cubemap GetLairReflection()
+        {
+            if (_lairReflection != null) return _lairReflection;
+            const int S = 64;
+            var cube = new Cubemap(S, TextureFormat.RGBA32, false);
+            var cols = new Color[S * S];
+            var top = new Color(0.05f, 0.06f, 0.16f);
+            var horizon = new Color(0.85f, 0.55f, 0.28f);
+            var bottom = new Color(0.02f, 0.02f, 0.03f);
+            for (int face = 0; face < 6; face++)
+            {
+                for (int y = 0; y < S; y++)
+                {
+                    float v = y / (float)(S - 1);
+                    Color c = v < 0.5f
+                        ? Color.Lerp(bottom, horizon, Mathf.SmoothStep(0f, 1f, v * 2f))
+                        : Color.Lerp(horizon, top, Mathf.SmoothStep(0f, 1f, (v - 0.5f) * 2f));
+                    for (int x = 0; x < S; x++) cols[y * S + x] = c;
+                }
+                cube.SetPixels(cols, (CubemapFace)face);
+            }
+            cube.Apply();
+            _lairReflection = cube;
+            return cube;
         }
 
         public void ReleaseEnvironment()
@@ -459,6 +502,9 @@ namespace LunarDominion.Boss
             RenderSettings.fogColor = _prevFogColor;
             RenderSettings.fogMode = _prevFogMode;
             RenderSettings.fogDensity = _prevFogDensity;
+            RenderSettings.defaultReflectionMode = _prevReflectionMode;
+            RenderSettings.customReflection = _prevCustomReflection;
+            RenderSettings.reflectionIntensity = _prevReflectionIntensity;
             _captured = false;
         }
 
