@@ -77,6 +77,10 @@ namespace LunarDominion.UI
         private static readonly Vector3 BaseCameraPosition = new Vector3(10f, 16f, 10f);
         // Drag state: a press that moves past the threshold becomes a
         // drag (pan) and must NOT also fire as a tap on release.
+        // True while the Base tab is the view on screen. Set by
+        // SetVisible; Update() ignores keyboard/pointer input while
+        // false (see the gate in Update).
+        private bool _visible = true;
         private bool _pointerDown;
         private bool _isDrag;
         private Vector2 _pointerStartPos;
@@ -1873,6 +1877,15 @@ namespace LunarDominion.UI
             // Hospital alert (2026-11-09): the red pulsing sphere above
             // the Hospital when injured units are waiting to be healed.
             UpdateHospitalAlert();
+            // Input gate (2026-11-13): the base's keyboard/pointer
+            // handling must only run while the Base tab is showing.
+            // This component lives on an always-active host, so
+            // without the gate it kept answering drags on other
+            // screens — in the boss lair, a drag on empty screen space
+            // panned the hidden base camera, snapping the fight
+            // camera back to the base. Same pattern as
+            // ExteriorView._visible.
+            if (!_visible) { _pointerDown = false; return; }
             // Arrow keys pan the base camera (PC). Same pattern as the
             // Map view: Keyboard when the Input System is enabled,
             // legacy Input otherwise.
@@ -2051,6 +2064,7 @@ namespace LunarDominion.UI
 
         public void SetVisible(bool visible)
         {
+            _visible = visible;
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
         }
 
