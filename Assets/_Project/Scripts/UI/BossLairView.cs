@@ -1658,25 +1658,61 @@ namespace LunarDominion.UI
                 // Fight height: level with the DEV button (Patrick
                 // 2026-11-11). DEV is a canvas child at canvas
                 // y 0.88-0.93, but this HUD lives inside the lair
-                // panel, which spans only canvas y 200-920 of
-                // 1080 (0.185-0.852) — so panel anchors above 1.0
-                // are required to reach DEV's band: panel 1.04-
-                // 1.12 == canvas 0.879-0.932. (The earlier fight
-                // band, panel 0.925-0.975, is only canvas 0.80-
-                // 0.835 — visibly below DEV.) No mask on the lair
-                // root, so the overflow renders fine.
-                barRt.anchorMin = fight ? new Vector2(0.22f, 1.04f) : new Vector2(0.22f, 0.845f);
-                barRt.anchorMax = fight ? new Vector2(0.78f, 1.12f) : new Vector2(0.78f, 0.90f);
+                // panel, which spans only part of the canvas — so
+                // in fight mode the stack is placed by CANVAS
+                // fraction, converted to panel anchors at runtime
+                // (FightAnchorY). The fixed panel fractions tuned
+                // in the Editor (bar 1.04-1.12) assumed a 1080-unit
+                // canvas; on the phone the canvas is ~978 units
+                // tall, the panel top sits at ~0.94 of the screen,
+                // and those fractions pushed the bar off the top
+                // edge, clipping it (Patrick's phone screenshot,
+                // 2026-11-12). The fallback values are the old
+                // Editor fractions, used only if geometry is
+                // somehow unavailable.
+                barRt.anchorMin = fight
+                    ? new Vector2(0.22f, FightAnchorY(0.8785f, 1.04f))
+                    : new Vector2(0.22f, 0.845f);
+                barRt.anchorMax = fight
+                    ? new Vector2(0.78f, FightAnchorY(0.9319f, 1.12f))
+                    : new Vector2(0.78f, 0.90f);
             }
             SetHudRect(_turnOrderText,
-                fight ? new Vector2(0.22f, 0.97f) : new Vector2(0.22f, 0.78f),
-                fight ? new Vector2(0.78f, 1.03f) : new Vector2(0.78f, 0.84f));
+                fight ? new Vector2(0.22f, FightAnchorY(0.8319f, 0.97f)) : new Vector2(0.22f, 0.78f),
+                fight ? new Vector2(0.78f, FightAnchorY(0.8719f, 1.03f)) : new Vector2(0.78f, 0.84f));
             SetHudRect(_turnIntentText,
-                fight ? new Vector2(0.22f, 0.925f) : new Vector2(0.22f, 0.73f),
-                fight ? new Vector2(0.78f, 0.97f) : new Vector2(0.78f, 0.775f));
+                fight ? new Vector2(0.22f, FightAnchorY(0.8019f, 0.925f)) : new Vector2(0.22f, 0.73f),
+                fight ? new Vector2(0.78f, FightAnchorY(0.8319f, 0.97f)) : new Vector2(0.78f, 0.775f));
             SetHudRect(_warningText,
-                fight ? new Vector2(0.25f, 0.80f) : new Vector2(0.25f, 0.605f),
-                fight ? new Vector2(0.75f, 0.92f) : new Vector2(0.75f, 0.725f));
+                fight ? new Vector2(0.25f, FightAnchorY(0.7185f, 0.80f)) : new Vector2(0.25f, 0.605f),
+                fight ? new Vector2(0.75f, FightAnchorY(0.7985f, 0.92f)) : new Vector2(0.75f, 0.725f));
+        }
+
+        // Converts a canvas-height fraction (0 = screen bottom,
+        // 1 = screen top) into a panel-relative anchor Y for the
+        // fight HUD, measured from the lair panel's real rect:
+        // anchorY = (fraction * canvasHeight - panelBottom) /
+        // panelHeight. On the Editor's 1080-unit canvas this
+        // reproduces the hand-tuned panel fractions exactly
+        // (bar 1.04-1.12 etc.); on the phone's shorter canvas it
+        // keeps the stack at the same SCREEN height instead of
+        // overshooting the top. Falls back to the given
+        // Editor-tuned panel fraction when geometry is missing.
+        private float FightAnchorY(float canvasFraction, float fallback)
+        {
+            if (_root == null) return fallback;
+            var panelRt = _root.GetComponent<RectTransform>();
+            if (panelRt == null) return fallback;
+            var canvas = _root.GetComponentInParent<Canvas>();
+            if (canvas == null) return fallback;
+            var canvasRt = canvas.GetComponent<RectTransform>();
+            if (canvasRt == null) return fallback;
+            float panelHeight = panelRt.rect.height;
+            float canvasHeight = canvasRt.rect.height;
+            if (panelHeight <= 0f || canvasHeight <= 0f) return fallback;
+            var corners = new Vector3[4];
+            panelRt.GetWorldCorners(corners);
+            return (canvasFraction * canvasHeight - corners[0].y) / panelHeight;
         }
 
         private static void SetHudRect(Text label, Vector2 min, Vector2 max)
