@@ -66,6 +66,7 @@ namespace LunarDominion.Boss
 
         private const float MaxRadius = 25f;
         private const float MaxHeight = 23f;
+        private const float MaxUserYaw = 25f;
         private static readonly Vector2 ArenaCentreXZ = new Vector2(500f, 0f);
 
         private Transform _bossRoot;
@@ -78,10 +79,17 @@ namespace LunarDominion.Boss
         private float _blendDur = 0.25f;
         private float _returnAt = -1f;
         private bool _returning;
+        // Player drag-rotate (Patrick 2026-11-13): a yaw offset
+        // the view adds to while dragging, eased toward its
+        // target in Tick and applied to the base pose on read.
+        private float _userYaw;
+        private float _userYawTarget;
 
         public bool Active { get; private set; }
-        public Vector3 BasePos => _cur.Pos;
-        public Quaternion BaseRot => _cur.Rot;
+        public Vector3 BasePos => YawAroundCentre(_cur.Pos);
+        public Quaternion BaseRot => Mathf.Abs(_userYaw) < 0.01f
+            ? _cur.Rot
+            : Quaternion.AngleAxis(_userYaw, Vector3.up) * _cur.Rot;
         public float BaseFov => _cur.Fov;
         public Vector3 HomePos => _home.Pos;
         public Quaternion HomeRot => _home.Rot;
@@ -111,7 +119,29 @@ namespace LunarDominion.Boss
             _blending = false;
             _returnAt = -1f;
             _returning = false;
+            _userYaw = 0f;
+            _userYawTarget = 0f;
             Active = true;
+        }
+
+        /// <summary>Drag-rotate: swings the view around the
+        /// arena centre by up to ±MaxUserYaw degrees. The orbit
+        /// rotates the current pose's position around the centre,
+        /// so its radius — and with it the wall rule — is
+        /// preserved exactly, and the Phase 5 shake keeps riding
+        /// on top of the yawed pose.</summary>
+        public void AddUserYaw(float deltaDegrees)
+        {
+            if (!Active) return;
+            _userYawTarget = Mathf.Clamp(
+                _userYawTarget + deltaDegrees, -MaxUserYaw, MaxUserYaw);
+        }
+
+        private Vector3 YawAroundCentre(Vector3 pos)
+        {
+            if (Mathf.Abs(_userYaw) < 0.01f) return pos;
+            Vector3 centre = new Vector3(ArenaCentreXZ.x, pos.y, ArenaCentreXZ.y);
+            return centre + Quaternion.AngleAxis(_userYaw, Vector3.up) * (pos - centre);
         }
 
         public void PlayShot(BossShot shot, Transform heroAnchor = null)
@@ -286,6 +316,10 @@ namespace LunarDominion.Boss
         public void Tick(float dt)
         {
             if (!Active) return;
+            // Ease the drag-rotate yaw toward its target so the
+            // swing feels weighted, not rigid.
+            _userYaw = Mathf.Lerp(_userYaw, _userYawTarget,
+                1f - Mathf.Exp(-12f * dt));
             if (_blending)
             {
                 _blendT += dt;
@@ -315,6 +349,8 @@ namespace LunarDominion.Boss
         public void Release()
         {
             Active = false;
+            _userYaw = 0f;
+            _userYawTarget = 0f;
         }
 
         private static Vector3 ClampToArena(Vector3 pos)

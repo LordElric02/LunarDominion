@@ -156,6 +156,16 @@ namespace LunarDominion.UI
         private readonly List<Button> _turnTargetButtons = new List<Button>();
         private readonly List<Text> _turnTargetLabels = new List<Text>();
         private bool _turnActive;
+        // Drag-rotate (Patrick 2026-11-13): a press tracked
+        // across frames by Update; past a small movement
+        // threshold it swings the fight camera (the director's
+        // user yaw) instead of acting as a tap.
+        private bool _dragViewActive;
+        private bool _dragViewMoved;
+        private bool _dragViewSkipArmed;
+        private Vector2 _dragViewStart;
+        private float _dragViewLastX;
+        private const float DragYawPerPixel = 0.05f;
         private EncounterDefinition _turnEncounter;
         private List<SquadCombatant> _turnSquad;
         private readonly List<GameObject> _turnFigures = new List<GameObject>();
@@ -2227,8 +2237,15 @@ namespace LunarDominion.UI
                         bc.r * t + 0.15f, bc.g * t + 0.15f, bc.b * t + 0.15f, 1f);
                 }
             }
-            if (!_turnActive || _turnFight == null || _turnFight.Finished) return;
+            if (!_turnActive || _turnFight == null || _turnFight.Finished)
+            {
+                _dragViewActive = false;
+                _dragViewMoved = false;
+                return;
+            }
             bool pressed = false;
+            bool held = false;
+            bool released = false;
             Vector2 screenPos = Vector2.zero;
             int touchPointerId = -1;
 #if ENABLE_INPUT_SYSTEM
@@ -2237,12 +2254,16 @@ namespace LunarDominion.UI
             if (touchscreen != null && (touchscreen.primaryTouch.press.isPressed || touchscreen.primaryTouch.press.wasPressedThisFrame || touchscreen.primaryTouch.press.wasReleasedThisFrame))
             {
                 pressed = touchscreen.primaryTouch.press.wasPressedThisFrame;
+                held = touchscreen.primaryTouch.press.isPressed;
+                released = touchscreen.primaryTouch.press.wasReleasedThisFrame;
                 screenPos = touchscreen.primaryTouch.position.ReadValue();
                 touchPointerId = (int)touchscreen.primaryTouch.touchId.ReadValue();
             }
             else if (mouse != null)
             {
                 pressed = mouse.leftButton.wasPressedThisFrame;
+                held = mouse.leftButton.isPressed;
+                released = mouse.leftButton.wasReleasedThisFrame;
                 screenPos = mouse.position.ReadValue();
             }
 #else
@@ -2250,44 +2271,93 @@ namespace LunarDominion.UI
             {
                 var touch = Input.GetTouch(0);
                 pressed = touch.phase == TouchPhase.Began;
+                held = touch.phase == TouchPhase.Began || touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary;
+                released = touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled;
                 screenPos = touch.position;
             }
             else
             {
                 pressed = Input.GetMouseButtonDown(0);
+                held = Input.GetMouseButton(0);
+                released = Input.GetMouseButtonUp(0);
                 screenPos = Input.mousePosition;
             }
 #endif
-            if (!pressed) return;
-            if (EventSystem.current != null)
+            // Drag-rotate (Patrick 2026-11-13): a press is
+            // tracked across frames; if it moves past a small
+            // threshold it becomes a camera drag (the director's
+            // user yaw), and a press that stays a tap keeps the
+            // exact behaviour it had before — hero taps fire on
+            // the press, and the C1 tap-to-skip now resolves on
+            // the release so a drag never triggers it.
+            if (pressed)
             {
-#if ENABLE_INPUT_SYSTEM
-                if (touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject()) return;
-#else
-                if (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId)) return;
-                if (Input.touchCount == 0 && EventSystem.current.IsPointerOverGameObject()) return;
-#endif
-            }
-            // Cinematic C1: a tap on empty space while an action
-            // plays skips the camera shot back to home framing.
-            if (_turnFight.Busy) { _turnFight.SkipShot(); return; }
-            var cam = Camera.main;
-            if (cam == null) return;
-            var ray = cam.ScreenPointToRay(screenPos);
-            var hits = Physics.RaycastAll(ray, 200f);
-            for (int i = 0; i < hits.Length; i++)
-            {
-                var node = hits[i].collider.transform;
-                while (node != null)
+                bool overUi = false;
+                if (EventSystem.current != null)
                 {
-                    int figIndex = _turnFigures.IndexOf(node.gameObject);
-                    if (figIndex >= 0)
-                    {
-                        OnHeroTapped(figIndex);
-                        return;
-                    }
-                    node = node.parent;
+#if ENABLE_INPUT_SYSTEM
+                    overUi = touchPointerId >= 0 ? EventSystem.current.IsPointerOverGameObject(touchPointerId) : EventSystem.current.IsPointerOverGameObject();
+#else
+                    if (Input.touchCount > 0) overUi = EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId);
+                    else overUi = EventSystem.current.IsPointerOverGameObject();
+#endif
                 }
+                if (overUi) return;
+                _dragViewActive = true;
+                _dragViewMoved = false;
+                _dragViewSkipArmed = _turnFight.Busy;
+                _dragViewStart = screenPos;
+                _dragViewLastX = screenPos.x;
+                if (!_turnFight.Busy)
+                {
+                    var cam = Camera.main;
+                    if (cam == null) return;
+                    var ray = cam.ScreenPointToRay(screenPos);
+                    var hits = Physics.RaycastAll(ray, 200f);
+                    for (int i = 0; i < hits.Length; i++)
+                    {
+                        var node = hits[i].collider.transform;
+                        while (node != null)
+                        {
+                            int figIndex = _turnFigures.IndexOf(node.gameObject);
+                            if (figIndex >= 0)
+                            {
+                                OnHeroTapped(figIndex);
+                                return;
+                            }
+                            node = node.parent;
+                        }
+                    }
+                }
+                return;
+            }
+            if (_dragViewActive && held)
+            {
+                float dx = screenPos.x - _dragViewLastX;
+                _dragViewLastX = screenPos.x;
+                if (!_dragViewMoved && (screenPos - _dragViewStart).sqrMagnitude > 100f)
+                    _dragViewMoved = true;
+                if (_dragViewMoved && dx != 0f && _turnFight.Director != null)
+                    _turnFight.Director.AddUserYaw(dx * DragYawPerPixel);
+                return;
+            }
+            if (_dragViewActive && released)
+            {
+                _dragViewActive = false;
+                // Cinematic C1: a tap on empty space while an
+                // action plays skips the camera shot back to
+                // home framing.
+                if (!_dragViewMoved && _dragViewSkipArmed && _turnFight.Busy)
+                    _turnFight.SkipShot();
+                _dragViewMoved = false;
+                return;
+            }
+            if (_dragViewActive && !held)
+            {
+                // The press vanished without a release (fight
+                // state changed under it): drop the tracking.
+                _dragViewActive = false;
+                _dragViewMoved = false;
             }
         }
 
