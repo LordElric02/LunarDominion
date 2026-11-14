@@ -546,20 +546,64 @@ namespace LunarDominion.UI
                 return;
             }
             if (paved == null) return;
+            // Clamp, don't wrap: the hexagonal paving mesh's UVs run
+            // past the texture's z edges at the hexagon's north /
+            // south points, and clamping stretches the black edge
+            // rows there instead of wrapping road texels in.
+            paved.wrapMode = TextureWrapMode.Clamp;
             try
             {
-                var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
-                plane.name = "PavedInterior";
+                var plane = new GameObject("PavedInterior");
                 _pavedGo = plane;
                 plane.transform.SetParent(_layoutRoot.transform, false);
                 plane.transform.localPosition = new Vector3(0f, 0.02f, 0f);
-                // Plane primitive is 10x10; scale to the interior size
-                // (2026-11-13: 69 x 42, inside the wall at x +/-36,
-                // z +/-22).
-                plane.transform.localScale = new Vector3(6.9f, 1f, 4.2f);
-                var rend = plane.GetComponent<Renderer>();
+                // 2026-11-14: the paving is a hexagonal mesh now,
+                // matching the hexagonal wall (BuildWall) — the old
+                // rectangular plane's corners would poke outside the
+                // wall's diagonal sides. The hexagon is the wall
+                // hexagon scaled out by 1.04 (a small apron past the
+                // wall's outer face). UVs keep the layout-space
+                // mapping the scaled plane produced (u = (lx + 34.5)
+                // / 69, v = (lz + 21) / 42), so the painted roads,
+                // plaza and hazard panel land exactly where they
+                // did. Normals are set to up by hand (the floor is
+                // flat) and the material is set double-sided below,
+                // so the fan's winding cannot hide or darken it.
+                var corners = new[]
+                {
+                    new Vector2(36f, 13f), new Vector2(0f, 26f),
+                    new Vector2(-36f, 13f), new Vector2(-36f, -13f),
+                    new Vector2(0f, -26f), new Vector2(36f, -13f),
+                };
+                var verts = new Vector3[7];
+                var uvs = new Vector2[7];
+                var normals = new Vector3[7];
+                verts[0] = Vector3.zero;
+                uvs[0] = new Vector2(0.5f, 0.5f);
+                normals[0] = Vector3.up;
+                for (int i = 0; i < 6; i++)
+                {
+                    var c = corners[i] * 1.04f;
+                    verts[i + 1] = new Vector3(c.x, 0f, c.y);
+                    uvs[i + 1] = new Vector2((c.x + 34.5f) / 69f, (c.y + 21f) / 42f);
+                    normals[i + 1] = Vector3.up;
+                }
+                var tris = new int[18];
+                for (int i = 0; i < 6; i++)
+                {
+                    tris[i * 3] = 0;
+                    tris[i * 3 + 1] = i + 1;
+                    tris[i * 3 + 2] = (i + 1) % 6 + 1;
+                }
+                var mesh = new Mesh { name = "PavedInteriorMesh" };
+                mesh.vertices = verts;
+                mesh.uv = uvs;
+                mesh.normals = normals;
+                mesh.triangles = tris;
+                plane.AddComponent<MeshFilter>().mesh = mesh;
+                var rend = plane.AddComponent<MeshRenderer>();
                 // Explicit URP Lit material (2026-11-10, phone magenta
-                // fix): a runtime Plane primitive's default material
+                // fix): a fresh renderer's default material
                 // uses the Standard shader, which renders magenta in a
                 // URP build (the phone) even though it looks fine in
                 // the Editor. SetPrimitiveColor creates the URP Lit
@@ -581,7 +625,9 @@ namespace LunarDominion.UI
                     rend.material.SetTexture("_BumpMap", pavedNormal);
                     rend.material.SetTextureScale("_BumpMap", Vector2.one);
                 }
-                Destroy(plane.GetComponent<Collider>());
+                // Double-sided (URP Lit _Cull = Off): the
+                // hand-built fan's winding is not relied on.
+                rend.material.SetInt("_Cull", 0);
             }
             catch (System.Exception e)
             {
@@ -589,72 +635,129 @@ namespace LunarDominion.UI
             }
         }
 
-        // Perimeter wall around the building area, like the
-        // walled compound in the reference layout. Rectangle
-        // x +/-36, z +/-22 since the 2026-11-13 redesign (was
-        // x +/-10.5, z +/-6.5, then x +/-24, z +/-13.5) — every
-        // building sits inside with margin. Four segments (the
-        // east one split for the gate) 0.8 high, 0.35 thick,
-        // gunmetal grey-blue, with a thin cyan strip light along the
-        // top of each segment and a 1.4-high corner tower (with cap)
-        // at each corner. 2026-11-06: the whole layout rotates 45
-        // degrees under BaseLayout, so the north/south edges read
-        // horizontal on screen and the east/west edges vertical. No
-        // gate yet: the near edge now sits just above the quick-select
-        // row, so a gate gap there would land cleanly — a follow-up
-        // if Patrick wants one.
+        // Perimeter wall palette (2026-11-14 hexagonal rebuild).
+        private static readonly Color WallBaseColor = new Color(0.32f, 0.35f, 0.42f);
+        private static readonly Color WallBandColor = new Color(0.27f, 0.30f, 0.37f);
+        private static readonly Color WallTowerColor = new Color(0.25f, 0.28f, 0.36f);
+        private static readonly Color WallCapColor = new Color(0.30f, 0.33f, 0.40f);
+        private static readonly Color WallStripColor = new Color(0.38f, 0.85f, 1.0f);
+        private static readonly Color LampHeadColor = new Color(1.0f, 0.93f, 0.80f);
+        private static readonly Color LampPostColor = new Color(0.16f, 0.17f, 0.20f);
+
+        // Perimeter wall around the building area.
+        // 2026-11-14 (Patrick: "the square wall is not realistic in
+        // this setting"): the perimeter is a HEXAGON — flat east /
+        // west sides at x +/-36 spanning z -13..13 (so the gate and
+        // the main street stay exactly where the 2026-11-13 redesign
+        // put them) and points north / south at z +/-26, joined by
+        // four diagonal sides. The diagonals clear the corner
+        // buildings: at layout x +/-21 the diagonal line sits at
+        // |z| 18.4, the buildings at (+/-21, +/-14). Each run is
+        // built in three stepped layers for depth (see AddWallRun),
+        // with a tower + glowing beacon at each of the six vertices
+        // and lamp posts inside the wall (two flanking the gate).
+        // Before this the wall was a rectangle x +/-36, z +/-22 of
+        // single 0.35-thick boxes with a cyan strip.
         // No colliders, same as the decor, so taps are never swallowed.
         private void BuildWall()
         {
-            var wallColor = new Color(0.32f, 0.35f, 0.42f);
-            var towerColor = new Color(0.25f, 0.28f, 0.36f);
-            var capColor = new Color(0.30f, 0.33f, 0.40f);
-            var stripColor = new Color(0.38f, 0.85f, 1.0f);
+            // The east side is split into two runs for the 3.4-wide
+            // gate gap at local z 0.
+            AddWallRun(36f, -13f, 36f, -1.7f);
+            AddWallRun(36f, 1.7f, 36f, 13f);
+            AddWallRun(36f, 13f, 0f, 26f);
+            AddWallRun(0f, 26f, -36f, 13f);
+            AddWallRun(-36f, 13f, -36f, -13f);
+            AddWallRun(-36f, -13f, 0f, -26f);
+            AddWallRun(0f, -26f, 36f, -13f);
 
-            // 2026-11-13 redesign: the wall grows to x +/-36,
-            // z +/-22 to enclose the spread-out layout, and the gate
-            // moves to the EAST (+X) segment — a 3.4-wide gap centred
-            // at local z 0, where the gate model sits and the main
-            // street (Lab - ring - Hospital) runs out. (The gate was
-            // on the north segment, gap 2.4 at local x 0, until now.)
-            // North (+Z) and south (-Z) segments, corner to corner.
-            AddWallBox(new Vector3(0f, 0.4f, 22f), new Vector3(72f, 0.8f, 0.35f), wallColor);
-            AddWallBox(new Vector3(0f, 0.4f, -22f), new Vector3(72f, 0.8f, 0.35f), wallColor);
-            // West (-X) segment, corner to corner.
-            AddWallBox(new Vector3(-36f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 44f), wallColor);
-            // East (+X) segment, split for the gate gap.
-            AddWallBox(new Vector3(36f, 0.4f, -11.85f), new Vector3(0.35f, 0.8f, 20.3f), wallColor);
-            AddWallBox(new Vector3(36f, 0.4f, 11.85f), new Vector3(0.35f, 0.8f, 20.3f), wallColor);
-
-            // Cyan strip lights along the top of each segment. The
-            // east strip is split for the gate gap, like the wall
-            // below it.
-            AddWallBox(new Vector3(0f, 0.83f, 22f), new Vector3(71.7f, 0.06f, 0.12f), stripColor);
-            AddWallBox(new Vector3(0f, 0.83f, -22f), new Vector3(71.7f, 0.06f, 0.12f), stripColor);
-            AddWallBox(new Vector3(-36f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 43.7f), stripColor);
-            AddWallBox(new Vector3(36f, 0.83f, -11.85f), new Vector3(0.12f, 0.06f, 20f), stripColor);
-            AddWallBox(new Vector3(36f, 0.83f, 11.85f), new Vector3(0.12f, 0.06f, 20f), stripColor);
-
-            // Corner towers with caps.
-            foreach (float x in new[] { -36f, 36f })
+            // Vertex towers, each capped and topped with a glowing
+            // cyan beacon.
+            foreach (var v in new[]
             {
-                foreach (float z in new[] { -22f, 22f })
-                {
-                    AddWallBox(new Vector3(x, 0.7f, z), new Vector3(1f, 1.4f, 1f), towerColor);
-                    AddWallBox(new Vector3(x, 1.525f, z), new Vector3(1.3f, 0.25f, 1.3f), capColor);
-                }
+                new Vector2(36f, 13f), new Vector2(0f, 26f),
+                new Vector2(-36f, 13f), new Vector2(-36f, -13f),
+                new Vector2(0f, -26f), new Vector2(36f, -13f),
+            })
+            {
+                AddWallBox(new Vector3(v.x, 1.3f, v.y), new Vector3(2.2f, 2.6f, 2.2f), WallTowerColor);
+                AddWallBox(new Vector3(v.x, 2.75f, v.y), new Vector3(2.7f, 0.3f, 2.7f), WallCapColor);
+                AddWallBox(new Vector3(v.x, 3.05f, v.y), new Vector3(0.5f, 0.3f, 0.5f), WallStripColor);
             }
+
+            // Lamp posts inside the wall: one at each side's
+            // midpoint, and one in each east half-run so two lamps
+            // flank the gate.
+            AddLampForRun(36f, -13f, 36f, -1.7f);
+            AddLampForRun(36f, 1.7f, 36f, 13f);
+            AddLampForRun(36f, 13f, 0f, 26f);
+            AddLampForRun(0f, 26f, -36f, 13f);
+            AddLampForRun(-36f, 13f, -36f, -13f);
+            AddLampForRun(-36f, -13f, 0f, -26f);
+            AddLampForRun(0f, -26f, 36f, -13f);
+        }
+
+        // One hexagonal wall run from (ax, az) to (bx, bz), in
+        // three stepped layers for depth: a thick base (1.7 thick,
+        // 0.85 high), a recessed upper band (1.05 thick, 0.75 high)
+        // and an overhanging cap (2.0 thick, 0.22 high — total wall
+        // height 1.82), plus the cyan strip light along the crest
+        // and buttresses standing proud of the outer face.
+        private void AddWallRun(float ax, float az, float bx, float bz)
+        {
+            float dx = bx - ax, dz = bz - az;
+            float len = Mathf.Sqrt(dx * dx + dz * dz);
+            // Box local +X must align with the run direction; a
+            // Unity Y-rotation maps +X to (cos, 0, -sin).
+            float yaw = Mathf.Atan2(-dz, dx) * Mathf.Rad2Deg;
+            var mid = new Vector3((ax + bx) * 0.5f, 0f, (az + bz) * 0.5f);
+            AddWallBox(mid + new Vector3(0f, 0.425f, 0f), new Vector3(len, 0.85f, 1.7f), WallBaseColor, yaw);
+            AddWallBox(mid + new Vector3(0f, 1.225f, 0f), new Vector3(len, 0.75f, 1.05f), WallBandColor, yaw);
+            AddWallBox(mid + new Vector3(0f, 1.71f, 0f), new Vector3(len, 0.22f, 2.0f), WallCapColor, yaw);
+            AddWallBox(mid + new Vector3(0f, 1.85f, 0f), new Vector3(len - 0.4f, 0.06f, 0.18f), WallStripColor, yaw);
+            // Buttresses on the outer face, evenly spaced.
+            var outward = new Vector3(-dz, 0f, dx).normalized;
+            if (Vector3.Dot(outward, mid) < 0f) outward = -outward;
+            int n = Mathf.Max(1, Mathf.RoundToInt(len / 12f));
+            for (int i = 1; i <= n; i++)
+            {
+                float t = i / (n + 1f);
+                var c = new Vector3(ax + dx * t, 0f, az + dz * t) + outward * 1.3f;
+                AddWallBox(c + new Vector3(0f, 0.55f, 0f), new Vector3(1.1f, 1.1f, 1.5f), WallTowerColor, yaw);
+            }
+        }
+
+        // A lamp post just inside a wall run, at the run's
+        // midpoint: a slim dark post with a warm-white head — the
+        // light structures on the wall (2026-11-14). It stands
+        // 1.65 inside the wall centreline, clear of the roads (the
+        // ring road's outer edge is 2.5+ from every wall line).
+        private void AddLampForRun(float ax, float az, float bx, float bz)
+        {
+            float dx = bx - ax, dz = bz - az;
+            var mid = new Vector3((ax + bx) * 0.5f, 0f, (az + bz) * 0.5f);
+            var inward = new Vector3(-dz, 0f, dx).normalized;
+            if (Vector3.Dot(inward, mid) > 0f) inward = -inward;
+            var p = mid + inward * 1.65f;
+            AddWallBox(new Vector3(p.x, 1.15f, p.z), new Vector3(0.16f, 2.3f, 0.16f), LampPostColor);
+            AddWallBox(new Vector3(p.x, 2.38f, p.z), new Vector3(0.46f, 0.16f, 0.46f), LampHeadColor);
         }
 
         // One wall piece: a plain box, coloured, collider stripped.
         // Cubes are 1x1x1, so localScale is the world size.
         private void AddWallBox(Vector3 pos, Vector3 size, Color color)
         {
+            AddWallBox(pos, size, color, 0f);
+        }
+
+        private void AddWallBox(Vector3 pos, Vector3 size, Color color, float yawDeg)
+        {
             var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
             box.name = "Wall";
             _wallPieces.Add(box);
             ParentToLayout(box);
             box.transform.localPosition = pos;
+            box.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
             box.transform.localScale = size;
             SetPrimitiveColor(box.GetComponent<Renderer>(), color);
             StripCollider(box);
