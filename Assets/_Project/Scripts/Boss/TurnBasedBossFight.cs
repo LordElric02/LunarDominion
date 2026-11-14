@@ -758,6 +758,19 @@ namespace LunarDominion.Boss
             }
             if (hero.Class != UnitClass.Ranged) SfxDirector.Play(SfxClip.HeroHit);
             StartCoroutine(ContactFlashRoutine(impact, ImpactTint()));
+            // Amped impacts (2026-11-14): spark bursts on hero
+            // hits. Melee on the boss is the big one (the
+            // HeroStrike close-up is playing), ranged and drone
+            // hits get smaller sprays.
+            if (drone != null)
+                SpawnSparks(impact, new Color(1f, 0.85f, 0.55f), 12, 3.5f);
+            else if (hero.Class == UnitClass.Ranged)
+                SpawnSparks(impact, new Color(0.65f, 0.9f, 1f), 14, 4.5f);
+            else
+            {
+                SpawnSparks(SurfacePoint(hero, impact), SparkTint(), 34, 7f);
+                AddShake(0.08f);
+            }
             int dmg = CombatService.Damage(HeroAtk(hero), drone != null ? 0 : BossEffDef,
                 hero.Class, UnitClass.Mechanized, hero.Level, BossLevel);
             if (hero.DeadeyeCharges > 0)
@@ -828,6 +841,12 @@ namespace LunarDominion.Boss
                     StartCoroutine(ContactFlashRoutine(
                         (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         ImpactTint()));
+                    if (drone != null)
+                        SpawnSparks(drone.Figure.transform.position + Vector3.up * 2.2f,
+                            new Color(1f, 0.85f, 0.55f), 16, 4f);
+                    else
+                        SpawnSparks(SurfacePoint(hero, bossPos + Vector3.up * 8.5f),
+                            new Color(1f, 0.72f, 0.2f), 50, 9f);
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * PrecisionMult),
                         drone != null ? 0 : BossEffDef / 2,
@@ -848,6 +867,12 @@ namespace LunarDominion.Boss
                     StartCoroutine(ContactFlashRoutine(
                         (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         new Color(0.45f, 0.9f, 1f)));
+                    if (drone != null)
+                        SpawnSparks(drone.Figure.transform.position + Vector3.up * 2.2f,
+                            new Color(0.65f, 0.9f, 1f), 16, 4f);
+                    else
+                        SpawnSparks(SurfacePoint(hero, bossPos + Vector3.up * 8.5f),
+                            new Color(0.65f, 0.9f, 1f), 30, 8f);
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * PiercingMult), 0,
                         hero.Class, UnitClass.Mechanized, hero.Level, BossLevel);
@@ -898,6 +923,15 @@ namespace LunarDominion.Boss
                     StartCoroutine(ContactFlashRoutine(
                         (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         ImpactTint()));
+                    if (drone != null)
+                        SpawnSparks(drone.Figure.transform.position + Vector3.up * 2.2f,
+                            new Color(1f, 0.85f, 0.55f), 16, 4f);
+                    else
+                    {
+                        SpawnSparks(SurfacePoint(hero, bossPos + Vector3.up * 8.5f),
+                            new Color(1f, 0.72f, 0.2f), 50, 9f);
+                        AddShake(0.08f);
+                    }
                     int dmg = CombatService.Damage(
                         Mathf.RoundToInt(HeroAtk(hero) * ArmorBreakMult),
                         drone != null ? 0 : BossEffDef,
@@ -1661,8 +1695,10 @@ namespace LunarDominion.Boss
 
         /// <summary>A brief additive flash at the exact impact
         /// point of a hit (Cinematic C2): a small sphere that
-        /// swells and fades over ~0.12s, using the shockwave's
-        /// proven URP Unlit additive recipe.</summary>
+        /// swells and fades, using the shockwave's proven URP
+        /// Unlit additive recipe. Amped 2026-11-14 (with the
+        /// spark bursts below): 0.12s -> 0.16s and the swell
+        /// 2.4 -> 3.6 units, so hits land harder in close-up.</summary>
         private IEnumerator ContactFlashRoutine(Vector3 pos, Color color)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -1687,11 +1723,11 @@ namespace LunarDominion.Boss
                 rend.material = mat;
             }
             float t = 0f;
-            while (t < 0.12f)
+            while (t < 0.16f)
             {
                 t += Time.deltaTime;
-                float p = Mathf.Clamp01(t / 0.12f);
-                go.transform.localScale = Vector3.one * (0.6f + 1.8f * p);
+                float p = Mathf.Clamp01(t / 0.16f);
+                go.transform.localScale = Vector3.one * (0.8f + 2.8f * p);
                 if (mat != null)
                 {
                     var c = col;
@@ -1701,6 +1737,106 @@ namespace LunarDominion.Boss
                 yield return null;
             }
             Destroy(go);
+        }
+
+        /// <summary>Spark colour for a melee hit on the boss:
+        /// gold while the core is venting (matching the crit
+        /// damage numbers), hot orange-white otherwise.</summary>
+        private Color SparkTint()
+        {
+            return _ventActive ? new Color(1f, 0.72f, 0.2f) : new Color(1f, 0.8f, 0.45f);
+        }
+
+        /// <summary>Moves an impact point (boss centre + 8.5 up)
+        /// onto the boss's front surface facing the attacker, so
+        /// melee sparks spray off the armour toward the camera
+        /// instead of starting inside the torso.</summary>
+        private Vector3 SurfacePoint(TurnHeroState hero, Vector3 impact)
+        {
+            if (hero == null || hero.Figure == null || _bossRoot == null) return impact;
+            Vector3 dir = hero.Figure.transform.position - _bossRoot.position;
+            dir.y = 0f;
+            if (dir.sqrMagnitude < 0.01f) return impact;
+            return impact + dir.normalized * 2.2f;
+        }
+
+        private void SpawnSparks(Vector3 pos, Color color, int count, float speed)
+        {
+            StartCoroutine(SparksRoutine(pos, color, count, speed));
+        }
+
+        /// <summary>A one-shot burst of metal sparks at an
+        /// impact point (2026-11-14, Patrick: amp the collision
+        /// effects, sparks on melee close-ups). Built on the
+        /// lair ambience's proven particle recipe (URP
+        /// Particles/Unlit + the soft dot texture, additive
+        /// blending like the contact flash); the burst is fired
+        /// with ParticleSystem.Emit and the object destroys
+        /// itself once the longest spark has lived out, so
+        /// nothing lingers between hits. Sparks fly in a sphere
+        /// and fall under gravity — the half inside the boss is
+        /// hidden by his mesh, the visible half sprays out.</summary>
+        private IEnumerator SparksRoutine(Vector3 pos, Color color, int count, float speed)
+        {
+            var go = new GameObject("ImpactSparks");
+            go.transform.SetParent(transform, false);
+            go.transform.position = pos;
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.loop = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.6f, speed);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.07f, 0.16f);
+            var col = color;
+            col.a = 0.95f;
+            main.startColor = col;
+            main.maxParticles = count;
+            main.gravityModifier = 1.2f;
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.25f;
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shader != null && renderer != null)
+            {
+                var mat = new Material(shader);
+                mat.SetTexture("_BaseMap", MakeSparkTexture());
+                mat.SetColor("_BaseColor", col);
+                mat.SetFloat("_Surface", 1f);
+                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                mat.SetInt("_ZWrite", 0);
+                mat.renderQueue = 3000;
+                renderer.material = mat;
+            }
+            ps.Emit(count);
+            float t = 0f;
+            while (t < 0.8f)
+            {
+                t += Time.deltaTime;
+                yield return null;
+            }
+            Destroy(go);
+        }
+
+        // Soft round sprite for the sparks (same recipe as
+        // LavaTubeAmbience.MakeDotTexture).
+        private static Texture2D MakeSparkTexture()
+        {
+            var tex = new Texture2D(32, 32, TextureFormat.RGBA32, false);
+            for (int y = 0; y < 32; y++)
+            {
+                for (int x = 0; x < 32; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x, y), new Vector2(15.5f, 15.5f)) / 16f;
+                    float a = Mathf.Clamp01(1f - d);
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a * a));
+                }
+            }
+            tex.Apply();
+            return tex;
         }
 
         /// <summary>A glowing shot that travels from -> to and

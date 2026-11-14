@@ -30,6 +30,8 @@ namespace LunarDominion.Boss
         private readonly List<Color> _beaconBaseEmission = new List<Color>();
         private readonly List<ParticleSystem> _steamSystems = new List<ParticleSystem>();
         private readonly List<float> _steamBurstTimers = new List<float>();
+        private readonly List<float> _steamIdleRates = new List<float>();
+        private readonly List<float> _steamBurstRates = new List<float>();
         private bool _phase2;
         private float _time;
 
@@ -313,8 +315,9 @@ namespace LunarDominion.Boss
         /// <summary>Cinematic C4: a denser dust drift inside the
         /// hero shaft only — the falling light gets visible motes,
         /// the rest of the cavern keeps the sparse global dust.
-        /// Particle budget: 220 global + 80 here + 5 vents x 60
-        /// steam = 600 alive max in the lair.</summary>
+        /// Particle budget: 220 global + 80 here + steam
+        /// (3 vents x 40 + the 2 boss vents x 90 = 300, V11)
+        /// = 600 alive max in the lair.</summary>
         private void BuildHeroDust()
         {
             var go = new GameObject("HeroShaftDust");
@@ -356,25 +359,36 @@ namespace LunarDominion.Boss
             foreach (var t in tubeInstance.GetComponentsInChildren<Transform>())
             {
                 if (!(t.name.Length == 7 && t.name.StartsWith("Vent_"))) continue;
+                // V11: Vent_04/05 are the prominent raised vents
+                // flanking the boss — their steam is bigger,
+                // faster and denser so the housings read as the
+                // lair's main vents. The other three vents drop
+                // to 40 max so the steam total is unchanged
+                // (3 x 40 + 2 x 90 = 300, as in C4's 5 x 60),
+                // and the lair's ~600 alive cap still holds.
+                bool bossVent = (t.name == "Vent_04" || t.name == "Vent_05");
                 var go = new GameObject("Steam_" + t.name);
                 go.transform.SetParent(transform, false);
-                go.transform.position = t.position + Vector3.up * 0.15f;
+                go.transform.position = t.position + Vector3.up * (bossVent ? 0.45f : 0.15f);
                 var ps = go.AddComponent<ParticleSystem>();
                 var main = ps.main;
                 main.loop = true;
                 main.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 2.2f);
-                main.startSpeed = new ParticleSystem.MinMaxCurve(1.2f, 2.2f);
-                main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 1.0f);
+                main.startSpeed = bossVent
+                    ? new ParticleSystem.MinMaxCurve(1.8f, 3.0f)
+                    : new ParticleSystem.MinMaxCurve(1.2f, 2.2f);
+                main.startSize = bossVent
+                    ? new ParticleSystem.MinMaxCurve(0.9f, 1.7f)
+                    : new ParticleSystem.MinMaxCurve(0.5f, 1.0f);
                 main.startColor = new Color(0.75f, 0.8f, 0.85f, 0.20f);
-                // Cinematic C4: 60 per vent (was 90) — with five
-                // vents in the V6 set the lair's total alive
-                // particles stay at the ~600 cap.
-                main.maxParticles = 60;
+                main.maxParticles = bossVent ? 90 : 40;
                 var emission = ps.emission;
-                emission.rateOverTime = 6f;
+                emission.rateOverTime = bossVent ? 14f : 6f;
                 var shape = ps.shape;
                 shape.shapeType = ParticleSystemShapeType.Circle;
-                shape.radius = 0.9f;
+                shape.radius = bossVent ? 1.5f : 0.9f;
+                _steamIdleRates.Add(bossVent ? 14f : 6f);
+                _steamBurstRates.Add(bossVent ? 60f : 42f);
                 var sizeOver = ps.sizeOverLifetime;
                 sizeOver.enabled = true;
                 sizeOver.size = new ParticleSystem.MinMaxCurve(1f,
@@ -542,7 +556,8 @@ namespace LunarDominion.Boss
                 if (_steamBurstTimers[i] <= 0f) continue;
                 _steamBurstTimers[i] -= Time.deltaTime;
                 var emission = _steamSystems[i].emission;
-                emission.rateOverTime = _steamBurstTimers[i] > 0f ? 42f : 6f;
+                emission.rateOverTime = _steamBurstTimers[i] > 0f
+                    ? _steamBurstRates[i] : _steamIdleRates[i];
             }
         }
 
