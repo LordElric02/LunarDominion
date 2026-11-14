@@ -379,6 +379,7 @@ namespace LunarDominion.Bootstrap
                 case NavTab.Base:
                     _exteriorView.SetVisible(false);
                     _baseView.SetVisible(true);
+                    _baseView.SetEnvironmentVisible(true);
                     _baseView.SetMountainsVisible(true);
                     break;
                 case NavTab.Heroes:
@@ -407,6 +408,7 @@ namespace LunarDominion.Bootstrap
                     // too (Patrick 2026-11-09: they crowd the big map);
                     // the ground and planet stay.
                     _baseView.SetVisible(false);
+                    _baseView.SetEnvironmentVisible(false);
                     _baseView.SetMountainsVisible(false);
                     _exteriorView.SetVisible(true);
                     RefreshMapNodeStates();

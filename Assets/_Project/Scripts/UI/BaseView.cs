@@ -38,6 +38,13 @@ namespace LunarDominion.UI
         // are children of this object, so the whole base turns 45 degrees
         // while the ground plane and mountains stay unrotated.
         private GameObject _layoutRoot;
+        // Base environment pieces the Map tab hides (see
+        // SetEnvironmentVisible): the ground mesh, the paved
+        // interior plane, and every wall piece.
+        private GameObject _groundGo;
+        private GameObject _pavedGo;
+        private readonly System.Collections.Generic.List<GameObject> _wallPieces =
+            new System.Collections.Generic.List<GameObject>();
         // Reactor animation (2026-11-06): the Nexus FBX keeps the reactor
         // sphere and each containment ring as separate named objects, so
         // they can move independently. Collected after the model loads;
@@ -444,6 +451,7 @@ namespace LunarDominion.UI
             {
                 var terrain = Instantiate(terrainPrefab);
                 terrain.name = "LunarGround";
+                _groundGo = terrain;
                 terrain.transform.position = Vector3.zero;
                 // Do NOT set the rotation here. The FBX carries a -90 deg X
                 // axis conversion (Blender Z-up to Unity Y-up). When the
@@ -462,6 +470,7 @@ namespace LunarDominion.UI
                 // Flat-plane fallback (the pre-terrain ground).
                 var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
                 ground.name = "LunarGround";
+                _groundGo = ground;
                 ground.transform.localScale = new Vector3(13.2f, 1f, 13.2f);
                 SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
                 groundRenderer = ground.GetComponent<Renderer>();
@@ -535,6 +544,7 @@ namespace LunarDominion.UI
             {
                 var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
                 plane.name = "PavedInterior";
+                _pavedGo = plane;
                 plane.transform.SetParent(_layoutRoot.transform, false);
                 plane.transform.localPosition = new Vector3(0f, 0.02f, 0f);
                 // Plane primitive is 10x10; scale to the interior size
@@ -636,6 +646,7 @@ namespace LunarDominion.UI
         {
             var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
             box.name = "Wall";
+            _wallPieces.Add(box);
             ParentToLayout(box);
             box.transform.localPosition = pos;
             box.transform.localScale = size;
@@ -2096,6 +2107,28 @@ namespace LunarDominion.UI
         {
             _visible = visible;
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
+        }
+
+        /// <summary>Show or hide the base environment: the ground
+        /// mesh, the paved interior and the perimeter wall. The Map
+        /// tab hides them (2026-11-13, Patrick: the Map view should
+        /// stay as it was before the base redesign): on the Map the
+        /// base is represented by ExteriorView's BaseMarker castle,
+        /// which sits on the exterior terrain's flat base disc
+        /// (r 42 — the whole compound footprint fits inside it), and
+        /// the base's own ground would otherwise show around the
+        /// castle as a 132x132 pale diamond, with the new wall and
+        /// road paving around it. Buildings are toggled separately
+        /// by SetVisible; rocks, props, debris and the planet stay
+        /// as they were.</summary>
+        public void SetEnvironmentVisible(bool visible)
+        {
+            if (_groundGo != null) _groundGo.SetActive(visible);
+            if (_pavedGo != null) _pavedGo.SetActive(visible);
+            foreach (var go in _wallPieces)
+            {
+                if (go != null) go.SetActive(visible);
+            }
         }
 
         /// <summary>Show or hide the 13 horizon mountains. The Map tab
