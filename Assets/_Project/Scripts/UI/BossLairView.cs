@@ -736,9 +736,10 @@ namespace LunarDominion.UI
             // want to re-fight it.
             _selectedBossLevel = HighestUnlockedBossLevel();
             _root.SetActive(true);
-            // Hero selection: the scene stays visible (boss +
-            // staged heroes) behind the compact panel
-            // (Patrick 2026-11-13).
+            // Hero selection is menu-only: the 3D scene stays
+            // hidden until the fight starts (Patrick 2026-11-13 —
+            // "we shouldn't be seeing this boss, since we are
+            // just picking the boss level at this point").
             SetSelectMode(true);
             // A fresh open always shows the header + bottom panel (they
             // are hidden during a fight — see OnFightClicked).
@@ -764,23 +765,25 @@ namespace LunarDominion.UI
             if (_root != null) _root.SetActive(false);
         }
 
-        // Hero selection mode: while the player is picking heroes
-        // the 3D lair scene stays visible — the boss and the
-        // selected heroes stand in the arena — behind a compact
-        // bottom panel (the rows scroll if they overflow). The
-        // 2026-11-10 layout hid the scene and expanded the panel
-        // to 0.80; Patrick asked for the heroes in the lair
-        // (2026-11-13). During the fight the panel returns to
-        // its normal size (and the UI hides). The scene root
-        // itself stays active the whole time the view is open;
-        // Hide() is what turns it off.
+        // Hero selection mode: while the player is picking the
+        // boss level and heroes, the 3D lair scene is HIDDEN and
+        // the bottom panel expands to 0.80 so all hero rows show
+        // without scrolling — picking is a menu, and the boss
+        // only appears when the fight starts (the 2026-11-10
+        // design, restored 2026-11-13 at Patrick's direction
+        // after the follow-up pass's visible-scene experiment:
+        // "we shouldn't be seeing this boss, since we are just
+        // picking the boss level at this point"). Leaving select
+        // mode (fight start) shows the scene again and returns
+        // the panel to its normal size. Hide() also turns the
+        // scene root off when the view closes entirely.
         private void SetSelectMode(bool select)
         {
             _selectMode = select;
-            if (_sceneRoot != null) _sceneRoot.SetActive(true);
+            if (_sceneRoot != null) _sceneRoot.SetActive(!select);
             if (_bottomRt != null)
             {
-                _bottomRt.anchorMax = select ? new Vector2(1, 0.52f) : new Vector2(1, 0.45f);
+                _bottomRt.anchorMax = select ? new Vector2(1, 0.80f) : new Vector2(1, 0.45f);
             }
         }
 
