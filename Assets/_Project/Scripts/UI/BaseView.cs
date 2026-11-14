@@ -74,7 +74,7 @@ namespace LunarDominion.UI
         // ground is (-0.707,0,-0.707) — same as the Map camera.
         private static readonly Vector3 CamRight = new Vector3(0.7071f, 0f, -0.7071f);
         private static readonly Vector3 CamGroundForward = new Vector3(-0.7071f, 0f, -0.7071f);
-        private static readonly Vector3 BaseCameraPosition = new Vector3(23.2f, 43.5f, 23.2f);
+        private static readonly Vector3 BaseCameraPosition = new Vector3(17f, 31.9f, 17f);
         // Drag state: a press that moves past the threshold becomes a
         // drag (pan) and must NOT also fire as a tap on release.
         // True while the Base tab is the view on screen. Set by
@@ -117,14 +117,19 @@ namespace LunarDominion.UI
                 camGo.tag = "MainCamera";
             }
             // 2026-11-13 base redesign (Patrick's call: the concept
-            // image's wider framing): camera (23.2, 43.5, 23.2), pitch
-            // 53 degrees, over the 132x132 ground, framing the whole
-            // 72x44 walled compound at once. Checked with real camera
-            // math (60-degree vertical FOV, 16:9; the projection was
-            // calibrated against the old layout, reproducing Lab /
-            // Hospital at NDC x -0.947 / +0.947): the wall corners sit
-            // at max |NDC x| 0.85, NDC y -0.74..+0.45 — inside the
-            // frame, clear of the top bar and the bottom nav. The
+            // image's wider framing): camera (17, 31.9, 17), pitch
+            // 53 degrees, over the 132x132 ground. Checked with real
+            // camera math (60-degree vertical FOV, 16:9; the
+            // projection was calibrated against the old layout,
+            // reproducing Lab / Hospital at NDC x -0.947 / +0.947).
+            // First cut (23.2, 43.5, 23.2) framed the whole 72x44
+            // wall (corners at max |NDC x| 0.85); Patrick's Play
+            // check read it as too far out, so the camera moved in
+            // to distance 40 (from 54.5) at his direction — the wall
+            // corners now crop out of frame (max |NDC x| ~1.16),
+            // which he explicitly accepted ('don't worry about the
+            // outside wall'); every building stays in frame
+            // (max |NDC x| ~0.73). The
             // terrain and the mountain ring grew in the same pass so
             // every frame edge is still covered by ground or
             // mountains. The layout turns 45 degrees under BaseLayout.
