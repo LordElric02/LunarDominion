@@ -303,25 +303,34 @@ namespace LunarDominion.UI
             { 205f, -160f, 3.3f, 48f },
             { 150f, 170f, 2.7f, 42f },
         };
-        // (cx, cz, radius, depth, rim height)
+        // (cx, cz, radius, depth, rim height, type) — types mirror
+        // BuildExteriorTerrainV4.py: 0 simple (legacy profile),
+        // 1 complex (flat floor, central peak, terraced walls),
+        // 2 degraded (shallow, soft, wide worn rim), 3 fresh
+        // (deeper, crisp rim; ejecta/rays are tint-only). The old
+        // (40,-40) crater is now a 5-pit secondary chain.
         private static readonly float[,] TerrainCraters =
         {
-            { -60f, -120f, 22f, 5.0f, 3.2f },
-            { 60f, 130f, 18f, 4.0f, 2.6f },
-            { 150f, -60f, 14f, 3.2f, 2.1f },
-            { -160f, -90f, 16f, 3.5f, 2.2f },
-            { 230f, 120f, 20f, 4.5f, 2.9f },
-            { -230f, 90f, 15f, 3.4f, 2.2f },
-            { 90f, -150f, 12f, 2.7f, 1.8f },
-            { -40f, 40f, 11f, 2.4f, 1.6f },
-            { 180f, 190f, 16f, 3.5f, 2.2f },
-            { -110f, -180f, 19f, 4.3f, 2.7f },
-            { 40f, -40f, 9f, 2.1f, 1.3f },
-            { 260f, -40f, 13f, 2.9f, 1.9f },
-            { -260f, -140f, 17f, 3.8f, 2.4f },
-            { 120f, 60f, 10f, 2.2f, 1.4f },
-            { -190f, 190f, 14f, 3.2f, 2.1f },
-            { 10f, -110f, 13f, 2.9f, 1.9f },
+            { -60f, -120f, 22f, 5.0f, 3.2f, 1f },
+            { 60f, 130f, 18f, 4.0f, 2.6f, 3f },
+            { 150f, -60f, 14f, 3.2f, 2.1f, 0f },
+            { -160f, -90f, 16f, 3.5f, 2.2f, 2f },
+            { 230f, 120f, 20f, 4.5f, 2.9f, 1f },
+            { -230f, 90f, 15f, 3.4f, 2.2f, 0f },
+            { 90f, -150f, 12f, 2.7f, 1.8f, 2f },
+            { -40f, 40f, 11f, 2.4f, 1.6f, 0f },
+            { 180f, 190f, 16f, 3.5f, 2.2f, 3f },
+            { -110f, -180f, 19f, 4.3f, 2.7f, 1f },
+            { 28f, -52f, 4.2f, 1.1f, 0.7f, 0f },
+            { 34f, -47f, 5.2f, 1.4f, 0.9f, 0f },
+            { 40f, -42f, 4.6f, 1.2f, 0.8f, 0f },
+            { 46f, -37f, 3.8f, 1.0f, 0.6f, 0f },
+            { 52f, -32f, 3.2f, 0.8f, 0.5f, 0f },
+            { 260f, -40f, 13f, 2.9f, 1.9f, 0f },
+            { -260f, -140f, 17f, 3.8f, 2.4f, 2f },
+            { 120f, 60f, 10f, 2.2f, 1.4f, 0f },
+            { -190f, 190f, 14f, 3.2f, 2.1f, 0f },
+            { 10f, -110f, 13f, 2.9f, 1.9f, 2f },
         };
         // How high a march marker rides above the terrain surface:
         // the mesh sits at -0.05, and markers historically rode at
@@ -334,9 +343,62 @@ namespace LunarDominion.UI
             return t * t * (3f - 2f * t);
         }
 
+        // One crater's height contribution at q = dist / radius.
+        // Mirrors crater_height in BuildExteriorTerrainV4.py —
+        // keep the math identical (types listed at TerrainCraters).
+        private static float TerrainCraterHeight(float q, float depth, float rim, int ctype)
+        {
+            if (ctype == 1) // complex: flat floor, central peak, terraces
+            {
+                if (q < 1f)
+                {
+                    float peak = 0.38f * depth * Mathf.Exp(-((q / 0.16f) * (q / 0.16f)));
+                    if (q < 0.42f) return -0.92f * depth + peak;
+                    float t = (q - 0.42f) / 0.58f;
+                    return -0.92f * depth * Mathf.Pow(1f - t, 1.35f)
+                        + depth * 0.05f * Mathf.Sin(6f * Mathf.PI * t) * (4f * t * (1f - t))
+                        + peak;
+                }
+                if (q < 1.7f)
+                {
+                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.7f);
+                    return 1.1f * rim * sn * sn;
+                }
+                return 0f;
+            }
+            if (ctype == 2) // degraded: shallow, softened, wide worn rim
+            {
+                if (q < 1f) return -0.45f * depth * Mathf.Pow(0.5f + 0.5f * Mathf.Cos(Mathf.PI * q), 1.3f);
+                if (q < 2.1f)
+                {
+                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 1.1f);
+                    return 0.4f * rim * sn * sn;
+                }
+                return 0f;
+            }
+            if (ctype == 3) // fresh: deeper bowl, crisp narrow rim
+            {
+                if (q < 1f) return -1.12f * depth * (0.5f + 0.5f * Mathf.Cos(Mathf.PI * q));
+                if (q < 1.5f)
+                {
+                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.5f);
+                    return 1.25f * rim * sn * sn;
+                }
+                return 0f;
+            }
+            // simple (0): the legacy profile, unchanged
+            if (q < 1f) return -depth * (0.5f + 0.5f * Mathf.Cos(Mathf.PI * q));
+            if (q < 1.7f)
+            {
+                float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.7f);
+                return rim * sn * sn;
+            }
+            return 0f;
+        }
+
         /// <summary>The sculpted terrain's height at (x, z), in
         /// world units (before the mesh's -0.05 offset). Mirrors
-        /// BuildExteriorTerrainV2.py — change both together.</summary>
+        /// BuildExteriorTerrainV4.py — change both together.</summary>
         public static float TerrainHeight(float x, float z)
         {
             float d = 2.4f * Mathf.Sin(0.021f * x + 1.7f) * Mathf.Sin(0.017f * z - 0.6f)
@@ -353,16 +415,8 @@ namespace LunarDominion.UI
             {
                 float dist = Mathf.Sqrt((x - TerrainCraters[i, 0]) * (x - TerrainCraters[i, 0])
                                       + (z - TerrainCraters[i, 1]) * (z - TerrainCraters[i, 1]));
-                float q = dist / TerrainCraters[i, 2];
-                if (q < 1f)
-                {
-                    d += -TerrainCraters[i, 3] * (0.5f + 0.5f * Mathf.Cos(Mathf.PI * q));
-                }
-                else if (q < 1.7f)
-                {
-                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.7f);
-                    d += TerrainCraters[i, 4] * sn * sn;
-                }
+                d += TerrainCraterHeight(dist / TerrainCraters[i, 2], TerrainCraters[i, 3],
+                    TerrainCraters[i, 4], (int)TerrainCraters[i, 5]);
             }
             float m = 1f;
             // Base disc.
