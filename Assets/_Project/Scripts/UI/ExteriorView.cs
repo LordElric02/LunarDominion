@@ -76,7 +76,6 @@ namespace LunarDominion.UI
         // exterior framing is unchanged since the original map —
         // the 2026-11-12 enlargement keeps this camera and the
         // player pans across the bigger map (see PanLimitX/Z).
-        private static readonly Vector3 BaseCameraPosition = new Vector3(10f, 16f, 10f);
         private static readonly Vector3 ExteriorCameraPosition = new Vector3(50f, 80f, 50f);
 
         private GameObject _terrain;
@@ -2163,8 +2162,6 @@ namespace LunarDominion.UI
             if (_bottomNavGo == null) _bottomNavGo = GameObject.Find("BottomNav");
             if (_topBarGo != null) _topBarGo.SetActive(!visible);
             if (_bottomNavGo != null) _bottomNavGo.SetActive(!visible);
-            var cam = Camera.main;
-            if (cam == null) return;
             if (visible)
             {
                 // Opening the Map always recentres on the base — the
@@ -2174,11 +2171,13 @@ namespace LunarDominion.UI
                 _isDrag = false;
                 ApplyCamera();
             }
-            else
-            {
-                cam.transform.position = BaseCameraPosition;
-                cam.transform.LookAt(Vector3.zero);
-            }
+            // Hiding the Map does NOT touch the camera (2026-11-14
+            // fix): this method used to reset it to a stale local
+            // copy of the base camera position, which fought
+            // BaseView's own camera — the startup view and tab
+            // returns showed whichever pose wrote last, and the
+            // first drag then snapped the zoom. BaseView owns the
+            // base camera now; its SetVisible(true) re-applies it.
         }
     }
 }

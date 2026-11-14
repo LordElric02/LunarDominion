@@ -81,7 +81,7 @@ namespace LunarDominion.UI
         // ground is (-0.707,0,-0.707) — same as the Map camera.
         private static readonly Vector3 CamRight = new Vector3(0.7071f, 0f, -0.7071f);
         private static readonly Vector3 CamGroundForward = new Vector3(-0.7071f, 0f, -0.7071f);
-        private static readonly Vector3 BaseCameraPosition = new Vector3(13.2f, 24.8f, 13.2f);
+        private static readonly Vector3 BaseCameraPosition = new Vector3(10f, 16f, 10f);
         // Drag state: a press that moves past the threshold becomes a
         // drag (pan) and must NOT also fire as a tap on release.
         // True while the Base tab is the view on screen. Set by
@@ -139,17 +139,26 @@ namespace LunarDominion.UI
             // (max |NDC x| ~0.73).
             // 2026-11-14: after the hexagonal wall went in, that
             // same distance-40 framing fit the whole (narrower)
-            // hexagon in frame and read as a far 'default view' —
-            // Patrick sent the closer framing he wants as default,
-            // so the camera moves in again to distance 31
-            // (13.2, 24.8, 13.2): the ring road spans ~|NDC x| 0.90,
-            // the hexagon's sides sit at ~1.19 (cropped at the
-            // frame edges), buildings and plaza large in frame. The
-            // terrain and the mountain ring grew in the same pass so
-            // every frame edge is still covered by ground or
-            // mountains. The layout turns 45 degrees under BaseLayout.
-            // (Supersedes the 2026-11-06 (10,16,10) framing and its
-            // base-prominence rule, at Patrick's direction.)
+            // hexagon in frame and read as a far 'default view'.
+            // A distance-31 pass (13.2, 24.8, 13.2) still read too
+            // far in Patrick's Play check — and his video showed
+            // why the framing he kept approving looked different:
+            // ExteriorView still held a stale copy of the ORIGINAL
+            // base camera (10, 16, 10) and reset the shared camera
+            // to it every time the Map hid, so the 'correct' view
+            // he saw after clicking away and back WAS (10, 16, 10),
+            // while startup and the first drag used this view's own
+            // newer values. That pose is now the real default here
+            // (distance ~21.4, 48.5-degree pitch — the pre-redesign
+            // prominence framing, over the new layout; the wall
+            // crops out of frame, buildings and plaza large), and
+            // ExteriorView's copy + reset are removed: this view is
+            // the single owner of the base camera. Its
+            // SetVisible(true) re-applies this pose (pan recentred)
+            // so the Base tab always opens at this framing, and
+            // panning moves camera and look-at together, so
+            // scrolling can never change the zoom (a player zoom
+            // control is a later feature, per Patrick).
             // 2026-11-09 expanded base: the camera position is now
             // ApplyCamera() (base position + pan offset), so the player
             // can scroll across the wider base.
@@ -2224,6 +2233,19 @@ namespace LunarDominion.UI
         {
             _visible = visible;
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
+            // Becoming visible re-applies the base camera with the
+            // pan recentred (2026-11-14): the camera is shared, and
+            // the Map and lair leave it at their own poses, so the
+            // Base tab must claim it back — otherwise the first
+            // view of a session and every return kept whatever pose
+            // was left over (the 'first view is off, click away and
+            // back fixes it' bug). Mirrors the Map, which also
+            // recentres on open.
+            if (visible)
+            {
+                _panOffset = Vector3.zero;
+                ApplyCamera();
+            }
         }
 
         /// <summary>Show or hide the base environment: the paved
