@@ -642,6 +642,26 @@ namespace LunarDominion.UI
                     rend.material.SetTexture("_BumpMap", pavedNormal);
                     rend.material.SetTextureScale("_BumpMap", Vector2.one);
                 }
+                // Jet-black glass pass (2026-11-14, Patrick's trial):
+                // a separate emission texture carries the glowing
+                // markings — cyan road-edge strips, amber dashes,
+                // plaza rings, and clusters of illuminated streaks
+                // in the open areas — while the diffuse stays jet
+                // black, and the surface goes glossy (smoothness
+                // 0.9, a touch of metalness) so the plates throw a
+                // sheen under the sun. Emission is optional: without
+                // the PNG the floor is plain glossy black.
+                var pavedEmission = Resources.Load<Texture2D>("Textures/GroundPaved_Emission");
+                if (pavedEmission != null)
+                {
+                    pavedEmission.wrapMode = TextureWrapMode.Clamp;
+                    rend.material.SetTexture("_EmissionMap", pavedEmission);
+                    rend.material.SetTextureScale("_EmissionMap", Vector2.one);
+                    rend.material.SetColor("_EmissionColor", Color.white);
+                    rend.material.EnableKeyword("_EMISSION");
+                }
+                rend.material.SetFloat("_Smoothness", 0.9f);
+                rend.material.SetFloat("_Metallic", 0.1f);
                 // Double-sided (URP Lit _Cull = Off): the
                 // hand-built fan's winding is not relied on.
                 rend.material.SetInt("_Cull", 0);

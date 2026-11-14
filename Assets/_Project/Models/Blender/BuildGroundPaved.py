@@ -80,8 +80,10 @@ import numpy as np
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TEXTURE_FILE = "GroundPaved.png"
 NORMAL_FILE = "GroundPaved_Normal.png"
+EMISSION_FILE = "GroundPaved_Emission.png"
 TEXTURE_PATH = os.path.join(SCRIPT_DIR, TEXTURE_FILE)
 NORMAL_PATH = os.path.join(SCRIPT_DIR, NORMAL_FILE)
+EMISSION_PATH = os.path.join(SCRIPT_DIR, EMISSION_FILE)
 
 # Interior size in layout-root local units (redesigned base,
 # 2026-11-13): wall at x +/-36, z +/-22; the paving stops a margin
@@ -99,13 +101,13 @@ NORMAL_STRENGTH = 2.0
 # reads via the normal map); the roads sit on it as dark asphalt
 # with pale edge lines and dashed centrelines, plaza disc black
 # with its cyan rings kept.
-CONCRETE = (0.030, 0.030, 0.034)
-PLAZA_DISC = (0.050, 0.050, 0.056)
-SEAM = (0.014, 0.014, 0.016)
-ASPHALT = (0.105, 0.108, 0.118)
-ROAD_EDGE = (0.52, 0.54, 0.58)
-ROAD_DASH = (0.85, 0.79, 0.52)
-PLAZA_RING = (0.35, 0.75, 0.85)
+CONCRETE = (0.008, 0.008, 0.010)
+PLAZA_DISC = (0.013, 0.013, 0.016)
+SEAM = (0.004, 0.004, 0.005)
+ASPHALT = (0.020, 0.021, 0.026)
+ROAD_EDGE = (0.10, 0.13, 0.16)
+ROAD_DASH = (0.16, 0.12, 0.06)
+PLAZA_RING = (0.10, 0.24, 0.28)
 HAZARD_YELLOW = (0.90, 0.75, 0.20)
 HAZARD_DARK = (0.15, 0.15, 0.16)
 
@@ -194,6 +196,7 @@ def make_paved():
     base = np.array(CONCRETE, dtype=np.float32)
     arr = np.ones((H, W, 3), dtype=np.float32) * base
     height = np.zeros((H, W), dtype=np.float32)
+    emi = np.zeros((H, W, 3), dtype=np.float32)
     # Subtle tonal variation + fine grain (concrete, not regolith).
     var = np.zeros((H, W), dtype=np.float32)
     for (fx, fy, amp, ph) in ((2, 1, 0.020, 0.0), (3, -2, 0.014, 1.7),
@@ -241,6 +244,8 @@ def make_paved():
         arr = np.where(e[..., None], edge_col, arr)
         dash = m & (d < 0.14) & ((s % DASH_PERIOD) < DASH_ON)
         arr = np.where(dash[..., None], dash_col, arr)
+        emi = np.where(e[..., None], np.array((0.30, 0.75, 1.00), dtype=np.float32) * 0.85, emi)
+        emi = np.where(dash[..., None], np.array((1.00, 0.70, 0.28), dtype=np.float32) * 0.55, emi)
     height = np.where(road_any, 0.0, height).astype(np.float32)
     # ---- Nexus plaza: lighter disc + cyan rings.
     r = np.sqrt(lx * lx + lz * lz)
@@ -252,6 +257,8 @@ def make_paved():
     arr = np.where(ring[..., None], ring_col, arr)
     inner = np.abs(r - PLAZA_INNER_RADIUS) < 0.12
     arr = np.where(inner[..., None], ring_col, arr)
+    emi = np.where(ring[..., None], np.array((0.35, 0.85, 1.00), dtype=np.float32), emi)
+    emi = np.where(inner[..., None], np.array((0.35, 0.85, 1.00), dtype=np.float32) * 0.9, emi)
     height += np.where(disc, 0.05, 0.0).astype(np.float32)
     # ---- Gate hazard stripes: diagonal yellow/dark panel at the
     # east wall gate (local x +34.5, z 0), 2.2 deep x 4.4 wide.
@@ -261,6 +268,39 @@ def make_paved():
     haz_d = np.array(HAZARD_DARK, dtype=np.float32)
     haz = np.where((diag < 1.0)[..., None], haz_y, haz_d)
     arr = np.where(gate[..., None], haz, arr)
+    emi = np.where((gate & (diag < 1.0))[..., None], np.array((0.90, 0.70, 0.20), dtype=np.float32) * 0.22, emi)
+    # ---- Illuminated streak clusters (2026-11-14, Patrick's
+    # jet-black glass trial): short glowing streaks grouped in
+    # open-floor areas - light veins in the black surface.
+    # Emission only; the diffuse stays jet black.
+    streak_cold = np.array((0.55, 0.85, 1.00), dtype=np.float32)
+    streak_warm = np.array((1.00, 0.80, 0.50), dtype=np.float32)
+    clusters = [(-29.0, 5.0), (29.0, -5.0), (-13.0, 18.0),
+                (14.0, -18.0), (-13.0, -18.0), (14.0, 18.0)]
+    for (cx, cz) in clusters:
+        main_ang = rng.uniform(0.0, math.pi)
+        for _ in range(int(rng.integers(6, 12))):
+            ang = main_ang + rng.normal(0.0, 0.45)
+            ln = rng.uniform(0.7, 2.6)
+            ox = cx + rng.normal(0.0, 1.5)
+            oz = cz + rng.normal(0.0, 1.1)
+            ax, ay = ox - math.cos(ang) * ln * 0.5, oz - math.sin(ang) * ln * 0.5
+            bx, by = ox + math.cos(ang) * ln * 0.5, oz + math.sin(ang) * ln * 0.5
+            d, s = dist_and_arclen(lx, lz, ax, ay, bx, by)
+            hw = rng.uniform(0.045, 0.085)
+            lat = np.clip((hw + 0.05 - d) / 0.05, 0.0, 1.0)
+            taper = np.clip(1.0 - np.abs(2.0 * (s / max(ln, 0.001)) - 1.0), 0.0, 1.0) ** 0.7
+            inten = rng.uniform(0.35, 1.0) * lat * taper
+            col = streak_warm if rng.random() < 0.16 else streak_cold
+            emi += inten[..., None] * col[None, None, :]
+    # A few lone long streaks in the open lanes.
+    for (ax, ay, bx, by) in [(-32.0, -16.5, -24.0, -16.8), (24.5, 16.8, 32.0, 16.5),
+                             (-6.0, -19.5, 1.0, -19.2), (5.0, 19.4, 12.0, 19.6)]:
+        d, s = dist_and_arclen(lx, lz, ax, ay, bx, by)
+        seg = math.hypot(bx - ax, by - ay)
+        lat = np.clip((0.06 + 0.05 - d) / 0.05, 0.0, 1.0)
+        taper = np.clip(1.0 - np.abs(2.0 * (s / seg) - 1.0), 0.0, 1.0) ** 0.7
+        emi += (0.8 * lat * taper)[..., None] * streak_cold[None, None, :]
     # ---- Wear: a few soft dark stains so the floor reads used.
     for _ in range(14):
         sx = rng.uniform(-HALF_X + 2, HALF_X - 2)
@@ -275,6 +315,11 @@ def make_paved():
     print("  texture %s: %s (%d bytes) mean RGB (%.3f, %.3f, %.3f)"
           % (TEXTURE_FILE, TEXTURE_PATH, os.path.getsize(TEXTURE_PATH),
              arr[..., 0].mean(), arr[..., 1].mean(), arr[..., 2].mean()))
+    emi = np.clip(emi, 0.0, 1.0)
+    write_png(EMISSION_PATH, emi)
+    print("  emission %s: %s (%d bytes) mean RGB (%.3f, %.3f, %.3f)"
+          % (EMISSION_FILE, EMISSION_PATH, os.path.getsize(EMISSION_PATH),
+             emi[..., 0].mean(), emi[..., 1].mean(), emi[..., 2].mean()))
     # ---- Normal map from the heightmap. Central differences with
     # np.roll (toroidal wrap). The texture does not tile, so the wrap
     # is only wrong on the 1-px border at the walls — negligible.
