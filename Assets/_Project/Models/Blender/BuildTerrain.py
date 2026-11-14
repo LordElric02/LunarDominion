@@ -8,7 +8,8 @@
 #
 # WHAT IT GENERATES (next to this script):
 #   TerrainMesh.fbx — a single heightfield mesh covering the
-#     full 56x48 ground (x +-28, z +-24 in Unity coords).
+#     full 132x132 ground (x/z +-66 in Unity coords; was 56x48
+#     before the 2026-11-13 base redesign).
 #
 # HEIGHT DESIGN (Unity coords: x horizontal, z depth, y up).
 # AXIS CONVENTION (confirmed by parsing the exported FBX):
@@ -26,9 +27,9 @@
 #   * FLAT (height 0) everywhere inside the wall, so the
 #     buildings, roads, props and debris sit level exactly
 #     as they do now. The wall is a rotated rectangle
-#     (local x +-10.5, z +-6.5, rotated 45 deg); in world
-#     coords a point is inside when |x+z| <= 9.19 AND
-#     |x-z| <= 14.85.
+#     (local x +-36, z +-22 since 2026-11-13, rotated 45 deg);
+#     in world coords a point is inside when |x+z| <= 31.1127
+#     AND |x-z| <= 50.9117.
 #   * GENTLE rolling dunes OUTSIDE the wall only: three low
 #     sinusoids (wavelengths ~6-12 units, total amplitude
 #     ~0.85), ramping up smoothly from the wall line
@@ -42,12 +43,12 @@
 #     overall is ~1.95 (dunes + mountain rise), inside the
 #     0.5-2.0 spec.
 #   * FLAT PADS under the decor that sits outside the wall:
-#     the 8 outer rocks and 4 outer debris placements are
-#     placed by the code at y 0, and road E1 runs along the
-#     wall line — if the terrain rose under them they would
-#     be buried. So the height is forced to 0 (smoothly,
-#     over a 2-unit blend) in a disc around each outer rock
-#     / debris pile and in a corridor along E1. The pads are
+#     the 8 outer rocks are placed by the code at y 0 — if
+#     the terrain rose under them they would be buried. So
+#     the height is forced to 0 (smoothly, over a 2-unit
+#     blend) in a disc around each outer rock. (All current
+#     debris placements sit inside the redesigned wall, on
+#     the flat interior, so they need no pads.) The pads are
 #     small clearings; the dunes flow around them. The
 #     mountains need no pads: their bases are meant to be
 #     partly buried (they rise 5.5-8 units, so they still
@@ -56,9 +57,9 @@
 #     the ground plane), so nothing floats and there is no
 #     gap under the wall or the mountain bases.
 #
-# UVs: planar, u = (x+28)/56, v = (z+24)/48, so the regolith
-# texture tiles exactly as it does on the flat plane (the
-# code sets the same 8x7 tiling). The material references
+# UVs: planar, u = (x+66)/132, v = (z+66)/132, so the regolith
+# texture tiles exactly as on the flat plane (the
+# code sets the same 19x19 tiling). The material references
 # GroundRegolith.png BY NAME ONLY (path_mode STRIP on
 # export, so the texture is NOT copied into this folder):
 # the PNG lives in Resources/Textures/, and the wiring step
@@ -68,7 +69,7 @@
 # the material works even before the code step.
 #
 # No colliders, no animation, no name dependencies. Grid
-# 56x48 cells (57x49 vertices, 5376 tris), 1-unit spacing —
+# 132x132 cells (133x133 vertices, 34848 tris), 1-unit spacing —
 # plenty for gentle dunes (6+ samples per wavelength).
 #
 # How to run (headless, no Blender UI needed):
@@ -121,13 +122,16 @@ def find_texture():
     return None
 
 # --- ground / wall geometry (Unity coords) ---
-HALF_X = 28.0
-HALF_Z = 24.0
-# Wall (rotated rectangle): inside when |x+z| <= 19.09 and |x-z| <= 33.94.
-# 2026-11-09 expanded base: wall x +-24, z +-13.5 (was x +-10.5, z +-6.5).
-WALL_SUM = 19.09   # local z +-13.5 * sqrt(2)
-WALL_DIFF = 33.94  # local x +-24 * sqrt(2)
-RAMP_DIST = 3.0    # smoothstep ramp from the wall line to full height
+HALF_X = 66.0
+HALF_Z = 66.0
+# Wall (rotated rectangle): inside when |x+z| <= 31.1127 and |x-z| <= 50.9117.
+# 2026-11-13 redesigned base: wall x +-36, z +-22 (was x +-24, z +-13.5).
+WALL_SUM = 31.1127   # local z +-22 * sqrt(2)
+WALL_DIFF = 50.9117  # local x +-36 * sqrt(2)
+RAMP_DIST = 5.0    # smoothstep ramp from the wall line to full height
+# (3.0 until 2026-11-13; widened with the bigger compound so the
+# dunes + mountain rise stay below the 0.8 wall top within 2 units
+# of the wall, where the rotated corners reach into the rise band)
 EDGE_TAPER = 2.0   # taper to 0 at the ground edges over this many units
 PAD_BLEND = 2.0    # flat-pad blend distance
 
@@ -140,41 +144,44 @@ DUNES = (
 )
 MOUNTAIN_RISE = 1.10  # broad rise toward the far -X / -Z mountain lines
 
-# --- layout data (world space, copied from BuildRoadsAndProps.py) ---
-# 2026-11-09 expanded base: buildings at 2.5x spread; Nexus pad radius
-# 1.75 (the Nexus model is scaled 1.75x in BaseView).
+# --- layout data (world space) ---
+# 2026-11-13 redesigned base: world = layout rotated 45 deg,
+# world x = (lx + lz) / sqrt(2), world z = (lz - lx) / sqrt(2).
+# Nexus pad radius 1.75 (the Nexus model is scaled 1.75x in
+# BaseView).
 BUILDINGS = [
     ("Nexus", 0.0, 0.0, 1.75),
-    ("Hydroponics", -4.42, 13.61, 1.0),
-    ("Alloy", 13.61, -4.42, 1.0),
-    ("Helium-3", 7.25, 7.25, 1.0),
-    ("Marine", -13.61, 4.42, 1.0),
-    ("Nova", 4.42, -13.61, 1.0),
-    ("Aegis", -7.25, -7.25, 1.0),
-    ("Lab", -14.68, 14.68, 1.1),
-    # Hospital (2026-11-09): layout (20.75, 0) -> world (14.68, -14.68).
-    ("Hospital", 14.68, -14.68, 1.1),
+    ("Hydroponics", -4.95, 24.75, 1.0),
+    ("Alloy", 24.75, -4.95, 1.0),
+    ("Helium-3", 11.31, 11.31, 1.0),
+    ("Marine", -24.75, 4.95, 1.0),
+    ("Nova", 4.95, -24.75, 1.0),
+    ("Aegis", -11.31, -11.31, 1.0),
+    ("Lab", -21.21, 21.21, 1.1),
+    ("Hospital", 21.21, -21.21, 1.1),
 ]
-# Rocks (world, radius ~0.25) — only the 8 outside the wall need pads.
+# Rocks (world, radius ~0.25) — the 8 BaseView rocks that sit
+# outside the wall (world conversions of their layout spots);
+# only these need pads.
 ROCKS = [
-    (2.47, 5.30), (-2.12, -5.66), (0.0, 22.63), (22.63, -11.31),
-    (19.80, 2.83), (18.38, -15.56), (18.38, 7.07), (21.21, -1.41),
-    (24.04, -7.07), (25.46, -2.83),
+    (35.36, -21.21), (32.53, 4.24), (36.06, -2.12), (41.01, -12.73),
+    (43.13, -4.95), (30.41, 12.02), (0.0, 38.18), (31.11, -26.87),
 ]
-# Debris placements (world, radius ~0.5) — only the 4 outside need pads.
+# Debris placements (world, radius ~0.5) — all inside the
+# redesigned wall, so the pad loop skips them; kept in sync with
+# BaseView.AddDebris.
 DEBRIS = [
     (0.0, -7.5), (-7.5, 0.0), (7.5, 0.0), (-0.5, 7.5),
-    (14.0, -10.0), (-14.0, 18.0), (20.0, 8.0), (16.0, -12.0),
+    (14.0, -10.0), (-14.0, 20.0), (20.0, 8.0), (13.0, -9.0),
 ]
-# Road E1 centreline (world): runs along the near wall edge.
-E1 = ((4.04, 5.16), (6.86, 2.34))
-E1_HALF_WIDTH = 0.9
-# Mountains (world) — the terrain rises toward these lines.
+# Mountains (world) — the terrain rises toward the -X / -Z lines
+# where BaseView rings the horizon models (2026-11-13: ring moved
+# out x2.6 with the wider camera framing).
 MOUNTAINS = [
-    (-22.0, 11.0), (-19.0, 6.0), (-18.0, 0.0), (-19.0, -6.0),
-    (-18.0, -12.0), (-23.0, 2.0), (-12.0, -18.0), (-8.0, -19.0),
-    (-4.0, -18.0), (0.0, -18.5), (4.0, -18.0), (7.5, -18.5),
-    (11.0, -19.0),
+    (-60.0, 26.0), (-55.0, 39.0), (-52.0, 13.0), (-55.0, -10.0),
+    (-49.0, -34.0), (-36.0, -52.0), (-13.0, -60.0), (13.0, -60.0),
+    (34.0, -52.0), (49.0, -42.0), (60.0, -21.0), (62.0, 3.0),
+    (-44.0, 42.0),
 ]
 
 
@@ -212,13 +219,15 @@ def height_at(x, z):
         dunes = dunes + amp * np.sin(
             2.0 * math.pi * (fx * x + fz * z) + ph)
     # Broad rise toward the far -X / -Z mountain lines.
-    rise_x = smoothstep((-x - 14.0) / 6.0)
-    rise_z = smoothstep((-z - 14.0) / 6.0)
+    rise_x = smoothstep((-x - 36.0) / 12.0)
+    rise_z = smoothstep((-z - 36.0) / 12.0)
     mountain = MOUNTAIN_RISE * np.maximum(rise_x, rise_z)
     h = ramp * edge * (dunes + mountain)
     h = np.maximum(0.0, h)
-    # Flat pads under the outer decor and the E1 road corridor,
-    # so nothing placed at y 0 gets buried.
+    # Flat pads under the outer decor, so nothing placed at
+    # y 0 gets buried. (The old E1 road-corridor pad went with
+    # the road system removed in 2026-11; the 2026-11-13 roads
+    # are painted inside the flat wall interior.)
     mask = np.ones_like(x)
     for (px, pz) in ROCKS + DEBRIS:
         if inside_wall(np.array([px]), np.array([pz]))[0]:
@@ -226,13 +235,6 @@ def height_at(x, z):
         r = 1.0 if (px, pz) in ROCKS else 1.2
         d = np.sqrt((x - px) ** 2 + (z - pz) ** 2)
         mask = np.minimum(mask, smoothstep((d - r) / PAD_BLEND))
-    (ax, az), (bx, bz) = E1
-    dx, dz = bx - ax, bz - az
-    seg_len2 = dx * dx + dz * dz
-    t = np.clip(((x - ax) * dx + (z - az) * dz) / seg_len2, 0.0, 1.0)
-    d_seg = np.sqrt((x - (ax + t * dx)) ** 2 + (z - (az + t * dz)) ** 2)
-    mask = np.minimum(
-        mask, smoothstep((d_seg - E1_HALF_WIDTH) / PAD_BLEND))
     return h * mask
 
 
@@ -248,12 +250,12 @@ def clear_scene():
 
 
 def build_terrain():
-    """Build the 56x48-cell heightfield mesh. Blender coords:
+    """Build the 132x132-cell heightfield mesh. Blender coords:
     (x, y, z) = (Unity x, -Unity z, Unity y) — see the axis
     note at the top of the file. Rows are emitted in reverse
     Unity-z order so Blender y increases with the row and the
     standard (a,b,c,d) winding keeps the normals up."""
-    nx, nz = 56, 48  # cells
+    nx, nz = 132, 132  # cells
     xs = np.linspace(-HALF_X, HALF_X, nx + 1)
     zs = np.linspace(-HALF_Z, HALF_Z, nz + 1)  # Unity z, increasing
     gx, gz = np.meshgrid(xs, zs)  # gz rows = z, gx cols = x
@@ -279,7 +281,7 @@ def build_terrain():
     mesh = bpy.data.meshes.new("TerrainMesh")
     mesh.from_pydata(verts, [], faces)
     mesh.update()
-    # Planar UVs spanning 0-1 across the 56x48 (from the Unity
+    # Planar UVs spanning 0-1 across the 132x132 (from the Unity
     # coords, so the regolith texture tiles exactly as on the
     # flat plane — NOT from the Blender y, which is -Unity z).
     uv_layer = mesh.uv_layers.new(name="UVMap")
@@ -355,12 +357,12 @@ def report(obj, mesh, h):
     # rise is toward Unity -Z, i.e. Blender +Y, so the mean height
     # at Blender y >= 17 must clearly exceed Blender y <= -17
     # (both at Blender x >= 10, where only the -Z rise applies).
-    far = [p for p in pts if p.x >= 10.0 and p.y >= 17.0]
-    near = [p for p in pts if p.x >= 10.0 and p.y <= -17.0]
+    far = [p for p in pts if p.x >= 25.0 and p.y >= 40.0]
+    near = [p for p in pts if p.x >= 25.0 and p.y <= -40.0]
     mf = sum(p.z for p in far) / len(far)
     mn = sum(p.z for p in near) / len(near)
-    print("  orientation: mean height Blender y>=17 (Unity -Z) %.3f "
-          "vs y<=-17 (Unity +Z) %.3f — %s"
+    print("  orientation: mean height Blender y>=40 (Unity -Z) %.3f "
+          "vs y<=-40 (Unity +Z) %.3f — %s"
           % (mf, mn, "OK, rise toward Unity -Z"
              if mf > mn + 0.3 else "FAIL, mirrored?"))
     path = os.path.join(SCRIPT_DIR, "TerrainMesh.fbx")
@@ -369,9 +371,9 @@ def report(obj, mesh, h):
 
 
 def verify(h):
-    """Numerical checks on the height grid (57x49, x -28..28, z -24..24)."""
-    xs = np.linspace(-HALF_X, HALF_X, 57)
-    zs = np.linspace(-HALF_Z, HALF_Z, 49)
+    """Numerical checks on the height grid (133x133, x/z -66..66)."""
+    xs = np.linspace(-HALF_X, HALF_X, 133)
+    zs = np.linspace(-HALF_Z, HALF_Z, 133)
     gx, gz = np.meshgrid(xs, zs)
     ok = True
 
@@ -393,15 +395,15 @@ def verify(h):
         check(float(np.abs(vals).max()) < 1e-9,
               "flat at %s footprint (max |h| %.2e)" % (name, float(np.abs(vals).max())))
     # 2. Flat along the wall line (sampled every 1 unit on all 4 edges).
-    # 2026-11-09 expanded base: wall x +-24, z +-13.5 (was +-10.5, +-6.5).
+    # 2026-11-13 redesigned base: wall x +-36, z +-22.
     wall_pts = []
-    for t in np.linspace(-24.0, 24.0, 49):
-        # local (t, +-13.5) -> world ((t+lz)*0.707, (-t+lz)*0.707)
-        for lz in (-13.5, 13.5):
+    for t in np.linspace(-36.0, 36.0, 73):
+        # local (t, +-22) -> world ((t+lz)*0.707, (-t+lz)*0.707)
+        for lz in (-22.0, 22.0):
             wall_pts.append(((t + lz) * math.sqrt(0.5),
                              (-t + lz) * math.sqrt(0.5)))
-    for t in np.linspace(-13.5, 13.5, 28):
-        for lx in (-24.0, 24.0):
+    for t in np.linspace(-22.0, 22.0, 45):
+        for lx in (-36.0, 36.0):
             wall_pts.append(((lx + t) * math.sqrt(0.5),
                              (-lx + t) * math.sqrt(0.5)))
     vals = height_at(np.array([p[0] for p in wall_pts]),
@@ -430,21 +432,15 @@ def verify(h):
           and float(h[:, 0].max()) == 0.0 and float(h[:, -1].max()) == 0.0,
           "edges at height 0 (no cliff at the frame)")
     check(abs(float(h.min())) < 1e-9, "no dips below 0 (min %.3f)" % float(h.min()))
-    # 5. Flat pads: h = 0 at every outer rock / debris centre and
-    #    along the E1 centreline.
+    # 5. Flat pads: h = 0 at every outer rock / debris centre.
     for (px, pz) in ROCKS + DEBRIS:
         if inside_wall(np.array([px]), np.array([pz]))[0]:
             continue
         v = float(height_at(np.array([px]), np.array([pz]))[0])
         check(v == 0.0, "flat pad at (%s, %s) h=%.3f" % (px, pz, v))
-    for t in np.linspace(0.0, 1.0, 9):
-        px = E1[0][0] + t * (E1[1][0] - E1[0][0])
-        pz = E1[0][1] + t * (E1[1][1] - E1[0][1])
-        v = float(height_at(np.array([px]), np.array([pz]))[0])
-        check(v == 0.0, "flat corridor on E1 at t=%.2f h=%.3f" % (t, v))
     # 6. Terrain rises toward the mountains (mean height in the
     #    mountain band is well above the outer-band mean).
-    band = (np.abs(gx) >= 17.0) | (gz <= -17.0)
+    band = (np.abs(gx) >= 40.0) | (gz <= -40.0)
     band &= outside
     outer = outside & ~band
     check(float(h[band].mean()) > float(h[outer].mean()),
@@ -461,5 +457,5 @@ if __name__ == "__main__":
     path = os.path.join(SCRIPT_DIR, "TerrainMesh.fbx")
     export_fbx(obj, path)
     report(obj, mesh, h)
-    print("Verification (height grid 57x49):")
+    print("Verification (height grid 133x133):")
     verify(h)

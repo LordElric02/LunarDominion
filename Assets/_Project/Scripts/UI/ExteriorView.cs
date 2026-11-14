@@ -23,8 +23,8 @@ namespace LunarDominion.UI
     /// <summary>Structured data for one tappable map point — the display
     /// strings plus what the excursion rules need (kind, tier, amount,
     /// position, and the index into the node/camp lists). Nodes are
-    /// indices 0-8 (in NodeDefs order); the boss lair is 12; enemy
-    /// camps are the 15 camp slots at indices 100-114 (camp field,
+    /// indices 0-17 (in NodeDefs order); the boss lair is 21; enemy
+    /// camps are the 36 camp slots at indices 100-135 (camp field,
     /// 2026-11-10) whose tier is set dynamically per spawn.</summary>
     public class MapPointData
     {
@@ -38,7 +38,7 @@ namespace LunarDominion.UI
     }
 
     /// <summary>Exterior map view (Phase 1 of the exterior base mode).
-    /// A large sculpted terrain (560x480 — 4x the area of the original
+    /// A large sculpted terrain (1120x960 — 16x the area of the original
     /// 280x240 map, doubled 2026-11-12) with a sci-fi
     /// castle standing in for the base (like the castle on the world
     /// map in Age of Empires Mobile), plus resource nodes and enemy
@@ -76,7 +76,6 @@ namespace LunarDominion.UI
         // exterior framing is unchanged since the original map —
         // the 2026-11-12 enlargement keeps this camera and the
         // player pans across the bigger map (see PanLimitX/Z).
-        private static readonly Vector3 BaseCameraPosition = new Vector3(10f, 16f, 10f);
         private static readonly Vector3 ExteriorCameraPosition = new Vector3(50f, 80f, 50f);
 
         private GameObject _terrain;
@@ -165,11 +164,11 @@ namespace LunarDominion.UI
         // PC, touch/mouse drag on the phone (and in the Editor). The
         // pan offset moves both the camera position and its look-at
         // point, so the 48.5-degree pitch never changes. Clamped so the
-        // view stays on the 560x480 map.
+        // view stays on the 1120x960 map.
         private Vector3 _panOffset = Vector3.zero;
         private static readonly float PanSpeed = 40f; // units/second, arrow keys
-        private static readonly float PanLimitX = 200f;
-        private static readonly float PanLimitZ = 180f;
+        private static readonly float PanLimitX = 480f;
+        private static readonly float PanLimitZ = 420f;
         private static readonly float DragTapThresholdPx = 15f; // below this, a press is a tap, not a drag
 
         // Drag state: a press that moves past the threshold becomes a
@@ -186,63 +185,80 @@ namespace LunarDominion.UI
         private static readonly Vector3 CamRight = new Vector3(0.7071f, 0f, -0.7071f);
         private static readonly Vector3 CamGroundForward = new Vector3(-0.7071f, 0f, -0.7071f);
 
-        // First-iteration layout (Patrick 2026-11-09): 3 nodes per
-        // resource (one 500, one 1000, one 2000 — farther nodes hold
-        // more), and 1 enemy camp per Expedition tier (Tier 1 near the
-        // base, Tier 2 mid-range, Tier 3 far out). Positions are world
-        // coords on the 560x480 map (x ±280, z ±240; doubled from the
-        // original layout 2026-11-12), all outside the
-        // central 56x48 base footprint. Node indices 0-8 are the
-        // depletion state indices (GameState.NodeRegenUtc); camps are
-        // 9-11 and never deplete.
+        // Layout: 18 resource nodes (indices 0-17 = the depletion
+        // state indices, GameState.NodeRegenUtc), then the 3 legacy
+        // camp records (18-20, layout record only - the camp field
+        // below is the live system), then the boss lair (21).
+        // Amounts grow with distance: 500/1000/2000 in the home
+        // region, 3500/5000/8000 in the far field (2026-11-14: the
+        // map quadrupled to 1120x960 for the higher-tier grind -
+        // original positions doubled, far nodes appended so old
+        // indices 0-8 keep their meaning in existing saves).
         private struct NodeDef
         {
             public string ResourcePath; // Resources/Models/<name>
             public MapPointKind Kind;
             public int Tier; // camps only (1-3)
-            public int Amount; // nodes only (500/1000/2000)
+            public int Amount; // nodes only
             public string Title;
             public string Info;
             public Vector3 Position;
         }
         private static readonly NodeDef[] NodeDefs =
         {
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 500, Title = "Biomass Node", Info = "Biomass: 500", Position = new Vector3(70f, 0f, 50f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 1000, Title = "Biomass Node", Info = "Biomass: 1000", Position = new Vector3(-110f, 0f, 90f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 2000, Title = "Biomass Node", Info = "Biomass: 2000", Position = new Vector3(190f, 0f, -110f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 500, Title = "Alloy Node", Info = "Alloy: 500", Position = new Vector3(-60f, 0f, -70f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 1000, Title = "Alloy Node", Info = "Alloy: 1000", Position = new Vector3(130f, 0f, 110f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 2000, Title = "Alloy Node", Info = "Alloy: 2000", Position = new Vector3(-210f, 0f, -130f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 500, Title = "Helium-3 Node", Info = "Helium-3: 500", Position = new Vector3(90f, 0f, -80f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 1000, Title = "Helium-3 Node", Info = "Helium-3: 1000", Position = new Vector3(-140f, 0f, -40f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 2000, Title = "Helium-3 Node", Info = "Helium-3: 2000", Position = new Vector3(220f, 0f, 150f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(110f, 0f, 30f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-170f, 0f, 120f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(240f, 0f, -160f) },
-            // Boss lair (2026-11-09): the War Robot lives here, far
-            // southwest corner of the map. Index 12. The lair does not
-            // move on respawn (unlike camps) — it is a fixed place.
-            new NodeDef { ResourcePath = "Models/BossLair", Kind = MapPointKind.BossLair, Title = "War Robot Lair", Info = "BOSS — War Robot\nGiant Mechanized enemy\nUnlocks at Nexus 10", Position = new Vector3(-240f, 0f, -200f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 500, Title = "Biomass Node", Info = "Biomass: 500", Position = new Vector3(140f, 0f, 100f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 1000, Title = "Biomass Node", Info = "Biomass: 1000", Position = new Vector3(-220f, 0f, 180f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 2000, Title = "Biomass Node", Info = "Biomass: 2000", Position = new Vector3(380f, 0f, -220f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 500, Title = "Alloy Node", Info = "Alloy: 500", Position = new Vector3(-120f, 0f, -140f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 1000, Title = "Alloy Node", Info = "Alloy: 1000", Position = new Vector3(260f, 0f, 220f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 2000, Title = "Alloy Node", Info = "Alloy: 2000", Position = new Vector3(-420f, 0f, -260f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 500, Title = "Helium-3 Node", Info = "Helium-3: 500", Position = new Vector3(180f, 0f, -160f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 1000, Title = "Helium-3 Node", Info = "Helium-3: 1000", Position = new Vector3(-280f, 0f, -80f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 2000, Title = "Helium-3 Node", Info = "Helium-3: 2000", Position = new Vector3(440f, 0f, 300f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 3500, Title = "Biomass Node", Info = "Biomass: 3500", Position = new Vector3(-380f, 0f, 320f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 5000, Title = "Biomass Node", Info = "Biomass: 5000", Position = new Vector3(300f, 0f, 380f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 8000, Title = "Biomass Node", Info = "Biomass: 8000", Position = new Vector3(-180f, 0f, -420f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 3500, Title = "Alloy Node", Info = "Alloy: 3500", Position = new Vector3(480f, 0f, -60f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 5000, Title = "Alloy Node", Info = "Alloy: 5000", Position = new Vector3(-480f, 0f, 60f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 8000, Title = "Alloy Node", Info = "Alloy: 8000", Position = new Vector3(120f, 0f, 430f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 3500, Title = "Helium-3 Node", Info = "Helium-3: 3500", Position = new Vector3(-460f, 0f, -340f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 5000, Title = "Helium-3 Node", Info = "Helium-3: 5000", Position = new Vector3(500f, 0f, 240f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 8000, Title = "Helium-3 Node", Info = "Helium-3: 8000", Position = new Vector3(60f, 0f, -440f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT1", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 \u2014 Spore Crawlers\nExpedition enemy", Position = new Vector3(220f, 0f, 60f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT2", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 \u2014 Void Stalkers\nExpedition enemy", Position = new Vector3(-340f, 0f, 240f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT3", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 \u2014 Brood Tyrant\nExpedition enemy", Position = new Vector3(480f, 0f, -320f) },
+            // Boss lair: the War Robot lives here, far southwest
+            // corner of the map. Index 21. The lair does not move
+            // on respawn (unlike camps) - it is a fixed place.
+            new NodeDef { ResourcePath = "Models/BossLair", Kind = MapPointKind.BossLair, Title = "War Robot Lair", Info = "BOSS \u2014 War Robot\nGiant Mechanized enemy\nUnlocks at Nexus 10", Position = new Vector3(-480f, 0f, -400f) },
         };
 
         // Enemy camp field (2026-11-10, replaces the 3 fixed camps and
-        // their respawn spots): 15 camp slots spread across the map in
+        // their respawn spots): 36 camp slots spread across the map in
         // rings — near, mid, and far corners — all clear of the base,
         // the resource nodes, the boss lair, and each other. A slot's
         // camp tier is dynamic (rolled per spawn by MapExcursionService,
-        // weighted by Nexus level), so a slot shows the EnemyCamp
-        // marker plus the creature group for its CURRENT tier, built
-        // on demand. Slot points carry Index = CampSlotIndexBase + slot
-        // so they never collide with node (0-8) or lair (12) indices.
-        public const int CampSlotCount = 15;
+        // weighted by Nexus level), so a slot shows the one standout
+        // structure for its CURRENT tier, swapped in on demand (the
+        // creature figures that used to ring the camps were removed
+        // 2026-11-14). Slot points carry Index = CampSlotIndexBase + slot
+        // so they never collide with node (0-17) or lair (21) indices.
+        public const int CampSlotCount = 36;
         public const int CampSlotIndexBase = 100;
         private static readonly Vector3[] CampSlotPositions =
         {
-            new Vector3(110f, 0f, 30f), new Vector3(-80f, 0f, 160f), new Vector3(200f, 0f, 80f),
-            new Vector3(-170f, 0f, 120f), new Vector3(40f, 0f, -180f), new Vector3(-240f, 0f, -20f),
-            new Vector3(240f, 0f, -160f), new Vector3(0f, 0f, 200f), new Vector3(120f, 0f, -200f),
-            new Vector3(170f, 0f, 20f), new Vector3(-190f, 0f, 30f), new Vector3(30f, 0f, 120f),
-            new Vector3(-30f, 0f, -190f), new Vector3(250f, 0f, 60f), new Vector3(-120f, 0f, -170f),
+            new Vector3(220f, 0f, 60f), new Vector3(-160f, 0f, 320f), new Vector3(400f, 0f, 160f),
+            new Vector3(-340f, 0f, 240f), new Vector3(80f, 0f, -360f), new Vector3(-480f, 0f, -40f),
+            new Vector3(480f, 0f, -320f), new Vector3(0f, 0f, 400f), new Vector3(240f, 0f, -400f),
+            new Vector3(340f, 0f, 40f), new Vector3(-380f, 0f, 60f), new Vector3(60f, 0f, 240f),
+            new Vector3(-60f, 0f, -380f), new Vector3(500f, 0f, 120f), new Vector3(-240f, 0f, -340f),
+            new Vector3(150f, 0f, -60f), new Vector3(-150f, 0f, -220f), new Vector3(-260f, 0f, 20f),
+            new Vector3(90f, 0f, 300f), new Vector3(-320f, 0f, -180f), new Vector3(420f, 0f, -380f),
+            new Vector3(-440f, 0f, 380f), new Vector3(520f, 0f, 340f), new Vector3(200f, 0f, -260f),
+            new Vector3(-80f, 0f, 120f), new Vector3(-400f, 0f, -420f), new Vector3(-180f, 0f, 430f),
+            new Vector3(500f, 0f, 430f), new Vector3(280f, 0f, -80f), new Vector3(-520f, 0f, -180f),
+            new Vector3(40f, 0f, -160f), new Vector3(-40f, 0f, 260f), new Vector3(430f, 0f, 60f),
+            new Vector3(-520f, 0f, 200f), new Vector3(170f, 0f, 190f), new Vector3(-300f, 0f, -450f),
         };
         // What each slot currently shows: the tier built (0 = empty)
         // and whether it should be visible (the service owns the state;
@@ -251,43 +267,21 @@ namespace LunarDominion.UI
         private readonly int[] _campSlotTier = new int[CampSlotCount];
         private readonly bool[] _campSlotVisible = new bool[CampSlotCount];
         private readonly MapPoint[] _campSlotMarkers = new MapPoint[CampSlotCount];
-        private readonly List<MapPoint>[] _campSlotCreatures = new List<MapPoint>[CampSlotCount];
+        private readonly GameObject[] _campSlotStructures = new GameObject[CampSlotCount];
 
-        // Creature layout per camp tier, as offsets from the slot
-        // position (the same relative layouts the 3 fixed camps used):
-        // Tier 1 = 4 Spore Crawlers, Tier 2 = 5 Void Stalkers,
-        // Tier 3 = the Brood Tyrant (2x) + 3 brood (1x).
-        private struct SlotCreatureDef
+        // One standout structure per camp tier (2026-11-14: the
+        // creature figures that used to ring each camp are gone -
+        // Patrick: "just one structure that stands out"). Loaded
+        // once in BuildCampSlots; SetCampSlot swaps the slot's
+        // child to the current tier's model.
+        private static readonly string[] CampStructurePaths =
         {
-            public string ResourcePath;
-            public Vector3 Offset;
-            public float Scale;
-        }
-        private static readonly SlotCreatureDef[][] CampCreatureTemplates =
-        {
-            new SlotCreatureDef[]
-            {
-                new SlotCreatureDef { ResourcePath = "Models/SporeCrawler", Offset = new Vector3(12f, 0f, 8f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/SporeCrawler", Offset = new Vector3(-12f, 0f, 10f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/SporeCrawler", Offset = new Vector3(10f, 0f, -12f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/SporeCrawler", Offset = new Vector3(-10f, 0f, -10f), Scale = 2f },
-            },
-            new SlotCreatureDef[]
-            {
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(14f, 0f, 10f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(-14f, 0f, 8f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(12f, 0f, -12f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(-12f, 0f, -10f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(0f, 0f, 16f), Scale = 2f },
-            },
-            new SlotCreatureDef[]
-            {
-                new SlotCreatureDef { ResourcePath = "Models/BroodTyrant", Offset = new Vector3(16f, 0f, 0f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/BroodTyrant", Offset = new Vector3(-14f, 0f, 12f), Scale = 1f },
-                new SlotCreatureDef { ResourcePath = "Models/BroodTyrant", Offset = new Vector3(-14f, 0f, -12f), Scale = 1f },
-                new SlotCreatureDef { ResourcePath = "Models/BroodTyrant", Offset = new Vector3(4f, 0f, 18f), Scale = 1f },
-            },
+            null, // tier 0 = empty slot, no structure
+            "Models/EnemyCampT1",
+            "Models/EnemyCampT2",
+            "Models/EnemyCampT3",
         };
+        private readonly GameObject[] _campPrefabs = new GameObject[4];
 
         // Sculpted terrain height (2026-11-12, map revisit Phase 1):
         // the ExteriorTerrainV2 mesh is an analytic heightfield
@@ -300,29 +294,64 @@ namespace LunarDominion.UI
         // itself sits at y -0.05 (see Build()).
         private static readonly float[,] TerrainHighlands =
         {
-            { -190f, 150f, 3.9f, 55f },
-            { 205f, -160f, 3.3f, 48f },
-            { 150f, 170f, 2.7f, 42f },
+            { -380f, 300f, 3.9f, 88f },
+            { 410f, -320f, 3.3f, 77f },
+            { 300f, 340f, 2.7f, 67f },
+            { -120f, -300f, 3.0f, 70f },
+            { 60f, 180f, 2.4f, 60f },
         };
-        // (cx, cz, radius, depth, rim height)
+        // (cx, cz, radius, depth, rim height, type) — types mirror
+        // BuildExteriorTerrainV4.py: 0 simple (legacy profile),
+        // 1 complex (flat floor, central peak, terraced walls),
+        // 2 degraded (shallow, soft, wide worn rim), 3 fresh
+        // (deeper, crisp rim; ejecta/rays are tint-only). The old
+        // (40,-40) crater is now a 5-pit secondary chain.
         private static readonly float[,] TerrainCraters =
         {
-            { -60f, -120f, 22f, 5.0f, 3.2f },
-            { 60f, 130f, 18f, 4.0f, 2.6f },
-            { 150f, -60f, 14f, 3.2f, 2.1f },
-            { -160f, -90f, 16f, 3.5f, 2.2f },
-            { 230f, 120f, 20f, 4.5f, 2.9f },
-            { -230f, 90f, 15f, 3.4f, 2.2f },
-            { 90f, -150f, 12f, 2.7f, 1.8f },
-            { -40f, 40f, 11f, 2.4f, 1.6f },
-            { 180f, 190f, 16f, 3.5f, 2.2f },
-            { -110f, -180f, 19f, 4.3f, 2.7f },
-            { 40f, -40f, 9f, 2.1f, 1.3f },
-            { 260f, -40f, 13f, 2.9f, 1.9f },
-            { -260f, -140f, 17f, 3.8f, 2.4f },
-            { 120f, 60f, 10f, 2.2f, 1.4f },
-            { -190f, 190f, 14f, 3.2f, 2.1f },
-            { 10f, -110f, 13f, 2.9f, 1.9f },
+{ -120f, -240f, 27.5f, 5.0f, 3.2f, 1f },
+            { 120f, 260f, 22.5f, 4.0f, 2.6f, 3f },
+            { 300f, -120f, 17.5f, 3.2f, 2.1f, 0f },
+            { -320f, -180f, 20.0f, 3.5f, 2.2f, 2f },
+            { 460f, 240f, 25.0f, 4.5f, 2.9f, 1f },
+            { -460f, 180f, 18.8f, 3.4f, 2.2f, 0f },
+            { 180f, -300f, 15.0f, 2.7f, 1.8f, 2f },
+            { -80f, 80f, 13.8f, 2.4f, 1.6f, 0f },
+            { 360f, 380f, 20.0f, 3.5f, 2.2f, 3f },
+            { -220f, -360f, 23.8f, 4.3f, 2.7f, 1f },
+            { 56f, -104f, 5.2f, 1.1f, 0.7f, 0f },
+            { 68f, -94f, 6.5f, 1.4f, 0.9f, 0f },
+            { 80f, -84f, 5.8f, 1.2f, 0.8f, 0f },
+            { 92f, -74f, 4.8f, 1.0f, 0.6f, 0f },
+            { 104f, -64f, 4.0f, 0.8f, 0.5f, 0f },
+            { 520f, -80f, 16.2f, 2.9f, 1.9f, 0f },
+            { -520f, -280f, 21.2f, 3.8f, 2.4f, 2f },
+            { 240f, 120f, 12.5f, 2.2f, 1.4f, 0f },
+            { -380f, 380f, 17.5f, 3.2f, 2.1f, 0f },
+            { 20f, -220f, 16.2f, 2.9f, 1.9f, 2f },
+            { 5f, -312f, 9.4f, 1.9f, 1.3f, 3f },
+            { 154f, 34f, 15.0f, 3.0f, 1.8f, 0f },
+            { 345f, 351f, 14.9f, 3.4f, 2.2f, 2f },
+            { -80f, 327f, 11.1f, 2.2f, 1.3f, 0f },
+            { 425f, -302f, 21.1f, 4.2f, 2.8f, 0f },
+            { 316f, -230f, 9.9f, 2.1f, 1.3f, 2f },
+            { -147f, 221f, 20.8f, 5.0f, 3.2f, 1f },
+            { -346f, -6f, 10.9f, 2.4f, 1.6f, 3f },
+            { -246f, 90f, 16.4f, 3.9f, 2.5f, 2f },
+            { 325f, 168f, 19.7f, 4.6f, 3.0f, 0f },
+            { -243f, 265f, 14.6f, 2.8f, 1.8f, 3f },
+            { -375f, -222f, 22.0f, 5.0f, 3.2f, 2f },
+            { -471f, -113f, 15.7f, 3.0f, 2.0f, 0f },
+            { -397f, -11f, 15.8f, 3.6f, 2.3f, 2f },
+            { -126f, -382f, 13.5f, 3.0f, 2.0f, 2f },
+            { -324f, -266f, 12.9f, 3.0f, 1.8f, 3f },
+            { -462f, -278f, 9.8f, 2.0f, 1.2f, 0f },
+            { -108f, -107f, 11.4f, 2.5f, 1.6f, 0f },
+            { 391f, -64f, 15.2f, 3.0f, 2.0f, 0f },
+            { -161f, -117f, 20.1f, 4.0f, 2.6f, 0f },
+            { -378f, 110f, 12.9f, 2.7f, 1.6f, 3f },
+            { -203f, 95f, 22.8f, 4.5f, 2.7f, 2f },
+            { 342f, 323f, 10.3f, 2.1f, 1.4f, 0f },
+            { 118f, 9f, 14.8f, 2.9f, 1.8f, 0f },
         };
         // How high a march marker rides above the terrain surface:
         // the mesh sits at -0.05, and markers historically rode at
@@ -335,9 +364,62 @@ namespace LunarDominion.UI
             return t * t * (3f - 2f * t);
         }
 
+        // One crater's height contribution at q = dist / radius.
+        // Mirrors crater_height in BuildExteriorTerrainV4.py —
+        // keep the math identical (types listed at TerrainCraters).
+        private static float TerrainCraterHeight(float q, float depth, float rim, int ctype)
+        {
+            if (ctype == 1) // complex: flat floor, central peak, terraces
+            {
+                if (q < 1f)
+                {
+                    float peak = 0.38f * depth * Mathf.Exp(-((q / 0.16f) * (q / 0.16f)));
+                    if (q < 0.42f) return -0.92f * depth + peak;
+                    float t = (q - 0.42f) / 0.58f;
+                    return -0.92f * depth * Mathf.Pow(1f - t, 1.35f)
+                        + depth * 0.05f * Mathf.Sin(6f * Mathf.PI * t) * (4f * t * (1f - t))
+                        + peak;
+                }
+                if (q < 1.7f)
+                {
+                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.7f);
+                    return 1.1f * rim * sn * sn;
+                }
+                return 0f;
+            }
+            if (ctype == 2) // degraded: shallow, softened, wide worn rim
+            {
+                if (q < 1f) return -0.45f * depth * Mathf.Pow(0.5f + 0.5f * Mathf.Cos(Mathf.PI * q), 1.3f);
+                if (q < 2.1f)
+                {
+                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 1.1f);
+                    return 0.4f * rim * sn * sn;
+                }
+                return 0f;
+            }
+            if (ctype == 3) // fresh: deeper bowl, crisp narrow rim
+            {
+                if (q < 1f) return -1.12f * depth * (0.5f + 0.5f * Mathf.Cos(Mathf.PI * q));
+                if (q < 1.5f)
+                {
+                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.5f);
+                    return 1.25f * rim * sn * sn;
+                }
+                return 0f;
+            }
+            // simple (0): the legacy profile, unchanged
+            if (q < 1f) return -depth * (0.5f + 0.5f * Mathf.Cos(Mathf.PI * q));
+            if (q < 1.7f)
+            {
+                float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.7f);
+                return rim * sn * sn;
+            }
+            return 0f;
+        }
+
         /// <summary>The sculpted terrain's height at (x, z), in
         /// world units (before the mesh's -0.05 offset). Mirrors
-        /// BuildExteriorTerrainV2.py — change both together.</summary>
+        /// BuildExteriorTerrainV4.py — change both together.</summary>
         public static float TerrainHeight(float x, float z)
         {
             float d = 2.4f * Mathf.Sin(0.021f * x + 1.7f) * Mathf.Sin(0.017f * z - 0.6f)
@@ -354,16 +436,8 @@ namespace LunarDominion.UI
             {
                 float dist = Mathf.Sqrt((x - TerrainCraters[i, 0]) * (x - TerrainCraters[i, 0])
                                       + (z - TerrainCraters[i, 1]) * (z - TerrainCraters[i, 1]));
-                float q = dist / TerrainCraters[i, 2];
-                if (q < 1f)
-                {
-                    d += -TerrainCraters[i, 3] * (0.5f + 0.5f * Mathf.Cos(Mathf.PI * q));
-                }
-                else if (q < 1.7f)
-                {
-                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.7f);
-                    d += TerrainCraters[i, 4] * sn * sn;
-                }
+                d += TerrainCraterHeight(dist / TerrainCraters[i, 2], TerrainCraters[i, 3],
+                    TerrainCraters[i, 4], (int)TerrainCraters[i, 5]);
             }
             float m = 1f;
             // Base disc.
@@ -387,8 +461,8 @@ namespace LunarDominion.UI
                 float dz = z - pos.z;
                 m = Mathf.Min(m, TerrainSmoothstep(21f, 30f, Mathf.Sqrt(dx * dx + dz * dz)));
             }
-            m *= 1f - TerrainSmoothstep(258f, 280f, Mathf.Abs(x));
-            m *= 1f - TerrainSmoothstep(218f, 240f, Mathf.Abs(z));
+            m *= 1f - TerrainSmoothstep(516f, 560f, Mathf.Abs(x));
+            m *= 1f - TerrainSmoothstep(436f, 480f, Mathf.Abs(z));
             return Mathf.Clamp(d * m, -5.2f, 8.0f);
         }
 
@@ -426,52 +500,51 @@ namespace LunarDominion.UI
             };
         }
 
-        // Build the 15 camp slot markers (the EnemyCamp model at each
-        // slot position). Creatures are NOT built here — they depend on
-        // the slot's current tier and are built by SetCampSlot.
+        // Build the 15 camp slot roots (empty GameObjects at the
+        // slot positions, each with a generous tap collider). The
+        // tier structures are NOT built here - they depend on the
+        // slot's current tier and are swapped in by SetCampSlot.
         private void BuildCampSlots()
         {
-            GameObject prefab = null;
-            try
+            for (int tier = 1; tier <= 3; tier++)
             {
-                prefab = Resources.Load<GameObject>("Models/EnemyCamp");
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning("[ExteriorView] Camp marker failed to load (Models/EnemyCamp): " + e.Message);
+                try
+                {
+                    _campPrefabs[tier] = Resources.Load<GameObject>(CampStructurePaths[tier]);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[ExteriorView] Camp structure failed to load (" + CampStructurePaths[tier] + "): " + e.Message);
+                }
+                if (_campPrefabs[tier] == null)
+                {
+                    Debug.LogWarning("[ExteriorView] " + CampStructurePaths[tier] + ".fbx is missing - tier " + tier + " camps will show nothing. Copy the FBX into Assets/_Project/Resources/Models/ (do not rename it).");
+                }
             }
             for (int slot = 0; slot < CampSlotCount; slot++)
             {
-                _campSlotCreatures[slot] = new List<MapPoint>();
                 _campSlotTier[slot] = 0;
                 _campSlotVisible[slot] = false;
-                if (prefab == null) continue;
-                var go = Instantiate(prefab);
-                go.name = "Empty Camp Slot";
+                var go = new GameObject("Empty Camp Slot");
                 go.transform.position = CampSlotPositions[slot];
-                go.transform.localScale = Vector3.one * 2f;
-                if (go.GetComponentInChildren<Collider>() == null)
-                {
-                    var box = go.AddComponent<BoxCollider>();
-                    box.center = new Vector3(0f, 2f, 0f);
-                    box.size = new Vector3(4f, 4f, 4f);
-                }
+                var box = go.AddComponent<BoxCollider>();
+                box.center = new Vector3(0f, 4f, 0f);
+                box.size = new Vector3(14f, 9f, 14f);
                 go.SetActive(false);
-                var renderers = go.GetComponentsInChildren<Renderer>();
-                var colors = new Color[renderers.Length];
-                for (int r = 0; r < renderers.Length; r++) colors[r] = renderers[r].material.color;
-                var point = new MapPoint { Go = go, Data = CampSlotData(slot, 0), Renderers = renderers, OriginalColors = colors };
+                var point = new MapPoint
+                {
+                    Go = go,
+                    Data = CampSlotData(slot, 0),
+                    Renderers = new Renderer[0],
+                    OriginalColors = new Color[0]
+                };
                 _campSlotMarkers[slot] = point;
                 _mapPoints.Add(point);
-            }
-            if (prefab == null)
-            {
-                Debug.LogWarning("[ExteriorView] EnemyCamp.fbx is missing — camp slots will be empty. Copy EnemyCamp.fbx into Assets/_Project/Resources/Models/ (do not rename it).");
             }
         }
 
         /// <summary>Show a camp slot as the given tier (0 = empty):
-        /// rebuilds the slot's creatures for the tier and updates the
+        /// swaps the slot's structure for the tier and updates the
         /// marker's data in place (so a panel already showing this camp
         /// stays correct). No-op when the slot already shows that tier.
         /// Visibility is separate — see SetCampSlotVisible.</summary>
@@ -480,7 +553,7 @@ namespace LunarDominion.UI
             if (slot < 0 || slot >= CampSlotCount) return;
             if (tier < 0 || tier > 3) tier = 0;
             if (_campSlotTier[slot] == tier) return;
-            DestroySlotCreatures(slot);
+            DestroySlotStructure(slot);
             _campSlotTier[slot] = tier;
             var marker = _campSlotMarkers[slot];
             if (marker != null)
@@ -493,11 +566,11 @@ namespace LunarDominion.UI
                 marker.Data.Info = CampInfoForTier(tier);
                 if (marker.Go != null) marker.Go.name = tier > 0 ? CampTitleForTier(tier) : "Empty Camp Slot";
             }
-            if (tier > 0) BuildSlotCreatures(slot, tier);
+            if (tier > 0) BuildSlotStructure(slot, tier);
             ApplySlotVisibility(slot);
         }
 
-        /// <summary>Show or hide a camp slot (marker + creatures). An
+        /// <summary>Show or hide a camp slot (root + structure). An
         /// empty slot is never shown. The actual active state also
         /// respects whether the Map itself is open, so a camp that
         /// respawns while the player is on another tab never pops into
@@ -514,12 +587,6 @@ namespace LunarDominion.UI
             bool active = _visible && _campSlotVisible[slot];
             var marker = _campSlotMarkers[slot];
             if (marker != null && marker.Go != null) marker.Go.SetActive(active);
-            var creatures = _campSlotCreatures[slot];
-            if (creatures == null) return;
-            foreach (var creature in creatures)
-            {
-                if (creature.Go != null) creature.Go.SetActive(active);
-            }
         }
 
         // The creature FBXs are authored around their centres,
@@ -542,61 +609,49 @@ namespace LunarDominion.UI
             }
         }
 
-        private void BuildSlotCreatures(int slot, int tier)
+        // Swap in the tier's structure as the slot root's child
+        // (authored at final size, so scale 1; the imported
+        // rotation is left alone, per the FBX rule) and refresh
+        // the marker's renderer cache so the per-renderer tinting
+        // in Update keeps working with the new model.
+        private void BuildSlotStructure(int slot, int tier)
         {
-            var template = CampCreatureTemplates[tier - 1];
-            string title = CampTitleForTier(tier);
-            foreach (var def in template)
-            {
-                GameObject prefab = null;
-                try
-                {
-                    prefab = Resources.Load<GameObject>(def.ResourcePath);
-                }
-                catch (System.Exception e)
-                {
-                    Debug.LogWarning("[ExteriorView] Creature failed to load (" + def.ResourcePath + "): " + e.Message);
-                }
-                if (prefab == null)
-                {
-                    Debug.LogWarning("[ExteriorView] " + def.ResourcePath + " is missing — that creature will be an empty spot. Copy the FBX into Assets/_Project/Resources/Models/ (do not rename it).");
-                    continue;
-                }
-                var go = Instantiate(prefab);
-                go.name = title + " Creature";
-                go.transform.position = CampSlotPositions[slot] + def.Offset;
-                go.transform.localScale = Vector3.one * def.Scale;
-                GroundSnap(go);
-                if (go.GetComponentInChildren<Collider>() == null)
-                {
-                    var box = go.AddComponent<BoxCollider>();
-                    box.center = new Vector3(0f, 2f, 0f);
-                    box.size = new Vector3(4f, 4f, 4f);
-                }
-                go.SetActive(false);
-                // The creature IS its camp for tapping: it carries the
-                // slot's data (with the CAMP position, so the march
-                // target is the camp, not the creature's offset spot).
-                var point = new MapPoint { Go = go, Data = CampSlotData(slot, tier) };
-                _campSlotCreatures[slot].Add(point);
-                _mapPoints.Add(point);
-            }
+            var marker = _campSlotMarkers[slot];
+            if (marker == null || marker.Go == null) return;
+            var prefab = _campPrefabs[tier];
+            if (prefab == null) return;
+            var go = Instantiate(prefab);
+            go.name = CampTitleForTier(tier) + " Structure";
+            go.transform.SetParent(marker.Go.transform, false);
+            go.transform.localPosition = Vector3.zero;
+            _campSlotStructures[slot] = go;
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            var colors = new Color[renderers.Length];
+            for (int r = 0; r < renderers.Length; r++) colors[r] = renderers[r].material.color;
+            marker.Renderers = renderers;
+            marker.OriginalColors = colors;
         }
 
-        private void DestroySlotCreatures(int slot)
+        private void DestroySlotStructure(int slot)
         {
-            var creatures = _campSlotCreatures[slot];
-            if (creatures == null) return;
-            foreach (var creature in creatures)
+            var go = _campSlotStructures[slot];
+            if (go != null) Destroy(go);
+            _campSlotStructures[slot] = null;
+            var marker = _campSlotMarkers[slot];
+            if (marker != null)
             {
-                _mapPoints.Remove(creature);
-                if (creature.Go != null) Destroy(creature.Go);
+                marker.Renderers = new Renderer[0];
+                marker.OriginalColors = new Color[0];
             }
-            creatures.Clear();
         }
 
         public void Build()
         {
+            // The x4 map (2026-11-14) pushes sightlines past the
+            // default 1000 far plane when panned into a corner -
+            // raise it so the far side of the world never clips.
+            var mainCam = Camera.main;
+            if (mainCam != null && mainCam.farClipPlane < 3000f) mainCam.farClipPlane = 3000f;
             GameObject terrainPrefab = null;
             try
             {
@@ -629,7 +684,7 @@ namespace LunarDominion.UI
 
             // Regolith texture, same density as the base ground: the
             // base tiles (8,7) across 56x48 (1 tile per 7 units), so
-            // the 560x480 map tiles (80,68). Wrap Mode Repeat. The
+            // the 1120x960 map tiles (160,137). Wrap Mode Repeat. The
             // colour is darkened to 0.7 (Patrick 2026-11-09: the map
             // terrain read almost white/snowy at (40,34) from the far
             // camera — the fine texture averages out to light grey, so
@@ -659,7 +714,7 @@ namespace LunarDominion.UI
                 {
                     regolith.wrapMode = TextureWrapMode.Repeat;
                     renderer.material.mainTexture = regolith;
-                    renderer.material.mainTextureScale = new Vector2(80f, 68f);
+                    renderer.material.mainTextureScale = new Vector2(160f, 137f);
                     renderer.material.color = new Color(0.7f, 0.7f, 0.7f);
                 }
             }
@@ -1055,9 +1110,9 @@ namespace LunarDominion.UI
         }
 
         // Fixed creatures on the map: only the War Robot at the boss
-        // lair now (2026-11-10). Camp creatures are built per camp
-        // slot from CampCreatureTemplates, since a slot's tier (and
-        // therefore its creatures) is dynamic.
+        // lair now (2026-11-10). Camp slots show no creatures at all
+        // since 2026-11-14 — each slot carries one tier structure
+        // (see CampStructurePaths), swapped by SetCampSlot.
         private struct CreatureDef
         {
             public string ResourcePath; // Resources/Models/<name>
@@ -1068,11 +1123,11 @@ namespace LunarDominion.UI
         }
         private static readonly CreatureDef[] CreatureDefs =
         {
-            // Boss — War Robot at its lair (-240, -200), lair index 12.
+            // Boss — War Robot at its lair (-480, -400), lair index 21.
             // Scale 4x: a GIANT war robot, twice the size of the Brood
             // Tyrant. Stands 12 units north of the lair structure so the
             // two do not overlap. Tapping it selects the lair.
-            new CreatureDef { ResourcePath = "Models/WarRobot", CampIndex = 12, Position = new Vector3(-240f, 0f, -188f), Scale = 4f },
+            new CreatureDef { ResourcePath = "Models/WarRobot", CampIndex = 21, Position = new Vector3(-480f, 0f, -388f), Scale = 4f },
         };
 
         private void BuildCreatures()
@@ -1116,7 +1171,7 @@ namespace LunarDominion.UI
             }
         }
 
-        // Structured data for a NodeDefs entry (nodes 0-8, camps 9-11).
+        // Structured data for a NodeDefs entry (nodes 0-17, camps 18-20, lair 21).
         private static MapPointData DataForNodeDef(int index)
         {
             var def = NodeDefs[index];
@@ -1137,7 +1192,7 @@ namespace LunarDominion.UI
             for (int i = 0; i < NodeDefs.Length; i++)
             {
                 var def = NodeDefs[i];
-                // Camps (indices 9-11 in NodeDefs) are NOT built here:
+                // Camps (indices 18-20 in NodeDefs) are NOT built here:
                 // the camp field (2026-11-10) builds 15 dynamic slots
                 // instead (BuildCampSlots). The NodeDefs camp entries
                 // remain only as the original layout record.
@@ -1709,14 +1764,14 @@ namespace LunarDominion.UI
 
         // Show or hide the boss lair (2026-11-09; ladder 2026-11-10):
         // the boss never vanishes now, so this is always called with
-        // true. Hiding also hides it from taps. The lair (index 12)
-        // and its robot both carry Data.Index == 12, so one pass hides
+        // true. Hiding also hides it from taps. The lair (index 21)
+        // and its robot both carry Data.Index == 21, so one pass hides
         // the whole lair.
         public void SetBossVisible(bool visible)
         {
             foreach (var point in _mapPoints)
             {
-                if (point.Data == null || point.Data.Index != 12) continue;
+                if (point.Data == null || point.Data.Index != 21) continue;
                 if (point.Data.Kind != MapPointKind.BossLair) continue;
                 if (point.Go != null) point.Go.SetActive(visible);
             }
@@ -1758,8 +1813,8 @@ namespace LunarDominion.UI
         private bool _gliding;
         private Vector3 _glideTarget;
         private float _searchTime;
-        private readonly bool[] _nodeOccupied = new bool[9];
-        private readonly bool[] _nodeHidden = new bool[9];
+        private readonly bool[] _nodeOccupied = new bool[18];
+        private readonly bool[] _nodeHidden = new bool[18];
 
         private static Color SearchColor(SearchCategory cat)
         {
@@ -1936,7 +1991,7 @@ namespace LunarDominion.UI
                     var kind = _searchCategory == SearchCategory.Biomass ? MapPointKind.Biomass
                         : _searchCategory == SearchCategory.Alloy ? MapPointKind.Alloy
                         : MapPointKind.Helium3;
-                    for (int i = 0; i < 9 && i < NodeDefs.Length; i++)
+                    for (int i = 0; i < NodeDefs.Length; i++)
                     {
                         if (NodeDefs[i].Kind != kind) continue;
                         if (_nodeHidden[i] || _nodeOccupied[i]) continue;
@@ -1954,7 +2009,7 @@ namespace LunarDominion.UI
                     }
                     break;
                 case SearchCategory.Lair:
-                    _searchMatches.Add(NodeDefs[12].Position);
+                    _searchMatches.Add(NodeDefs[21].Position);
                     break;
             }
             // Nearest first, measured from where the camera is
@@ -2163,8 +2218,6 @@ namespace LunarDominion.UI
             if (_bottomNavGo == null) _bottomNavGo = GameObject.Find("BottomNav");
             if (_topBarGo != null) _topBarGo.SetActive(!visible);
             if (_bottomNavGo != null) _bottomNavGo.SetActive(!visible);
-            var cam = Camera.main;
-            if (cam == null) return;
             if (visible)
             {
                 // Opening the Map always recentres on the base — the
@@ -2174,11 +2227,13 @@ namespace LunarDominion.UI
                 _isDrag = false;
                 ApplyCamera();
             }
-            else
-            {
-                cam.transform.position = BaseCameraPosition;
-                cam.transform.LookAt(Vector3.zero);
-            }
+            // Hiding the Map does NOT touch the camera (2026-11-14
+            // fix): this method used to reset it to a stale local
+            // copy of the base camera position, which fought
+            // BaseView's own camera — the startup view and tab
+            // returns showed whichever pose wrote last, and the
+            // first drag then snapped the zoom. BaseView owns the
+            // base camera now; its SetVisible(true) re-applies it.
         }
     }
 }

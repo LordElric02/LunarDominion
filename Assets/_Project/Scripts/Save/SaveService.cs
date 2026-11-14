@@ -42,7 +42,7 @@ namespace LunarDominion.Save
         public float ProductionCarryHelium3;
         // Map excursions (2026-11-09): node regen timestamps, one per
         // resource node. Old saves without this field load as all "".
-        public string[] NodeRegenUtc = new string[9];
+        public string[] NodeRegenUtc = new string[18];
         // Node occupation (2026-11-09): the army farming a node.
         // Old saves load with no occupation (-1). LEGACY singular
         // fields (pre two-armies): still read on load and migrated
@@ -63,12 +63,12 @@ namespace LunarDominion.Save
         // defeated (0 = none yet, up to 15). Old saves load as 0.
         public string BossRespawnUtc = "";
         public int BossLevelDefeated = 0;
-        // Enemy camp field (2026-11-10): 15 slots. CampSlotTier[i] =
+        // Enemy camp field (2026-11-10): 36 slots. CampSlotTier[i] =
         // the tier in slot i (0 = empty); CampSlotRespawnUtc[i] = when
         // an empty slot refills ("" = not waiting). Old saves load
         // with all 0/"" and the field is populated on first sync.
-        public int[] CampSlotTier = new int[15];
-        public string[] CampSlotRespawnUtc = new string[15];
+        public int[] CampSlotTier = new int[36];
+        public string[] CampSlotRespawnUtc = new string[36];
         // Standing armies (2026-11-12): one entry per army, the
         // roster as unit serials (see OwnedUnit.Serial), plus
         // the next serial to hand out. Old saves without these
@@ -135,7 +135,7 @@ namespace LunarDominion.Save
                 ProductionCarryBiomass = state.ProductionCarryBiomass,
                 ProductionCarryAlloy = state.ProductionCarryAlloy,
                 ProductionCarryHelium3 = state.ProductionCarryHelium3,
-                NodeRegenUtc = state.NodeRegenUtc != null ? (string[])state.NodeRegenUtc.Clone() : new string[9],
+                NodeRegenUtc = state.NodeRegenUtc != null ? (string[])state.NodeRegenUtc.Clone() : new string[18],
                 OccupiedNodeIndices = CopyIntSlots(state.OccupiedNodeIndex, -1),
                 OccupationEndUtcs = CopyStringSlots(state.OccupationEndUtc),
                 OccupationAmounts = CopyIntSlots(state.OccupationAmount, 0),
@@ -272,7 +272,7 @@ namespace LunarDominion.Save
 
         private int[] ValidateCampSlotTiers(int[] saved)
         {
-            var result = new int[15];
+            var result = new int[36];
             if (saved == null) return result;
             for (int i = 0; i < result.Length && i < saved.Length; i++)
             {
@@ -283,7 +283,7 @@ namespace LunarDominion.Save
 
         private string[] ValidateCampSlotRespawns(string[] saved)
         {
-            var result = new string[15];
+            var result = new string[36];
             for (int i = 0; i < result.Length; i++)
             {
                 result[i] = saved != null && i < saved.Length && saved[i] != null ? saved[i] : "";
@@ -305,9 +305,9 @@ namespace LunarDominion.Save
         // Only keep parseable UTC timestamps; anything else means available.
         private string[] ValidateNodeRegenUtc(string[] saved)
         {
-            var result = new string[9];
+            var result = new string[18];
             if (saved == null) return result;
-            int count = Math.Min(saved.Length, 9);
+            int count = Math.Min(saved.Length, 18);
             for (int i = 0; i < count; i++)
             {
                 string s = saved[i];
@@ -324,7 +324,7 @@ namespace LunarDominion.Save
         // occupation is dropped (the node reads as available).
         private int ValidateOccupiedNode(int index, string endUtc)
         {
-            if (index < 0 || index > 8) return -1;
+            if (index < 0 || index > 17) return -1;
             if (string.IsNullOrEmpty(endUtc)) return -1;
             if (!DateTime.TryParse(endUtc, null, DateTimeStyles.RoundtripKind, out _)) return -1;
             return index;

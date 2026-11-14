@@ -53,21 +53,21 @@ namespace LunarDominion.Core
         public string LastSaveTimeUtc = "";
 
         // Map excursions (2026-11-09): one regen timestamp per resource
-        // node (9 nodes, in ExteriorView NodeDefs order, indices 0-8).
+        // node (18 nodes, in ExteriorView NodeDefs order, indices 0-17).
         // "" = available. UTC round-trip format, same as
         // ActiveResearchFinishUtc. Old saves load with all "" (available).
-        public string[] NodeRegenUtc = new string[9];
+        public string[] NodeRegenUtc = new string[18];
 
         // Enemy camp field (2026-11-10, replaces the 3-camp system):
-        // 15 camp slots spread across the map. CampSlotTier[i] is the
+        // 36 camp slots spread across the map. CampSlotTier[i] is the
         // tier of the camp in slot i (0 = empty, waiting to respawn);
         // CampSlotRespawnUtc[i] is when an empty slot refills ("" =
         // not waiting). A slot's tier is rolled fresh on every spawn,
         // weighted by Nexus level (see MapExcursionService), so the
         // field grows with the player. Old saves load with all 0/""
         // and the whole field is populated on first sync.
-        public int[] CampSlotTier = new int[15];
-        public string[] CampSlotRespawnUtc = new string[15];
+        public int[] CampSlotTier = new int[36];
+        public string[] CampSlotRespawnUtc = new string[36];
 
         // Boss lair (2026-11-09, redesigned 2026-11-10): the War Robot
         // boss. BossLevelDefeated = the highest boss level beaten

@@ -20,8 +20,16 @@ namespace LunarDominion.UI
         {
             _controller = controller;
             var safe = SafeArea.Get(canvas);
-            var bar = UIHelpers.Panel(canvas.gameObject, "TopBar", UIHelpers.Hex("#101826"),
+            // Transparent background (Patrick 2026-11-14): the navy
+            // band is gone — the level/resource text overlays the 3D
+            // view directly. The panel object stays (the Map and the
+            // boss fight find "TopBar" by name to hide it), but its
+            // image is fully transparent and non-raycasting, so the
+            // invisible strip can't eat taps meant for the scene.
+            var bar = UIHelpers.Panel(canvas.gameObject, "TopBar", new Color(0f, 0f, 0f, 0f),
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -140 - safe.Top), new Vector2(0, -safe.Top));
+            var barImage = bar.GetComponent<Image>();
+            if (barImage != null) barImage.raycastTarget = false;
 
             // 2026-11-07: the title is the player level ("Level:XX"),
             // derived from progression — see PlayerLevelService. The
