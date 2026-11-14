@@ -648,8 +648,10 @@ namespace LunarDominion.UI
                 // plaza rings, and clusters of illuminated streaks
                 // in the open areas — while the diffuse stays jet
                 // black, and the surface goes glossy (smoothness
-                // 0.9, a touch of metalness) so the plates throw a
-                // sheen under the sun. Emission is optional: without
+                // 0.75, a touch of metalness) so the plates throw a
+                // sheen under the sun. (0.9 at first — Patrick's
+                // Play check showed a hot white glare blob travelling
+                // with the pan, so it was softened to 0.75.) Emission is optional: without
                 // the PNG the floor is plain glossy black.
                 var pavedEmission = Resources.Load<Texture2D>("Textures/GroundPaved_Emission");
                 if (pavedEmission != null)
@@ -660,7 +662,7 @@ namespace LunarDominion.UI
                     rend.material.SetColor("_EmissionColor", Color.white);
                     rend.material.EnableKeyword("_EMISSION");
                 }
-                rend.material.SetFloat("_Smoothness", 0.9f);
+                rend.material.SetFloat("_Smoothness", 0.75f);
                 rend.material.SetFloat("_Metallic", 0.1f);
                 // Double-sided (URP Lit _Cull = Off): the
                 // hand-built fan's winding is not relied on.
