@@ -182,7 +182,7 @@ namespace LunarDominion.Expeditions
             EnsureOccupationArrays();
             for (int slot = 0; slot < ArmySlotCount; slot++)
             {
-                if (state.OccupiedNodeIndex[slot] >= 0 && state.OccupiedNodeIndex[slot] <= 8
+                if (state.OccupiedNodeIndex[slot] >= 0 && state.OccupiedNodeIndex[slot] <= 17
                     && !string.IsNullOrEmpty(state.OccupationEndUtc[slot])
                     && DateTime.TryParse(state.OccupationEndUtc[slot], null, DateTimeStyles.RoundtripKind, out _))
                 {
@@ -670,7 +670,7 @@ namespace LunarDominion.Expeditions
             for (int slot = 0; slot < ArmySlotCount; slot++)
             {
                 if (!_slots[slot].Occupying && _state.OccupiedNodeIndex[slot] < 0) continue;
-                if (_state.OccupiedNodeIndex[slot] < 0 || _state.OccupiedNodeIndex[slot] > 8) continue;
+                if (_state.OccupiedNodeIndex[slot] < 0 || _state.OccupiedNodeIndex[slot] > 17) continue;
                 if (string.IsNullOrEmpty(_state.OccupationEndUtc[slot])) continue;
                 if (!DateTime.TryParse(_state.OccupationEndUtc[slot], null, DateTimeStyles.RoundtripKind, out var endUtc)) continue;
                 if (DateTime.UtcNow < endUtc) continue;
@@ -694,8 +694,8 @@ namespace LunarDominion.Expeditions
             _economy.Earn(grant);
             int gained = (_state.Biomass - beforeB) + (_state.Alloy - beforeA) + (_state.Helium3 - beforeH);
             // Deplete the node (UTC now + regen) and clear the occupation.
-            if (_state.NodeRegenUtc == null || _state.NodeRegenUtc.Length != 9)
-                _state.NodeRegenUtc = new string[9];
+            if (_state.NodeRegenUtc == null || _state.NodeRegenUtc.Length != 18)
+                _state.NodeRegenUtc = new string[18];
             _state.NodeRegenUtc[nodeIndex] = DateTime.UtcNow.AddHours(NodeRegenHours).ToString("o");
             ClearOccupation(slotIndex);
             _saveGame?.Invoke();
@@ -979,7 +979,7 @@ namespace LunarDominion.Expeditions
             {
                 if (!_slots[slot].Occupying) continue;
                 int nodeIndex = _state.OccupiedNodeIndex[slot];
-                if (nodeIndex < 0 || nodeIndex > 8) continue;
+                if (nodeIndex < 0 || nodeIndex > 17) continue;
                 // The occupied node is found by index; its position
                 // comes from the slot's point when this session started
                 // it, or from the saved index via the view's node
