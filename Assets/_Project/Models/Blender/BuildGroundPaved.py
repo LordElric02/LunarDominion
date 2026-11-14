@@ -3,33 +3,40 @@
 # outside, like the reference image's spaceport floor).
 #
 # WHAT IT GENERATES (next to this script):
-#   GroundPaved.png — 1024x1024 paved-interior colour texture, ONE
-#     TILE stretched across the whole base interior (48 x 27 units,
-#     x +/-24, z +/-13.5 in the BaseView layout-root local space).
+#   GroundPaved.png — 2048x1024 paved-interior colour texture, ONE
+#     TILE stretched across the whole base interior (69 x 42 units,
+#     x +/-34.5, z +/-21 in the BaseView layout-root local space).
 #     NOT a tiling texture — the markings are positioned to line up
-#     with the actual building spots, so the walkways lead to the
+#     with the actual building spots, so the roads lead to the
 #     right doors. Contents:
-#       * Concrete plates: 3-unit plates (16 x 9) with dark seams,
+#       * Concrete plates: 3-unit plates (23 x 14) with dark seams,
 #         medium cool grey (sRGB 0.45/0.46/0.49) — darker than the
 #         regolith (0.56/0.58/0.61) so the paved interior reads
 #         distinct from the moon surface outside the walls.
-#       * Nexus plaza: a lighter concrete disc (radius 4.5) around
-#         the Nexus with a cyan ring at its edge and a thinner inner
-#         ring at radius 2.2 (clears the 3.5-wide Nexus footprint).
-#       * Walkways: pale-yellow painted lines (1.5 units wide) from
-#         the plaza edge out to each of the 7 other buildings.
+#       * Nexus plaza: a lighter concrete disc (radius 6, since
+#         the 2026-11-13 redesign; was 4.5) around the Nexus with a
+#         cyan ring at its edge and a thinner inner ring at radius
+#         2.2 (clears the 3.5-wide Nexus footprint).
+#       * Roads (2026-11-13 redesign, replacing the painted
+#         walkways): a 3-unit-wide asphalt network — a ring road
+#         around the plaza, a main street from the Research Lab
+#         through the ring and the Hospital to the east gate, and
+#         spines to the Helium-3 Harvester and Aegis Motor Pool —
+#         with pale edge lines and dashed yellow centre lines. The
+#         same segment list is the route network the future
+#         support vehicles will drive.
 #       * Gate hazard stripes: diagonal yellow/dark stripes in a
-#         4.4 x 2.2 unit panel at the north wall gate (local x 0,
-#         z +13.5), the 2.4-wide gate gap.
+#         2.2 x 4.4 unit panel at the east wall gate (local
+#         x +34.5, z 0), the 3.4-wide gate gap.
 #       * Wear: bolt dots at plate corners, a few soft stains, fine
 #         grain — so the floor reads used, not freshly painted.
-#   GroundPaved_Normal.png — 1024x1024 tangent-space normal map
+#   GroundPaved_Normal.png — 2048x1024 tangent-space normal map
 #     (OpenGL convention, green = +V) from a heightmap sharing the
 #     plate seams (grooves) and plaza disc, so the paving has real
 #     relief under the scene light. Painted markings are flat (no
 #     height change). Same install as the regolith normal map.
 #
-# HOW IT IS USED: BaseView.cs builds a flat 48x27 plane as a child
+# HOW IT IS USED: BaseView.cs builds a flat 69x42 plane as a child
 # of the layout root (so it rotates with the base), at local y 0.02
 # (just above the terrain's flat interior), and loads this texture
 # as its _BaseMap (and the normal PNG as _BumpMap). The TerrainMesh
@@ -76,11 +83,13 @@ NORMAL_FILE = "GroundPaved_Normal.png"
 TEXTURE_PATH = os.path.join(SCRIPT_DIR, TEXTURE_FILE)
 NORMAL_PATH = os.path.join(SCRIPT_DIR, NORMAL_FILE)
 
-# Interior size in layout-root local units (expanded base, 2026-11-09):
-# wall at x +/-24, z +/-13.5.
-HALF_X = 24.0
-HALF_Z = 13.5
-TEXTURE_SIZE = 1024
+# Interior size in layout-root local units (redesigned base,
+# 2026-11-13): wall at x +/-36, z +/-22; the paving stops a margin
+# inside it.
+HALF_X = 34.5
+HALF_Z = 21.0
+TEX_W = 2048
+TEX_H = 1024
 NORMAL_STRENGTH = 2.0
 
 # Colours as sRGB DISPLAY values (the PNG stores sRGB; Unity decodes
@@ -88,26 +97,37 @@ NORMAL_STRENGTH = 2.0
 CONCRETE = (0.45, 0.46, 0.49)
 PLAZA_DISC = (0.53, 0.54, 0.57)
 SEAM = (0.26, 0.27, 0.30)
-WALKWAY = (0.82, 0.76, 0.50)
+ASPHALT = (0.215, 0.225, 0.25)
+ROAD_EDGE = (0.52, 0.54, 0.58)
+ROAD_DASH = (0.85, 0.79, 0.52)
 PLAZA_RING = (0.35, 0.75, 0.85)
 HAZARD_YELLOW = (0.90, 0.75, 0.20)
 HAZARD_DARK = (0.15, 0.15, 0.16)
 
-# Building positions in layout-root local space (expanded base).
-# Walkways run from the plaza edge to each of these.
-BUILDINGS = [
-    (-12.75, 6.5),    # Hydroponics Dome
-    (12.75, 6.5),     # Alloy Extractor
-    (0.0, 10.25),     # Helium-3 Harvester
-    (-12.75, -6.5),   # Marine Foundry
-    (12.75, -6.5),    # Nova Arsenal
-    (0.0, -10.25),    # Aegis Motor Pool
-    (-20.75, 0.0),    # Research Lab
-    (20.75, 0.0),     # Hospital (2026-11-09)
+# Road network in layout-root local space (2026-11-13 redesign):
+# segments as (ax, az, bx, bz), all 3 units wide. A ring road
+# around the Nexus plaza (its east/west edges extend to serve the
+# four corner buildings' driveways), the main street running
+# Research Lab - ring - Hospital - east gate, and the two spines
+# from the plaza to the Helium-3 Harvester and Aegis Motor Pool.
+# Building positions (BaseView.cs): Nexus (0,0); Hydroponics
+# (-21,14); Alloy (21,14); Helium-3 (0,16); Marine (-21,-14);
+# Nova (21,-14); Aegis (0,-16); Lab (-30,0); Hospital (30,0).
+ROAD_SEGMENTS = [
+    (-21.0, 9.5, 21.0, 9.5),      # ring north
+    (-21.0, -9.5, 21.0, -9.5),    # ring south
+    (-21.0, -11.5, -21.0, 11.5),  # ring west (+ corner driveways)
+    (21.0, -11.5, 21.0, 11.5),    # ring east (+ corner driveways)
+    (-27.5, 0.0, 36.0, 0.0),      # main street: Lab to the gate
+    (0.0, 6.0, 0.0, 13.5),        # north spine to Helium-3
+    (0.0, -13.5, 0.0, -6.0),      # south spine to Aegis
 ]
-PLAZA_RADIUS = 4.5
+ROAD_HALF_WIDTH = 1.5
+ROAD_EDGE_IN = 1.26   # edge lines live between 1.26 and 1.5
+DASH_PERIOD = 2.4     # centre-dash repeat along the road
+DASH_ON = 1.3         # dashed portion of each repeat
+PLAZA_RADIUS = 6.0
 PLAZA_INNER_RADIUS = 2.2
-WALKWAY_HALF_WIDTH = 0.75
 PLATE = 3.0
 SEAM_HALF_WIDTH = 0.06
 
@@ -135,9 +155,11 @@ def write_png(path, rgb_float):
         f.write(png)
 
 
-def dist_to_segment(px, py, ax, ay, bx, by):
-    """Distance from each point in (px, py) grids to segment A-B.
-    Vectorised; returns a (H, W) float array of distances."""
+def dist_and_arclen(px, py, ax, ay, bx, by):
+    """Distance from each point in (px, py) grids to segment A-B,
+    plus the arc length along the segment of the closest point
+    (for the road centre dashes). Vectorised; returns two
+    (H, W) float arrays."""
     abx = bx - ax
     aby = by - ay
     ab2 = abx * abx + aby * aby
@@ -145,38 +167,39 @@ def dist_to_segment(px, py, ax, ay, bx, by):
     t = np.clip(t, 0.0, 1.0)
     cx = ax + t * abx
     cy = ay + t * aby
-    return np.sqrt((px - cx) ** 2 + (py - cy) ** 2)
+    dist = np.sqrt((px - cx) ** 2 + (py - cy) ** 2)
+    return dist, t * math.sqrt(ab2)
 
 
 def make_paved():
     """Generate the paved-interior colour texture and its normal map.
     Markings are computed in world units per pixel, so they line up
     with the building positions in the layout-root local space."""
-    S = TEXTURE_SIZE
+    W, H = TEX_W, TEX_H
     rng = np.random.default_rng(11)
     # Pixel-centre coordinates in layout-root local units.
-    # Array x -> lx (-24..+24), array y -> lz (-13.5..+13.5).
-    # Array y=0 is the bottom (lz=-13.5); write_png flips the rows so
-    # the PNG top is lz=+13.5 (north, the gate edge), matching the
-    # plane's UV v=1 at local +Z.
-    px = (np.arange(S, dtype=np.float32) + 0.5) / S
-    py = (np.arange(S, dtype=np.float32) + 0.5) / S
-    lx = (px * (2.0 * HALF_X) - HALF_X)[None, :].repeat(S, axis=0)
-    lz = (py * (2.0 * HALF_Z) - HALF_Z)[:, None].repeat(S, axis=1)
+    # Array x -> lx (-34.5..+34.5), array y -> lz (-21..+21).
+    # Array y=0 is the bottom (lz=-21); write_png flips the rows so
+    # the PNG top is lz=+21 (north), matching the plane's UV v=1 at
+    # local +Z.
+    px = (np.arange(W, dtype=np.float32) + 0.5) / W
+    py = (np.arange(H, dtype=np.float32) + 0.5) / H
+    lx = (px * (2.0 * HALF_X) - HALF_X)[None, :].repeat(H, axis=0)
+    lz = (py * (2.0 * HALF_Z) - HALF_Z)[:, None].repeat(W, axis=1)
     base = np.array(CONCRETE, dtype=np.float32)
-    arr = np.ones((S, S, 3), dtype=np.float32) * base
-    height = np.zeros((S, S), dtype=np.float32)
+    arr = np.ones((H, W, 3), dtype=np.float32) * base
+    height = np.zeros((H, W), dtype=np.float32)
     # Subtle tonal variation + fine grain (concrete, not regolith).
-    var = np.zeros((S, S), dtype=np.float32)
+    var = np.zeros((H, W), dtype=np.float32)
     for (fx, fy, amp, ph) in ((2, 1, 0.020, 0.0), (3, -2, 0.014, 1.7),
                               (5, 3, 0.010, 4.2), (29, 17, 0.010, 0.5),
                               (41, -23, 0.008, 2.0)):
         var += amp * np.sin(2.0 * np.pi * (fx * px[None, :] + fy * py[:, None]) + ph)
     arr *= (1.0 + var[..., None])
-    arr *= (1.0 + rng.normal(0.0, 0.008, (S, S, 1)).astype(np.float32))
+    arr *= (1.0 + rng.normal(0.0, 0.008, (H, W, 1)).astype(np.float32))
     # ---- Plate seams: 3-unit plates, grooves in the heightmap.
-    # Seams at lx = -24 + 3k and lz = -13.5 + 3k (edges align exactly:
-    # 48/3 = 16 plates across, 27/3 = 9 plates down).
+    # Seams at lx = -34.5 + 3k and lz = -21 + 3k (edges align
+    # exactly: 69/3 = 23 plates across, 42/3 = 14 plates down).
     seam_x = np.minimum((lx + HALF_X) % PLATE, PLATE - (lx + HALF_X) % PLATE)
     seam_z = np.minimum((lz + HALF_Z) % PLATE, PLATE - (lz + HALF_Z) % PLATE)
     seam = np.minimum(seam_x, seam_z)
@@ -194,6 +217,26 @@ def make_paved():
             dot = d < 0.09
             arr = np.where(dot[..., None], seam_col * 0.8, arr)
             height -= np.where(dot, 0.15, 0.0).astype(np.float32)
+    # ---- Roads: the 2026-11-13 network (see ROAD_SEGMENTS).
+    # Asphalt with pale edge lines and dashed yellow centre lines.
+    # Painted BEFORE the plaza so the main street passes cleanly
+    # under the plaza disc instead of cutting across it. Roads are
+    # flat: the plate seams are erased from the heightmap under
+    # the asphalt, so the road surface has no grooves.
+    road_any = np.zeros((H, W), dtype=bool)
+    asph_col = np.array(ASPHALT, dtype=np.float32)
+    edge_col = np.array(ROAD_EDGE, dtype=np.float32)
+    dash_col = np.array(ROAD_DASH, dtype=np.float32)
+    for (ax, ay, bx, by) in ROAD_SEGMENTS:
+        d, s = dist_and_arclen(lx, lz, ax, ay, bx, by)
+        m = d < ROAD_HALF_WIDTH
+        road_any |= m
+        arr = np.where(m[..., None], asph_col, arr)
+        e = m & (d > ROAD_EDGE_IN)
+        arr = np.where(e[..., None], edge_col, arr)
+        dash = m & (d < 0.14) & ((s % DASH_PERIOD) < DASH_ON)
+        arr = np.where(dash[..., None], dash_col, arr)
+    height = np.where(road_any, 0.0, height).astype(np.float32)
     # ---- Nexus plaza: lighter disc + cyan rings.
     r = np.sqrt(lx * lx + lz * lz)
     disc = r < PLAZA_RADIUS
@@ -205,27 +248,9 @@ def make_paved():
     inner = np.abs(r - PLAZA_INNER_RADIUS) < 0.12
     arr = np.where(inner[..., None], ring_col, arr)
     height += np.where(disc, 0.05, 0.0).astype(np.float32)
-    # ---- Walkways: pale-yellow painted lines from the plaza edge to
-    # each building. Segment starts at the plaza edge (radius 4.5 in
-    # the building's direction) and ends at the building's footprint
-    # edge (1.2 units short of its centre).
-    walk_col = np.array(WALKWAY, dtype=np.float32)
-    for (bx, bz) in BUILDINGS:
-        blen = math.hypot(bx, bz)
-        ux, uz = bx / blen, bz / blen
-        ax = ux * PLAZA_RADIUS
-        ay = uz * PLAZA_RADIUS
-        ex = bx - ux * 1.2
-        ey = bz - uz * 1.2
-        d = dist_to_segment(lx, lz, ax, ay, ex, ey)
-        # Soft edge: full colour inside, fading over 0.12 units.
-        w = np.clip((WALKWAY_HALF_WIDTH + 0.12 - d) / 0.12, 0.0, 1.0)
-        w = np.where(d < WALKWAY_HALF_WIDTH, 1.0, w)
-        w = np.where(d < WALKWAY_HALF_WIDTH + 0.12, w, 0.0)
-        arr = arr * (1.0 - w[..., None]) + walk_col * w[..., None]
     # ---- Gate hazard stripes: diagonal yellow/dark panel at the
-    # north wall gate (local x 0, z +13.5), 4.4 wide x 2.2 deep.
-    gate = (np.abs(lx) < 2.2) & (lz > HALF_Z - 2.2)
+    # east wall gate (local x +34.5, z 0), 2.2 deep x 4.4 wide.
+    gate = (lx > HALF_X - 2.2) & (np.abs(lz) < 2.2)
     diag = np.floor((lx + lz) / 0.8) % 2.0
     haz_y = np.array(HAZARD_YELLOW, dtype=np.float32)
     haz_d = np.array(HAZARD_DARK, dtype=np.float32)

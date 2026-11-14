@@ -66,15 +66,15 @@ namespace LunarDominion.UI
         // cannot leave the ground.
         private Vector3 _panOffset = Vector3.zero;
         private static readonly float PanSpeed = 40f; // units/second, arrow keys
-        private static readonly float PanLimitX = 20f;
-        private static readonly float PanLimitZ = 20f;
+        private static readonly float PanLimitX = 30f;
+        private static readonly float PanLimitZ = 30f;
         private static readonly float DragTapThresholdPx = 15f; // below this, a press is a tap, not a drag
-        // The Base camera sits at (10,16,10) on the x=z diagonal, so
+        // The Base camera sits at (23.2,43.5,23.2) on the x=z diagonal, so
         // screen-right is world (0.707,0,-0.707) and screen-up on the
         // ground is (-0.707,0,-0.707) — same as the Map camera.
         private static readonly Vector3 CamRight = new Vector3(0.7071f, 0f, -0.7071f);
         private static readonly Vector3 CamGroundForward = new Vector3(-0.7071f, 0f, -0.7071f);
-        private static readonly Vector3 BaseCameraPosition = new Vector3(10f, 16f, 10f);
+        private static readonly Vector3 BaseCameraPosition = new Vector3(23.2f, 43.5f, 23.2f);
         // Drag state: a press that moves past the threshold becomes a
         // drag (pan) and must NOT also fire as a tap on release.
         // True while the Base tab is the view on screen. Set by
@@ -91,7 +91,7 @@ namespace LunarDominion.UI
             _controller = controller;
             // 2026-11-06: rotate the base 45 degrees so the wall perimeter
             // reads parallel to the screen's horizontal borders. The camera
-            // sits at (10,16,10), so screen-right is world (0.707,0,-0.707);
+            // sits at (23.2,43.5,23.2), so screen-right is world (0.707,0,-0.707);
             // a +45-degree Y rotation maps the layout's local X axis onto
             // screen-right and its local Z axis onto screen-depth, so the
             // wall's north/south edges run horizontal on screen and its
@@ -116,21 +116,20 @@ namespace LunarDominion.UI
                 cam = camGo.AddComponent<Camera>();
                 camGo.tag = "MainCamera";
             }
-            // 2026-11-06 full-bleed: camera (10,16,10), pitch 48.5
-            // degrees, over the 56x48 ground. Checked with real camera
-            // math (60-degree vertical FOV, 16:9): every frame edge is
-            // covered by ground or mountains (0 uncovered boundary
-            // samples). 2026-11-06 rotation: the layout turns 45 degrees
-            // under BaseLayout, so buildings now span NDC x -0.42..0.28
-            // and y -0.29..0.35 — inside the frame, clear of the top bar
-            // (bottom edge NDC y 0.74) and the quick-select row (top
-            // edge NDC y -0.50). The wall's near edge is horizontal at
-            // NDC y -0.46 (top), its base at -0.495, just 0.009 above
-            // the quick-select row top (-0.504) — the tightest margin in
-            // the layout; moving the camera to widen it breaks the
-            // mountain coverage, so the camera stays at (10,16,10). The
-            // old (11,13,11) camera left the far ground corner at NDC x
-            // 0.83, so dark background showed around the ground.
+            // 2026-11-13 base redesign (Patrick's call: the concept
+            // image's wider framing): camera (23.2, 43.5, 23.2), pitch
+            // 53 degrees, over the 132x132 ground, framing the whole
+            // 72x44 walled compound at once. Checked with real camera
+            // math (60-degree vertical FOV, 16:9; the projection was
+            // calibrated against the old layout, reproducing Lab /
+            // Hospital at NDC x -0.947 / +0.947): the wall corners sit
+            // at max |NDC x| 0.85, NDC y -0.74..+0.45 — inside the
+            // frame, clear of the top bar and the bottom nav. The
+            // terrain and the mountain ring grew in the same pass so
+            // every frame edge is still covered by ground or
+            // mountains. The layout turns 45 degrees under BaseLayout.
+            // (Supersedes the 2026-11-06 (10,16,10) framing and its
+            // base-prominence rule, at Patrick's direction.)
             // 2026-11-09 expanded base: the camera position is now
             // ApplyCamera() (base position + pan offset), so the player
             // can scroll across the wider base.
@@ -202,11 +201,12 @@ namespace LunarDominion.UI
             bloom.scatter.value = 0.7f;
             bloomVolume.profile = bloomProfile;
 
-            // 2026-11-06 full-bleed: ground 56 wide by 48 deep, so it
-            // runs past all four frame edges from the (10,16,10)
-            // camera — the whole screen is terrain, with no black bars
-            // around it. The wall sits at x +/-10.5, z +/-6.5 and the
-            // mountains at the far edges, all on this ground.
+            // Ground 132 wide by 132 deep (2026-11-13 redesign;
+            // was 56x48), so it runs past all four frame edges from
+            // the (23.2, 43.5, 23.2) camera — the whole screen is
+            // terrain, with no black bars around it. The wall sits
+            // at layout x +/-36, z +/-22 and the mountains ring the
+            // far edges, all on this ground.
             // 2026-11-07: the ground is the sculpted terrain mesh
             // (TerrainMesh.fbx), flat plane as fallback — see
             // BuildGround() below.
@@ -236,16 +236,21 @@ namespace LunarDominion.UI
             // darker crater discs are removed too — the regolith texture
             // and the debris carry the ground detail now, and the flat
             // dark circles read the same way. The rocks stay.
-            AddRock(new Vector3(-2f, 0f, 5.5f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(2.5f, 0f, -5.5f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(-16f, 0f, 16f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
-            AddRock(new Vector3(24f, 0f, 8f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(12f, 0f, 16f), 0.45f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(24f, 0f, 2f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
-            AddRock(new Vector3(8f, 0f, 18f), 0.4f, new Color(0.38f, 0.4f, 0.44f));
-            AddRock(new Vector3(16f, 0f, 14f), 0.5f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(22f, 0f, 12f), 0.45f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(20f, 0f, 16f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
+            // 2026-11-13 redesign: two rocks on the plaza aprons
+            // inside the wall, eight in the outer band beyond the
+            // new wall (layout x +/-36, z +/-22) — the outer eight
+            // have matching flat pads in BuildTerrain.py (world
+            // conversions of these layout spots).
+            AddRock(new Vector3(-14f, 0f, 0f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(14f, 0f, 3f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(40f, 0f, 10f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
+            AddRock(new Vector3(20f, 0f, 26f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(27f, 0f, 24f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(38f, 0f, 20f), 0.4f, new Color(0.33f, 0.35f, 0.39f));
+            AddRock(new Vector3(34f, 0f, 27f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
+            AddRock(new Vector3(13f, 0f, 30f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(-27f, 0f, 27f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(41f, 0f, 3f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
 
             // 2026-11-07: Blender debris models (rubble / rocks /
             // shards), placed in world space like the ground plane.
@@ -302,9 +307,9 @@ namespace LunarDominion.UI
             AddDebrisAt("Models/DebrisShards", new Vector3(7.5f, 0f, 0f), 80f);
             AddDebrisAt("Models/DebrisRubble", new Vector3(-0.5f, 0f, 7.5f), 130f);
             AddDebrisAt("Models/DebrisRocks", new Vector3(14f, 0f, -10f), 200f);
-            AddDebrisAt("Models/DebrisShards", new Vector3(-14f, 0f, 18f), 260f);
+            AddDebrisAt("Models/DebrisShards", new Vector3(-14f, 0f, 20f), 260f);
             AddDebrisAt("Models/DebrisRubble", new Vector3(20f, 0f, 8f), 310f);
-            AddDebrisAt("Models/DebrisRubble", new Vector3(16f, 0f, -12f), 25f);
+            AddDebrisAt("Models/DebrisRubble", new Vector3(13f, 0f, -9f), 25f);
         }
 
         private void AddDebrisAt(string resourcePath, Vector3 position, float rotationY)
@@ -355,18 +360,22 @@ namespace LunarDominion.UI
         // is the boundary now). Only the props remain.
         private void AddProps()
         {
-            // Props, re-spread for the expanded base (world space, clear
-            // of the buildings). The gate moves to the new
-            // north wall gap (local (0,13.5) -> world (9.55,9.55)).
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(5.66f, 0f, -2.83f), 30f, "Prop");
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.66f, 0f, 2.83f), -20f, "Prop");
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(4.24f, 0f, -7.07f), -30f, "Prop");
-            AddSceneryAt("Models/PropCrates", new Vector3(-4.24f, 0f, 7.07f), 15f, "Prop");
-            AddSceneryAt("Models/PropCrates", new Vector3(1.41f, 0f, -5.66f), 70f, "Prop");
-            AddSceneryAt("Models/PropStorageTank", new Vector3(-1.41f, 0f, 5.66f), 0f, "Prop");
-            AddSceneryAt("Models/PropStorageTank", new Vector3(5.66f, 0f, -4.24f), 0f, "Prop");
-            AddSceneryAt("Models/PropRover", new Vector3(-2.12f, 0f, 0.71f), -45f, "Prop");
-            AddSceneryAt("Models/PropGate", new Vector3(9.55f, 0f, 9.55f), 45f, "Prop");
+            // Props, re-spread for the redesigned base (world
+            // space, clear of the buildings and roads).
+            // 2026-11-13 redesign: props re-spread for the new
+            // layout (world conversions of layout spots on the
+            // aprons, clear of the roads and buildings); the gate
+            // moves to the new EAST wall gap (layout (36, 0) ->
+            // world (25.46, -25.46)), rotated to span the gap.
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.66f, 0f, 12.73f), 30f, "Prop");
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(5.66f, 0f, -12.73f), -20f, "Prop");
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(-12.73f, 0f, 5.66f), -30f, "Prop");
+            AddSceneryAt("Models/PropCrates", new Vector3(20.51f, 0f, -13.44f), 15f, "Prop");
+            AddSceneryAt("Models/PropCrates", new Vector3(-20.51f, 0f, 13.44f), 70f, "Prop");
+            AddSceneryAt("Models/PropStorageTank", new Vector3(-13.44f, 0f, 20.51f), 0f, "Prop");
+            AddSceneryAt("Models/PropStorageTank", new Vector3(13.44f, 0f, -20.51f), 0f, "Prop");
+            AddSceneryAt("Models/PropRover", new Vector3(-8.49f, 0f, 4.24f), -45f, "Prop");
+            AddSceneryAt("Models/PropGate", new Vector3(25.46f, 0f, -25.46f), -45f, "Prop");
         }
 
         private void AddSceneryAt(string resourcePath, Vector3 position, float rotationY, string name)
@@ -448,7 +457,7 @@ namespace LunarDominion.UI
                 // Flat-plane fallback (the pre-terrain ground).
                 var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
                 ground.name = "LunarGround";
-                ground.transform.localScale = new Vector3(5.6f, 1f, 4.8f);
+                ground.transform.localScale = new Vector3(13.2f, 1f, 13.2f);
                 SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
                 groundRenderer = ground.GetComponent<Renderer>();
             }
@@ -457,8 +466,10 @@ namespace LunarDominion.UI
             // Resources/Textures/). If it loads, it replaces the flat
             // colour: the PNG is authored in sRGB at the ground's
             // colour, so the material colour goes to white — colour x
-            // texture would double-darken it. Tiled (8,7) across the
-            // 56x48 ground, Wrap Mode Repeat. If the PNG is missing,
+            // texture would double-darken it. Tiled (19,19) across
+            // the 132x132 ground (2026-11-13; was (8,7) across
+            // 56x48 — same texel density), Wrap Mode Repeat. If the
+            // PNG is missing,
             // the flat colour above stays (plane) or the FBX material
             // keeps its own texture reference (terrain).
             var regolith = Resources.Load<Texture2D>("Textures/GroundRegolith");
@@ -466,12 +477,12 @@ namespace LunarDominion.UI
             {
                 regolith.wrapMode = TextureWrapMode.Repeat;
                 groundRenderer.material.mainTexture = regolith;
-                groundRenderer.material.mainTextureScale = new Vector2(8f, 7f);
+                groundRenderer.material.mainTextureScale = new Vector2(19f, 19f);
                 groundRenderer.material.color = Color.white;
             }
             // Ground normal map (GroundRegolith_Normal.png in
             // Resources/Textures/, from BuildGroundTextureV2.py). Same
-            // (8,7) tiling as the colour texture so the relief stays
+            // (19,19) tiling as the colour texture so the relief stays
             // in register with the pebbles/pocks. URP Lit reads it
             // from _BumpMap. The PNG must be imported as Texture Type
             // "Normal Map" in Unity or it unpacks wrong. If the PNG
@@ -482,16 +493,17 @@ namespace LunarDominion.UI
             {
                 regolithNormal.wrapMode = TextureWrapMode.Repeat;
                 groundRenderer.material.SetTexture("_BumpMap", regolithNormal);
-                groundRenderer.material.SetTextureScale("_BumpMap", new Vector2(8f, 7f));
+                groundRenderer.material.SetTextureScale("_BumpMap", new Vector2(19f, 19f));
             }
             BuildPavedInterior();
         }
 
-        // 2026-11-09 paved interior: the ground inside the base walls
-        // is a paved spaceport floor (concrete plates, Nexus plaza,
-        // painted walkways, gate hazard stripes), while the ground
-        // outside the walls stays the normal moon regolith. A flat
-        // 48x27 plane, child of the layout root (so it rotates with
+        // Paved interior: the ground inside the base walls is a
+        // paved spaceport floor (concrete plates, Nexus plaza, a
+        // painted road network, gate hazard stripes), while the
+        // ground outside the walls stays the normal moon regolith.
+        // A flat plane (48x27 originally; 69x42 since the 2026-11-13
+        // redesign), child of the layout root (so it rotates with
         // the base), at local y 0.02 — just above the terrain's flat
         // interior, so it covers the regolith inside the walls without
         // z-fighting. The paved texture (GroundPaved.png, from
@@ -521,8 +533,9 @@ namespace LunarDominion.UI
                 plane.transform.SetParent(_layoutRoot.transform, false);
                 plane.transform.localPosition = new Vector3(0f, 0.02f, 0f);
                 // Plane primitive is 10x10; scale to the interior size
-                // (wall x +/-24, z +/-13.5 -> 48 x 27).
-                plane.transform.localScale = new Vector3(4.8f, 1f, 2.7f);
+                // (2026-11-13: 69 x 42, inside the wall at x +/-36,
+                // z +/-22).
+                plane.transform.localScale = new Vector3(6.9f, 1f, 4.2f);
                 var rend = plane.GetComponent<Renderer>();
                 // Explicit URP Lit material (2026-11-10, phone magenta
                 // fix): a runtime Plane primitive's default material
@@ -555,11 +568,12 @@ namespace LunarDominion.UI
             }
         }
 
-        // 2026-11-06 full-bleed: perimeter wall around the building
-        // area, like the walled compound in the reference layout.
-        // Rectangle x +/-10.5, z +/-6.5 — every building sits inside
-        // with margin (worst case Lab at x -8.3, edge -9.4, is 1.1
-        // from the west wall). Four segments 0.8 high, 0.35 thick,
+        // Perimeter wall around the building area, like the
+        // walled compound in the reference layout. Rectangle
+        // x +/-36, z +/-22 since the 2026-11-13 redesign (was
+        // x +/-10.5, z +/-6.5, then x +/-24, z +/-13.5) — every
+        // building sits inside with margin. Four segments (the
+        // east one split for the gate) 0.8 high, 0.35 thick,
         // gunmetal grey-blue, with a thin cyan strip light along the
         // top of each segment and a 1.4-high corner tower (with cap)
         // at each corner. 2026-11-06: the whole layout rotates 45
@@ -576,34 +590,34 @@ namespace LunarDominion.UI
             var capColor = new Color(0.30f, 0.33f, 0.40f);
             var stripColor = new Color(0.38f, 0.85f, 1.0f);
 
+            // 2026-11-13 redesign: the wall grows to x +/-36,
+            // z +/-22 to enclose the spread-out layout, and the gate
+            // moves to the EAST (+X) segment — a 3.4-wide gap centred
+            // at local z 0, where the gate model sits and the main
+            // street (Lab - ring - Hospital) runs out. (The gate was
+            // on the north segment, gap 2.4 at local x 0, until now.)
             // North (+Z) and south (-Z) segments, corner to corner.
-            // 2026-11-07: the north segment is split for the gate — a
-            // 2.4-wide gap centred at local x 0 (world (4.6, 4.6), the
-            // near wall edge's midpoint), where the gate model sits and
-            // the E1 road passes through. The gate posts overlap the
-            // wall ends by 0.13 on each side.
-            // 2026-11-09 expanded base: the wall grows to x +/-24,
-            // z +/-13.5 to enclose the 2.5x-spread buildings. The gate
-            // gap stays 2.4 wide, centred at local x 0.
-            AddWallBox(new Vector3(-12.6f, 0.4f, 13.5f), new Vector3(22.8f, 0.8f, 0.35f), wallColor);
-            AddWallBox(new Vector3(12.6f, 0.4f, 13.5f), new Vector3(22.8f, 0.8f, 0.35f), wallColor);
-            AddWallBox(new Vector3(0f, 0.4f, -13.5f), new Vector3(48f, 0.8f, 0.35f), wallColor);
-            // East (+X) and west (-X) segments, corner to corner.
-            AddWallBox(new Vector3(24f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 27f), wallColor);
-            AddWallBox(new Vector3(-24f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 27f), wallColor);
+            AddWallBox(new Vector3(0f, 0.4f, 22f), new Vector3(72f, 0.8f, 0.35f), wallColor);
+            AddWallBox(new Vector3(0f, 0.4f, -22f), new Vector3(72f, 0.8f, 0.35f), wallColor);
+            // West (-X) segment, corner to corner.
+            AddWallBox(new Vector3(-36f, 0.4f, 0f), new Vector3(0.35f, 0.8f, 44f), wallColor);
+            // East (+X) segment, split for the gate gap.
+            AddWallBox(new Vector3(36f, 0.4f, -11.85f), new Vector3(0.35f, 0.8f, 20.3f), wallColor);
+            AddWallBox(new Vector3(36f, 0.4f, 11.85f), new Vector3(0.35f, 0.8f, 20.3f), wallColor);
 
-            // Cyan strip lights along the top of each segment. The north
-            // strip is split for the gate gap, like the wall below it.
-            AddWallBox(new Vector3(-12.6f, 0.83f, 13.5f), new Vector3(22.5f, 0.06f, 0.12f), stripColor);
-            AddWallBox(new Vector3(12.6f, 0.83f, 13.5f), new Vector3(22.5f, 0.06f, 0.12f), stripColor);
-            AddWallBox(new Vector3(0f, 0.83f, -13.5f), new Vector3(47.7f, 0.06f, 0.12f), stripColor);
-            AddWallBox(new Vector3(24f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 26.7f), stripColor);
-            AddWallBox(new Vector3(-24f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 26.7f), stripColor);
+            // Cyan strip lights along the top of each segment. The
+            // east strip is split for the gate gap, like the wall
+            // below it.
+            AddWallBox(new Vector3(0f, 0.83f, 22f), new Vector3(71.7f, 0.06f, 0.12f), stripColor);
+            AddWallBox(new Vector3(0f, 0.83f, -22f), new Vector3(71.7f, 0.06f, 0.12f), stripColor);
+            AddWallBox(new Vector3(-36f, 0.83f, 0f), new Vector3(0.12f, 0.06f, 43.7f), stripColor);
+            AddWallBox(new Vector3(36f, 0.83f, -11.85f), new Vector3(0.12f, 0.06f, 20f), stripColor);
+            AddWallBox(new Vector3(36f, 0.83f, 11.85f), new Vector3(0.12f, 0.06f, 20f), stripColor);
 
             // Corner towers with caps.
-            foreach (float x in new[] { -24f, 24f })
+            foreach (float x in new[] { -36f, 36f })
             {
-                foreach (float z in new[] { -13.5f, 13.5f })
+                foreach (float z in new[] { -22f, 22f })
                 {
                     AddWallBox(new Vector3(x, 0.7f, z), new Vector3(1f, 1.4f, 1f), towerColor);
                     AddWallBox(new Vector3(x, 1.525f, z), new Vector3(1.3f, 0.25f, 1.3f), capColor);
@@ -660,19 +674,19 @@ namespace LunarDominion.UI
             // peaks landed on the planet disc's visible cap and
             // split it — lowering them makes the arc continuous.
             // All other spots unchanged.
-            AddMountain("Models/HorizonB", new Vector3(-23f, 0f, 10f), 20f, new Vector3(1.4f, 0.5f, 1.4f));
-            AddMountain("Models/HorizonC", new Vector3(-21f, 0f, 15f), 310f, new Vector3(1.33f, 1f, 1.33f));
-            AddMountain("Models/HorizonA", new Vector3(-20f, 0f, 5f), 140f, new Vector3(1.4f, 0.6f, 1.4f));
-            AddMountain("Models/HorizonB", new Vector3(-21f, 0f, -4f), 260f, new Vector3(1.4f, 1f, 1.4f));
-            AddMountain("Models/HorizonC", new Vector3(-19f, 0f, -13f), 90f, new Vector3(1.4f, 0.95f, 1.4f));
-            AddMountain("Models/HorizonA", new Vector3(-14f, 0f, -20f), 200f, new Vector3(1.33f, 0.9f, 1.33f));
-            AddMountain("Models/HorizonB", new Vector3(-5f, 0f, -23f), 170f, new Vector3(1.33f, 0.9f, 1.33f));
-            AddMountain("Models/HorizonC", new Vector3(5f, 0f, -23f), 15f, new Vector3(1.33f, 0.9f, 1.33f));
-            AddMountain("Models/HorizonA", new Vector3(13f, 0f, -20f), 230f, new Vector3(1.26f, 0.85f, 1.26f));
-            AddMountain("Models/HorizonB", new Vector3(19f, 0f, -16f), 120f, new Vector3(1.26f, 0.85f, 1.26f));
-            AddMountain("Models/HorizonC", new Vector3(23f, 0f, -8f), 45f, new Vector3(1.19f, 0.8f, 1.19f));
-            AddMountain("Models/HorizonA", new Vector3(24f, 0f, 1f), 280f, new Vector3(1.19f, 0.8f, 1.19f));
-            AddMountain("Models/HorizonB", new Vector3(-17f, 0f, 16f), 180f, new Vector3(1.26f, 0.9f, 1.26f));
+            AddMountain("Models/HorizonB", new Vector3(-60f, 0f, 26f), 20f, new Vector3(3.1f, 0.7f, 3.1f));
+            AddMountain("Models/HorizonC", new Vector3(-55f, 0f, 39f), 310f, new Vector3(2.9f, 1.4f, 2.9f));
+            AddMountain("Models/HorizonA", new Vector3(-52f, 0f, 13f), 140f, new Vector3(3.1f, 0.8f, 3.1f));
+            AddMountain("Models/HorizonB", new Vector3(-55f, 0f, -10f), 260f, new Vector3(3.1f, 1.4f, 3.1f));
+            AddMountain("Models/HorizonC", new Vector3(-49f, 0f, -34f), 90f, new Vector3(3.1f, 1.3f, 3.1f));
+            AddMountain("Models/HorizonA", new Vector3(-36f, 0f, -52f), 200f, new Vector3(2.9f, 1.3f, 2.9f));
+            AddMountain("Models/HorizonB", new Vector3(-13f, 0f, -60f), 170f, new Vector3(2.9f, 1.3f, 2.9f));
+            AddMountain("Models/HorizonC", new Vector3(13f, 0f, -60f), 15f, new Vector3(2.9f, 1.3f, 2.9f));
+            AddMountain("Models/HorizonA", new Vector3(34f, 0f, -52f), 230f, new Vector3(2.8f, 1.2f, 2.8f));
+            AddMountain("Models/HorizonB", new Vector3(49f, 0f, -42f), 120f, new Vector3(2.8f, 1.2f, 2.8f));
+            AddMountain("Models/HorizonC", new Vector3(60f, 0f, -21f), 45f, new Vector3(2.6f, 1.1f, 2.6f));
+            AddMountain("Models/HorizonA", new Vector3(62f, 0f, 3f), 280f, new Vector3(2.6f, 1.1f, 2.6f));
+            AddMountain("Models/HorizonB", new Vector3(-44f, 0f, 42f), 180f, new Vector3(2.8f, 1.3f, 2.8f));
         }
 
         private void AddMountain(string resourcePath, Vector3 position, float rotationY, Vector3 scale)
@@ -752,7 +766,11 @@ namespace LunarDominion.UI
                 // (narrower disc, 15.6% wide) so more of it fits
                 // the thin sky band — 21.5% visible, a broad
                 // continuous banded arc, +53% visible pixels vs V3.
-                // Camera unchanged (10,16,10), base stays prominent.
+                // Camera then unchanged (10,16,10). NOTE 2026-11-13:
+                // the base camera has since moved to (23.2,43.5,23.2)
+                // for the layout redesign — this planet position was
+                // tuned for the old framing and needs a Play re-check
+                // against the new one (position left as-is for now).
                 // Top edge y 15.7% — only ~5 px below the top bar,
                 // check it clears in Play.
                 go.transform.position = new Vector3(-170.6f, -70.0f, 7.9f);
@@ -806,7 +824,13 @@ namespace LunarDominion.UI
 
         private void BuildBuildings()
         {
-            // Layout: Nexus centre, generators top, barracks bottom — readable
+            // Layout (2026-11-13 redesign): Nexus centre on its
+            // plaza, the four production buildings at the ring-road
+            // corners (+/-21, +/-14), He-3 / Aegis on the north /
+            // south spines (0, +/-16), Lab / Hospital out on the
+            // main street (+/-30, 0) — every building fronts the
+            // road network painted in GroundPaved. Before that:
+            // Nexus centre, generators top, barracks bottom — readable
             // from the isometric camera and tappable on a phone screen.
             // 2026-11-05: positions tightened to 0.75x toward the centre so
             // the base fills the portrait frame better (was spread over 13
@@ -833,47 +857,48 @@ namespace LunarDominion.UI
             // it loads, otherwise fall back to the old green sphere so the
             // base still builds when the model file is missing.
             if (!TryAddModelHydroponicsDome())
-                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-12.75f, 0f, 6.5f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
+                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-21f, 0f, 14f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
             // Alloy Extractor (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelAlloyExtractor())
-                AddBuilding(BuildingId.AlloyExtractor, new Vector3(12.75f, 0f, 6.5f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
+                AddBuilding(BuildingId.AlloyExtractor, new Vector3(21f, 0f, 14f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
             // Helium-3 Harvester (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old cyan cylinder so the
             // base still builds when the model file is missing.
             if (!TryAddModelHeliumHarvester())
-                AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 10.25f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
+                AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 16f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
             // Marine Foundry (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old green-grey cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelMarineFoundry())
-                AddBuilding(BuildingId.MarineFoundry, new Vector3(-12.75f, 0f, -6.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
+                AddBuilding(BuildingId.MarineFoundry, new Vector3(-21f, 0f, -14f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             // Nova Arsenal (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old red cube so the
             // base still builds when the model file is missing.
             if (!TryAddModelNovaArsenal())
-                AddBuilding(BuildingId.NovaArsenal, new Vector3(12.75f, 0f, -6.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
+                AddBuilding(BuildingId.NovaArsenal, new Vector3(21f, 0f, -14f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             // Aegis Motor Pool (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the base
             // still builds when the model file is missing.
             if (!TryAddModelAegisMotorPool())
-                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -10.25f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
+                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -16f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
             // Research Lab (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old purple cylinder so
             // the base still builds when the model file is missing.
             // (2026-11-01 note: west side, clear of the other buildings,
             // so it stays tappable at phone size.)
             if (!TryAddModelResearchLab())
-                AddBuilding(BuildingId.ResearchLab, new Vector3(-20.75f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
-            // Hospital (2026-11-09): east side at (20.75, 0), mirroring
+                AddBuilding(BuildingId.ResearchLab, new Vector3(-30f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
+            // Hospital (2026-11-09): east side at (30, 0) since the
+            // 2026-11-13 redesign (was (20.75, 0)), mirroring
             // the Research Lab on the west, clear of the other buildings
             // so it stays tappable at phone size. Use the FBX model if
             // it loads, otherwise fall back to a white cube so the base
             // still builds when the model file is missing (the Blender
             // model is built separately, like the other v5 buildings).
             if (!TryAddModelHospital())
-                AddBuilding(BuildingId.Hospital, new Vector3(20.75f, 0f, 0f), PrimitiveType.Cube, new Vector3(2f, 1.8f, 2f), new Color(0.95f, 0.95f, 0.95f), "Hospital");
+                AddBuilding(BuildingId.Hospital, new Vector3(30f, 0f, 0f), PrimitiveType.Cube, new Vector3(2f, 1.8f, 2f), new Color(0.95f, 0.95f, 0.95f), "Hospital");
         }
 
         private void AddBuilding(BuildingId id, Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, string shortName)
@@ -1133,7 +1158,7 @@ namespace LunarDominion.UI
                 go = Instantiate(prefab);
                 go.name = "HydroBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
-                go.transform.localPosition = new Vector3(-5.1f, 0f, 2.6f);
+                go.transform.localPosition = new Vector3(-8.4f, 0f, 5.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1227,7 +1252,7 @@ namespace LunarDominion.UI
                 go = Instantiate(prefab);
                 go.name = "AlloyBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
-                go.transform.localPosition = new Vector3(5.1f, 0f, 2.6f);
+                go.transform.localPosition = new Vector3(8.4f, 0f, 5.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1321,7 +1346,7 @@ namespace LunarDominion.UI
                 go = Instantiate(prefab);
                 go.name = "He3Building";
                 go.transform.SetParent(_layoutRoot.transform, false);
-                go.transform.localPosition = new Vector3(0f, 0f, 4.1f);
+                go.transform.localPosition = new Vector3(0f, 0f, 6.4f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1415,7 +1440,7 @@ namespace LunarDominion.UI
                 go = Instantiate(prefab);
                 go.name = "MarineBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
-                go.transform.localPosition = new Vector3(-5.1f, 0f, -2.6f);
+                go.transform.localPosition = new Vector3(-8.4f, 0f, -5.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1509,7 +1534,7 @@ namespace LunarDominion.UI
                 go = Instantiate(prefab);
                 go.name = "NovaBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
-                go.transform.localPosition = new Vector3(5.1f, 0f, -2.6f);
+                go.transform.localPosition = new Vector3(8.4f, 0f, -5.6f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1596,7 +1621,7 @@ namespace LunarDominion.UI
                 go = Instantiate(prefab);
                 go.name = "AegisBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
-                go.transform.localPosition = new Vector3(0f, 0f, -4.1f);
+                go.transform.localPosition = new Vector3(0f, 0f, -6.4f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1684,7 +1709,7 @@ namespace LunarDominion.UI
                 go = Instantiate(prefab);
                 go.name = "LabBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
-                go.transform.localPosition = new Vector3(-8.3f, 0f, 0f);
+                go.transform.localPosition = new Vector3(-12f, 0f, 0f);
                 go.transform.localScale = Vector3.one;
 
                 // Capture the model's part renderers BEFORE adding the marker,
@@ -1761,8 +1786,8 @@ namespace LunarDominion.UI
         }
 
         // Hospital (2026-11-09): same pattern as the Research Lab.
-        // The model position (8.3, 0, 0) is the layout position
-        // (20.75, 0) / 2.5, matching the other buildings' model
+        // The model position (12, 0, 0) is the layout position
+        // (30, 0) / 2.5, matching the other buildings' model
         // positions (see TryAddModelResearchLab). The marker is white
         // like the other buildings; the hospital's injured alert is a
         // separate pulsing red marker (see UpdateHospitalAlert), so the
@@ -1778,7 +1803,7 @@ namespace LunarDominion.UI
                 go = Instantiate(prefab);
                 go.name = "HospitalBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
-                go.transform.localPosition = new Vector3(8.3f, 0f, 0f);
+                go.transform.localPosition = new Vector3(12f, 0f, 0f);
                 go.transform.localScale = Vector3.one;
 
                 var renderers = go.GetComponentsInChildren<Renderer>();
