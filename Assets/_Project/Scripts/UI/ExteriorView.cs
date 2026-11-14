@@ -1809,11 +1809,18 @@ namespace LunarDominion.UI
         {
             var safe = SafeArea.Get(canvas);
             float baseY = 196f + safe.Bottom;
+            // The BASE+FIND cluster sits in the lower-left corner
+            // (Patrick 2026-11-13, moved from bottom centre): it
+            // can hug the corner now that the BottomNav it used
+            // to clear is hidden on the Map. The expanded find
+            // bar keeps its centred spot at baseY.
+            float clusterX = 24f + safe.Left;
+            float clusterY = 24f + safe.Bottom;
             var barColor = new Color(0.06f, 0.09f, 0.15f, 0.94f);
 
             _findRoot = UIHelpers.Panel(canvas.gameObject, "FindButton", barColor,
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(-95f, baseY), new Vector2(95f, baseY + 62f));
+                new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(clusterX + 195f, clusterY), new Vector2(clusterX + 385f, clusterY + 62f));
             var findBtn = UIHelpers.Button(_findRoot, "Find", "FIND", 30,
                 UIHelpers.Hex("#1A2436"), Color.white);
             var frt = findBtn.GetComponent<RectTransform>();
@@ -1826,11 +1833,12 @@ namespace LunarDominion.UI
             // BASE sits with FIND (Patrick 2026-11-13): with the
             // TopBar/BottomNav hidden on the Map, this button is
             // the way back to the Base tab. Same panel/button
-            // styling as FIND, immediately to its left, and it
-            // tucks away with FIND while the search bar is open.
+            // styling as FIND, first in the corner cluster, and
+            // it tucks away with FIND while the search bar is
+            // open.
             _baseBtnRoot = UIHelpers.Panel(canvas.gameObject, "BaseButton", barColor,
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(-290f, baseY), new Vector2(-105f, baseY + 62f));
+                new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(clusterX, clusterY), new Vector2(clusterX + 185f, clusterY + 62f));
             var baseBtn = UIHelpers.Button(_baseBtnRoot, "Base", "BASE", 30,
                 UIHelpers.Hex("#1A2436"), Color.white);
             var brt = baseBtn.GetComponent<RectTransform>();
