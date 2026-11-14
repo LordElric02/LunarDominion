@@ -777,29 +777,35 @@ namespace LunarDominion.Expeditions
             return roll < 0.30f ? 1 : (roll < 0.65f ? 2 : 3);
         }
 
-        // Normalize the slot arrays, and populate a FRESH field: when
-        // every slot is empty AND no respawn is pending, this save has
-        // never had the camp field (new game, or a save from before
-        // it) — fill all 15 slots now. A field with every camp beaten
-        // at once is NOT fresh: all its respawn timers are set.
+        // Normalize the slot arrays, then populate every slot that
+        // has never held a camp (no tier, no respawn timer): a fresh
+        // save fills the whole field; a save from before the field
+        // grew fills only the new slots. A field with every camp
+        // beaten at once is untouched: all its respawn timers are set.
         private void EnsureCampSlots()
         {
             if (_state.CampSlotTier == null || _state.CampSlotTier.Length != ExteriorView.CampSlotCount)
                 _state.CampSlotTier = new int[ExteriorView.CampSlotCount];
             if (_state.CampSlotRespawnUtc == null || _state.CampSlotRespawnUtc.Length != ExteriorView.CampSlotCount)
                 _state.CampSlotRespawnUtc = new string[ExteriorView.CampSlotCount];
-            bool anyTier = false;
-            bool anyTimer = false;
+            // A slot with no tier AND no respawn timer has never
+            // been populated: a fresh save (all slots) or slots the
+            // field GREW by after the save was written (the x4 map
+            // took the field 15 -> 36; on an existing save the new
+            // slots sat empty forever under the old all-or-nothing
+            // fresh-field check). A beaten camp always carries a
+            // timer (VanishCampSlot), so filling timer-less empty
+            // slots can never resurrect one early.
+            bool filled = false;
             for (int i = 0; i < ExteriorView.CampSlotCount; i++)
             {
-                if (_state.CampSlotTier[i] != 0) anyTier = true;
-                if (!string.IsNullOrEmpty(_state.CampSlotRespawnUtc[i])) anyTimer = true;
+                if (_state.CampSlotTier[i] == 0 && string.IsNullOrEmpty(_state.CampSlotRespawnUtc[i]))
+                {
+                    _state.CampSlotTier[i] = RollCampTier();
+                    filled = true;
+                }
             }
-            if (anyTier || anyTimer) return;
-            for (int i = 0; i < ExteriorView.CampSlotCount; i++)
-            {
-                _state.CampSlotTier[i] = RollCampTier();
-            }
+            if (!filled) return;
             _saveGame?.Invoke();
             _notifyChanged?.Invoke();
         }
