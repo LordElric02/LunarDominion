@@ -215,9 +215,9 @@ namespace LunarDominion.UI
             new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 500, Title = "Helium-3 Node", Info = "Helium-3: 500", Position = new Vector3(90f, 0f, -80f) },
             new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 1000, Title = "Helium-3 Node", Info = "Helium-3: 1000", Position = new Vector3(-140f, 0f, -40f) },
             new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 2000, Title = "Helium-3 Node", Info = "Helium-3: 2000", Position = new Vector3(220f, 0f, 150f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(110f, 0f, 30f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-170f, 0f, 120f) },
-            new NodeDef { ResourcePath = "Models/EnemyCamp", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(240f, 0f, -160f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT1", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 — Spore Crawlers\nExpedition enemy", Position = new Vector3(110f, 0f, 30f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT2", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 — Void Stalkers\nExpedition enemy", Position = new Vector3(-170f, 0f, 120f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT3", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 — Brood Tyrant\nExpedition enemy", Position = new Vector3(240f, 0f, -160f) },
             // Boss lair (2026-11-09): the War Robot lives here, far
             // southwest corner of the map. Index 12. The lair does not
             // move on respawn (unlike camps) — it is a fixed place.
@@ -229,9 +229,10 @@ namespace LunarDominion.UI
         // rings — near, mid, and far corners — all clear of the base,
         // the resource nodes, the boss lair, and each other. A slot's
         // camp tier is dynamic (rolled per spawn by MapExcursionService,
-        // weighted by Nexus level), so a slot shows the EnemyCamp
-        // marker plus the creature group for its CURRENT tier, built
-        // on demand. Slot points carry Index = CampSlotIndexBase + slot
+        // weighted by Nexus level), so a slot shows the one standout
+        // structure for its CURRENT tier, swapped in on demand (the
+        // creature figures that used to ring the camps were removed
+        // 2026-11-14). Slot points carry Index = CampSlotIndexBase + slot
         // so they never collide with node (0-8) or lair (12) indices.
         public const int CampSlotCount = 15;
         public const int CampSlotIndexBase = 100;
@@ -250,43 +251,21 @@ namespace LunarDominion.UI
         private readonly int[] _campSlotTier = new int[CampSlotCount];
         private readonly bool[] _campSlotVisible = new bool[CampSlotCount];
         private readonly MapPoint[] _campSlotMarkers = new MapPoint[CampSlotCount];
-        private readonly List<MapPoint>[] _campSlotCreatures = new List<MapPoint>[CampSlotCount];
+        private readonly GameObject[] _campSlotStructures = new GameObject[CampSlotCount];
 
-        // Creature layout per camp tier, as offsets from the slot
-        // position (the same relative layouts the 3 fixed camps used):
-        // Tier 1 = 4 Spore Crawlers, Tier 2 = 5 Void Stalkers,
-        // Tier 3 = the Brood Tyrant (2x) + 3 brood (1x).
-        private struct SlotCreatureDef
+        // One standout structure per camp tier (2026-11-14: the
+        // creature figures that used to ring each camp are gone -
+        // Patrick: "just one structure that stands out"). Loaded
+        // once in BuildCampSlots; SetCampSlot swaps the slot's
+        // child to the current tier's model.
+        private static readonly string[] CampStructurePaths =
         {
-            public string ResourcePath;
-            public Vector3 Offset;
-            public float Scale;
-        }
-        private static readonly SlotCreatureDef[][] CampCreatureTemplates =
-        {
-            new SlotCreatureDef[]
-            {
-                new SlotCreatureDef { ResourcePath = "Models/SporeCrawler", Offset = new Vector3(12f, 0f, 8f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/SporeCrawler", Offset = new Vector3(-12f, 0f, 10f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/SporeCrawler", Offset = new Vector3(10f, 0f, -12f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/SporeCrawler", Offset = new Vector3(-10f, 0f, -10f), Scale = 2f },
-            },
-            new SlotCreatureDef[]
-            {
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(14f, 0f, 10f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(-14f, 0f, 8f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(12f, 0f, -12f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(-12f, 0f, -10f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/VoidStalker", Offset = new Vector3(0f, 0f, 16f), Scale = 2f },
-            },
-            new SlotCreatureDef[]
-            {
-                new SlotCreatureDef { ResourcePath = "Models/BroodTyrant", Offset = new Vector3(16f, 0f, 0f), Scale = 2f },
-                new SlotCreatureDef { ResourcePath = "Models/BroodTyrant", Offset = new Vector3(-14f, 0f, 12f), Scale = 1f },
-                new SlotCreatureDef { ResourcePath = "Models/BroodTyrant", Offset = new Vector3(-14f, 0f, -12f), Scale = 1f },
-                new SlotCreatureDef { ResourcePath = "Models/BroodTyrant", Offset = new Vector3(4f, 0f, 18f), Scale = 1f },
-            },
+            null, // tier 0 = empty slot, no structure
+            "Models/EnemyCampT1",
+            "Models/EnemyCampT2",
+            "Models/EnemyCampT3",
         };
+        private readonly GameObject[] _campPrefabs = new GameObject[4];
 
         // Sculpted terrain height (2026-11-12, map revisit Phase 1):
         // the ExteriorTerrainV2 mesh is an analytic heightfield
@@ -479,52 +458,51 @@ namespace LunarDominion.UI
             };
         }
 
-        // Build the 15 camp slot markers (the EnemyCamp model at each
-        // slot position). Creatures are NOT built here — they depend on
-        // the slot's current tier and are built by SetCampSlot.
+        // Build the 15 camp slot roots (empty GameObjects at the
+        // slot positions, each with a generous tap collider). The
+        // tier structures are NOT built here - they depend on the
+        // slot's current tier and are swapped in by SetCampSlot.
         private void BuildCampSlots()
         {
-            GameObject prefab = null;
-            try
+            for (int tier = 1; tier <= 3; tier++)
             {
-                prefab = Resources.Load<GameObject>("Models/EnemyCamp");
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning("[ExteriorView] Camp marker failed to load (Models/EnemyCamp): " + e.Message);
+                try
+                {
+                    _campPrefabs[tier] = Resources.Load<GameObject>(CampStructurePaths[tier]);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[ExteriorView] Camp structure failed to load (" + CampStructurePaths[tier] + "): " + e.Message);
+                }
+                if (_campPrefabs[tier] == null)
+                {
+                    Debug.LogWarning("[ExteriorView] " + CampStructurePaths[tier] + ".fbx is missing - tier " + tier + " camps will show nothing. Copy the FBX into Assets/_Project/Resources/Models/ (do not rename it).");
+                }
             }
             for (int slot = 0; slot < CampSlotCount; slot++)
             {
-                _campSlotCreatures[slot] = new List<MapPoint>();
                 _campSlotTier[slot] = 0;
                 _campSlotVisible[slot] = false;
-                if (prefab == null) continue;
-                var go = Instantiate(prefab);
-                go.name = "Empty Camp Slot";
+                var go = new GameObject("Empty Camp Slot");
                 go.transform.position = CampSlotPositions[slot];
-                go.transform.localScale = Vector3.one * 2f;
-                if (go.GetComponentInChildren<Collider>() == null)
-                {
-                    var box = go.AddComponent<BoxCollider>();
-                    box.center = new Vector3(0f, 2f, 0f);
-                    box.size = new Vector3(4f, 4f, 4f);
-                }
+                var box = go.AddComponent<BoxCollider>();
+                box.center = new Vector3(0f, 4f, 0f);
+                box.size = new Vector3(14f, 9f, 14f);
                 go.SetActive(false);
-                var renderers = go.GetComponentsInChildren<Renderer>();
-                var colors = new Color[renderers.Length];
-                for (int r = 0; r < renderers.Length; r++) colors[r] = renderers[r].material.color;
-                var point = new MapPoint { Go = go, Data = CampSlotData(slot, 0), Renderers = renderers, OriginalColors = colors };
+                var point = new MapPoint
+                {
+                    Go = go,
+                    Data = CampSlotData(slot, 0),
+                    Renderers = new Renderer[0],
+                    OriginalColors = new Color[0]
+                };
                 _campSlotMarkers[slot] = point;
                 _mapPoints.Add(point);
-            }
-            if (prefab == null)
-            {
-                Debug.LogWarning("[ExteriorView] EnemyCamp.fbx is missing — camp slots will be empty. Copy EnemyCamp.fbx into Assets/_Project/Resources/Models/ (do not rename it).");
             }
         }
 
         /// <summary>Show a camp slot as the given tier (0 = empty):
-        /// rebuilds the slot's creatures for the tier and updates the
+        /// swaps the slot's structure for the tier and updates the
         /// marker's data in place (so a panel already showing this camp
         /// stays correct). No-op when the slot already shows that tier.
         /// Visibility is separate — see SetCampSlotVisible.</summary>
@@ -533,7 +511,7 @@ namespace LunarDominion.UI
             if (slot < 0 || slot >= CampSlotCount) return;
             if (tier < 0 || tier > 3) tier = 0;
             if (_campSlotTier[slot] == tier) return;
-            DestroySlotCreatures(slot);
+            DestroySlotStructure(slot);
             _campSlotTier[slot] = tier;
             var marker = _campSlotMarkers[slot];
             if (marker != null)
@@ -546,11 +524,11 @@ namespace LunarDominion.UI
                 marker.Data.Info = CampInfoForTier(tier);
                 if (marker.Go != null) marker.Go.name = tier > 0 ? CampTitleForTier(tier) : "Empty Camp Slot";
             }
-            if (tier > 0) BuildSlotCreatures(slot, tier);
+            if (tier > 0) BuildSlotStructure(slot, tier);
             ApplySlotVisibility(slot);
         }
 
-        /// <summary>Show or hide a camp slot (marker + creatures). An
+        /// <summary>Show or hide a camp slot (root + structure). An
         /// empty slot is never shown. The actual active state also
         /// respects whether the Map itself is open, so a camp that
         /// respawns while the player is on another tab never pops into
@@ -567,12 +545,6 @@ namespace LunarDominion.UI
             bool active = _visible && _campSlotVisible[slot];
             var marker = _campSlotMarkers[slot];
             if (marker != null && marker.Go != null) marker.Go.SetActive(active);
-            var creatures = _campSlotCreatures[slot];
-            if (creatures == null) return;
-            foreach (var creature in creatures)
-            {
-                if (creature.Go != null) creature.Go.SetActive(active);
-            }
         }
 
         // The creature FBXs are authored around their centres,
@@ -595,57 +567,40 @@ namespace LunarDominion.UI
             }
         }
 
-        private void BuildSlotCreatures(int slot, int tier)
+        // Swap in the tier's structure as the slot root's child
+        // (authored at final size, so scale 1; the imported
+        // rotation is left alone, per the FBX rule) and refresh
+        // the marker's renderer cache so the per-renderer tinting
+        // in Update keeps working with the new model.
+        private void BuildSlotStructure(int slot, int tier)
         {
-            var template = CampCreatureTemplates[tier - 1];
-            string title = CampTitleForTier(tier);
-            foreach (var def in template)
-            {
-                GameObject prefab = null;
-                try
-                {
-                    prefab = Resources.Load<GameObject>(def.ResourcePath);
-                }
-                catch (System.Exception e)
-                {
-                    Debug.LogWarning("[ExteriorView] Creature failed to load (" + def.ResourcePath + "): " + e.Message);
-                }
-                if (prefab == null)
-                {
-                    Debug.LogWarning("[ExteriorView] " + def.ResourcePath + " is missing — that creature will be an empty spot. Copy the FBX into Assets/_Project/Resources/Models/ (do not rename it).");
-                    continue;
-                }
-                var go = Instantiate(prefab);
-                go.name = title + " Creature";
-                go.transform.position = CampSlotPositions[slot] + def.Offset;
-                go.transform.localScale = Vector3.one * def.Scale;
-                GroundSnap(go);
-                if (go.GetComponentInChildren<Collider>() == null)
-                {
-                    var box = go.AddComponent<BoxCollider>();
-                    box.center = new Vector3(0f, 2f, 0f);
-                    box.size = new Vector3(4f, 4f, 4f);
-                }
-                go.SetActive(false);
-                // The creature IS its camp for tapping: it carries the
-                // slot's data (with the CAMP position, so the march
-                // target is the camp, not the creature's offset spot).
-                var point = new MapPoint { Go = go, Data = CampSlotData(slot, tier) };
-                _campSlotCreatures[slot].Add(point);
-                _mapPoints.Add(point);
-            }
+            var marker = _campSlotMarkers[slot];
+            if (marker == null || marker.Go == null) return;
+            var prefab = _campPrefabs[tier];
+            if (prefab == null) return;
+            var go = Instantiate(prefab);
+            go.name = CampTitleForTier(tier) + " Structure";
+            go.transform.SetParent(marker.Go.transform, false);
+            go.transform.localPosition = Vector3.zero;
+            _campSlotStructures[slot] = go;
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            var colors = new Color[renderers.Length];
+            for (int r = 0; r < renderers.Length; r++) colors[r] = renderers[r].material.color;
+            marker.Renderers = renderers;
+            marker.OriginalColors = colors;
         }
 
-        private void DestroySlotCreatures(int slot)
+        private void DestroySlotStructure(int slot)
         {
-            var creatures = _campSlotCreatures[slot];
-            if (creatures == null) return;
-            foreach (var creature in creatures)
+            var go = _campSlotStructures[slot];
+            if (go != null) Destroy(go);
+            _campSlotStructures[slot] = null;
+            var marker = _campSlotMarkers[slot];
+            if (marker != null)
             {
-                _mapPoints.Remove(creature);
-                if (creature.Go != null) Destroy(creature.Go);
+                marker.Renderers = new Renderer[0];
+                marker.OriginalColors = new Color[0];
             }
-            creatures.Clear();
         }
 
         public void Build()
@@ -1108,9 +1063,9 @@ namespace LunarDominion.UI
         }
 
         // Fixed creatures on the map: only the War Robot at the boss
-        // lair now (2026-11-10). Camp creatures are built per camp
-        // slot from CampCreatureTemplates, since a slot's tier (and
-        // therefore its creatures) is dynamic.
+        // lair now (2026-11-10). Camp slots show no creatures at all
+        // since 2026-11-14 — each slot carries one tier structure
+        // (see CampStructurePaths), swapped by SetCampSlot.
         private struct CreatureDef
         {
             public string ResourcePath; // Resources/Models/<name>
