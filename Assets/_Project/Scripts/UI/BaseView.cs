@@ -81,7 +81,7 @@ namespace LunarDominion.UI
         // ground is (-0.707,0,-0.707) — same as the Map camera.
         private static readonly Vector3 CamRight = new Vector3(0.7071f, 0f, -0.7071f);
         private static readonly Vector3 CamGroundForward = new Vector3(-0.7071f, 0f, -0.7071f);
-        private static readonly Vector3 BaseCameraPosition = new Vector3(17f, 31.9f, 17f);
+        private static readonly Vector3 BaseCameraPosition = new Vector3(13.2f, 24.8f, 13.2f);
         // Drag state: a press that moves past the threshold becomes a
         // drag (pan) and must NOT also fire as a tap on release.
         // True while the Base tab is the view on screen. Set by
@@ -136,7 +136,15 @@ namespace LunarDominion.UI
             // corners now crop out of frame (max |NDC x| ~1.16),
             // which he explicitly accepted ('don't worry about the
             // outside wall'); every building stays in frame
-            // (max |NDC x| ~0.73). The
+            // (max |NDC x| ~0.73).
+            // 2026-11-14: after the hexagonal wall went in, that
+            // same distance-40 framing fit the whole (narrower)
+            // hexagon in frame and read as a far 'default view' —
+            // Patrick sent the closer framing he wants as default,
+            // so the camera moves in again to distance 31
+            // (13.2, 24.8, 13.2): the ring road spans ~|NDC x| 0.90,
+            // the hexagon's sides sit at ~1.19 (cropped at the
+            // frame edges), buildings and plaza large in frame. The
             // terrain and the mountain ring grew in the same pass so
             // every frame edge is still covered by ground or
             // mountains. The layout turns 45 degrees under BaseLayout.
