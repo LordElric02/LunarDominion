@@ -63,6 +63,10 @@ namespace LunarDominion.UI
         public event Action<MapPointData> OnMapPointSelected;
         // Raised when a tap lands on empty map ground (not a node/camp).
         public event Action OnEmptyMapTapped;
+        // Raised by the BASE button beside FIND (Patrick
+        // 2026-11-13): with the nav bar hidden on the Map, this
+        // is the way back to the Base tab.
+        public event Action OnBackToBaseClicked;
 
         // True while the Map tab is the active view.
         public bool IsVisible => _visible;
@@ -1736,6 +1740,9 @@ namespace LunarDominion.UI
         };
 
         private GameObject _findRoot;
+        private GameObject _baseBtnRoot;
+        private GameObject _topBarGo;
+        private GameObject _bottomNavGo;
         private GameObject _findBar;
         private Text _findStatus;
         private readonly Button[] _findChips = new Button[ChipCategories.Length];
@@ -1816,6 +1823,23 @@ namespace LunarDominion.UI
             frt.offsetMax = Vector2.zero;
             findBtn.onClick.AddListener(() => SetFindBarOpen(true));
 
+            // BASE sits with FIND (Patrick 2026-11-13): with the
+            // TopBar/BottomNav hidden on the Map, this button is
+            // the way back to the Base tab. Same panel/button
+            // styling as FIND, immediately to its left, and it
+            // tucks away with FIND while the search bar is open.
+            _baseBtnRoot = UIHelpers.Panel(canvas.gameObject, "BaseButton", barColor,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(-290f, baseY), new Vector2(-105f, baseY + 62f));
+            var baseBtn = UIHelpers.Button(_baseBtnRoot, "Base", "BASE", 30,
+                UIHelpers.Hex("#1A2436"), Color.white);
+            var brt = baseBtn.GetComponent<RectTransform>();
+            brt.anchorMin = Vector2.zero;
+            brt.anchorMax = Vector2.one;
+            brt.offsetMin = Vector2.zero;
+            brt.offsetMax = Vector2.zero;
+            baseBtn.onClick.AddListener(() => OnBackToBaseClicked?.Invoke());
+
             _findBar = UIHelpers.Panel(canvas.gameObject, "FindBar", barColor,
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(-660f, baseY), new Vector2(660f, baseY + 128f));
@@ -1850,6 +1874,7 @@ namespace LunarDominion.UI
             _searchRoot.SetActive(false);
             _findBar.SetActive(false);
             _findRoot.SetActive(false);
+            _baseBtnRoot.SetActive(false);
             UpdateSearchStatus();
         }
 
@@ -1858,6 +1883,7 @@ namespace LunarDominion.UI
             _findBarOpen = open;
             if (!open) ClearSearch();
             if (_findRoot != null) _findRoot.SetActive(_visible && !open);
+            if (_baseBtnRoot != null) _baseBtnRoot.SetActive(_visible && !open);
             if (_findBar != null) _findBar.SetActive(_visible && open);
         }
 
@@ -2115,6 +2141,20 @@ namespace LunarDominion.UI
             if (_findRoot != null) _findRoot.SetActive(visible && !_findBarOpen);
             if (_findBar != null) _findBar.SetActive(visible && _findBarOpen);
             if (_searchRoot != null) _searchRoot.SetActive(visible);
+            if (_baseBtnRoot != null) _baseBtnRoot.SetActive(visible && !_findBarOpen);
+            // Full-screen Map (Patrick 2026-11-13): the TopBar
+            // and BottomNav panels hide while the Map is up —
+            // the same canvas panels the boss fight's chrome
+            // hides (the *View objects are empty hosts; the
+            // panels are canvas children found by name).
+            // SetVisible is the single choke point — tab
+            // switches, entering the lair and closing the lair
+            // all pass through here — so the bars always match
+            // the screen on top.
+            if (_topBarGo == null) _topBarGo = GameObject.Find("TopBar");
+            if (_bottomNavGo == null) _bottomNavGo = GameObject.Find("BottomNav");
+            if (_topBarGo != null) _topBarGo.SetActive(!visible);
+            if (_bottomNavGo != null) _bottomNavGo.SetActive(!visible);
             var cam = Camera.main;
             if (cam == null) return;
             if (visible)
