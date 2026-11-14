@@ -412,6 +412,27 @@ namespace LunarDominion.UI
                     _coreBaseEmission = _coreMaterial.GetColor("_EmissionColor");
             }
 
+            // The visor fix (2026-11-13): the imported FBX renders
+            // a full blue visor bar in Blender and the fight poses
+            // never pitch the head, yet in game the visor reads as
+            // a dark plate with two dots — the imported glow is
+            // lost on Unity's side of the import. So the visor
+            // renderer gets a runtime URP-Unlit material instead:
+            // guaranteed bright, the same route as the contact
+            // flashes (URP/Unlit is in Always Included Shaders, so
+            // it survives phone builds too).
+            foreach (var t in aresModel.GetComponentsInChildren<Transform>())
+            {
+                if (t.name != "Visor") continue;
+                var visorRenderer = t.GetComponent<Renderer>();
+                if (visorRenderer == null) continue;
+                var visorShader = Shader.Find("Universal Render Pipeline/Unlit");
+                if (visorShader == null) continue;
+                var visorMaterial = new Material(visorShader);
+                visorMaterial.SetColor("_BaseColor", new Color(0.45f, 0.95f, 1.0f));
+                visorRenderer.sharedMaterial = visorMaterial;
+            }
+
             // Telegraph rings at the boss's feet.
             _slamRing = MakeRing(new Color(1f, 0.30f, 0.10f));
             _ventRing = MakeRing(new Color(1f, 0.55f, 0.10f));
