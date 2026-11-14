@@ -94,10 +94,15 @@ NORMAL_STRENGTH = 2.0
 
 # Colours as sRGB DISPLAY values (the PNG stores sRGB; Unity decodes
 # to linear on sample — same convention as the regolith texture).
-CONCRETE = (0.45, 0.46, 0.49)
-PLAZA_DISC = (0.53, 0.54, 0.57)
-SEAM = (0.26, 0.27, 0.30)
-ASPHALT = (0.215, 0.225, 0.25)
+# 2026-11-14 (Patrick): the floor is BLACK — plates near-black with
+# only the sin-variation and grain over them (the tile relief still
+# reads via the normal map); the roads sit on it as dark asphalt
+# with pale edge lines and dashed centrelines, plaza disc black
+# with its cyan rings kept.
+CONCRETE = (0.030, 0.030, 0.034)
+PLAZA_DISC = (0.050, 0.050, 0.056)
+SEAM = (0.014, 0.014, 0.016)
+ASPHALT = (0.105, 0.108, 0.118)
 ROAD_EDGE = (0.52, 0.54, 0.58)
 ROAD_DASH = (0.85, 0.79, 0.52)
 PLAZA_RING = (0.35, 0.75, 0.85)

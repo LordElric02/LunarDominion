@@ -39,9 +39,9 @@ namespace LunarDominion.UI
         // while the ground plane and mountains stay unrotated.
         private GameObject _layoutRoot;
         // Base environment pieces the Map tab hides (see
-        // SetEnvironmentVisible): the ground mesh, the paved
-        // interior plane, and every wall piece.
-        private GameObject _groundGo;
+        // SetEnvironmentVisible): the paved interior plane and
+        // every wall piece. (The ground mesh is not among them —
+        // since 2026-11-14 it never shows at all; see BuildGround.)
         private GameObject _pavedGo;
         private readonly System.Collections.Generic.List<GameObject> _wallPieces =
             new System.Collections.Generic.List<GameObject>();
@@ -451,7 +451,13 @@ namespace LunarDominion.UI
             {
                 var terrain = Instantiate(terrainPrefab);
                 terrain.name = "LunarGround";
-                _groundGo = terrain;
+                // Moon sand removed from the base (2026-11-14,
+                // Patrick): the terrain never shows in the base
+                // view — the compound sits on the black paving
+                // over the dark backdrop. (The Map tab has its own
+                // exterior terrain; this mesh was only ever the
+                // base's own ground.)
+                terrain.SetActive(false);
                 terrain.transform.position = Vector3.zero;
                 // Do NOT set the rotation here. The FBX carries a -90 deg X
                 // axis conversion (Blender Z-up to Unity Y-up). When the
@@ -470,7 +476,7 @@ namespace LunarDominion.UI
                 // Flat-plane fallback (the pre-terrain ground).
                 var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
                 ground.name = "LunarGround";
-                _groundGo = ground;
+                ground.SetActive(false); // moon sand removed — see above
                 ground.transform.localScale = new Vector3(13.2f, 1f, 13.2f);
                 SetPrimitiveColor(ground.GetComponent<Renderer>(), new Color(0.27f, 0.29f, 0.33f));
                 groundRenderer = ground.GetComponent<Renderer>();
@@ -2109,21 +2115,20 @@ namespace LunarDominion.UI
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
         }
 
-        /// <summary>Show or hide the base environment: the ground
-        /// mesh, the paved interior and the perimeter wall. The Map
-        /// tab hides them (2026-11-13, Patrick: the Map view should
-        /// stay as it was before the base redesign): on the Map the
-        /// base is represented by ExteriorView's BaseMarker castle,
-        /// which sits on the exterior terrain's flat base disc
-        /// (r 42 — the whole compound footprint fits inside it), and
-        /// the base's own ground would otherwise show around the
-        /// castle as a 132x132 pale diamond, with the new wall and
-        /// road paving around it. Buildings are toggled separately
-        /// by SetVisible; rocks, props, debris and the planet stay
-        /// as they were.</summary>
+        /// <summary>Show or hide the base environment: the paved
+        /// interior and the perimeter wall. The Map tab hides them
+        /// (2026-11-13, Patrick: the Map view should stay as it was
+        /// before the base redesign): on the Map the base is
+        /// represented by ExteriorView's BaseMarker castle, which
+        /// sits on the exterior terrain's flat base disc (r 42 — the
+        /// whole compound footprint fits inside it); the base's wall
+        /// and road paving would otherwise show around the castle.
+        /// The ground mesh is not toggled here — since 2026-11-14
+        /// it never shows at all (moon sand removed, BuildGround).
+        /// Buildings are toggled separately by SetVisible; rocks,
+        /// props, debris and the planet stay as they were.</summary>
         public void SetEnvironmentVisible(bool visible)
         {
-            if (_groundGo != null) _groundGo.SetActive(visible);
             if (_pavedGo != null) _pavedGo.SetActive(visible);
             foreach (var go in _wallPieces)
             {
