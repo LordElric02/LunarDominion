@@ -42,6 +42,7 @@ namespace LunarDominion.UI
         private readonly List<Vector3> _heroOrigPos = new List<Vector3>();
         private bool _visible;
         private bool _fighting;
+        private bool _selectMode;
 
         // Boss ladder (2026-11-10): 15 levels of War Robot. The player
         // fights the selected level (1 to the highest unlocked =
@@ -528,8 +529,20 @@ namespace LunarDominion.UI
                     // (r < ~28) — the first 2x framing put it at
                     // z -32, inside the south wall itself, and the
                     // fight view was solid rock (Patrick, 2026-11-11).
-                    cam.transform.position = new Vector3(500f, 10f, -26f);
-                    cam.transform.LookAt(new Vector3(500f, 5f, 6f));
+                    if (_selectMode)
+                    {
+                        // Selection framing: a touch higher than
+                        // the standard arena framing, so the boss
+                        // and the staged heroes read in the band
+                        // above the selection panel (2026-11-13).
+                        cam.transform.position = new Vector3(500f, 17f, -25f);
+                        cam.transform.LookAt(new Vector3(500f, 5.5f, 3f));
+                    }
+                    else
+                    {
+                        cam.transform.position = new Vector3(500f, 10f, -26f);
+                        cam.transform.LookAt(new Vector3(500f, 5f, 6f));
+                    }
                 }
                 else
                 {
@@ -723,8 +736,9 @@ namespace LunarDominion.UI
             // want to re-fight it.
             _selectedBossLevel = HighestUnlockedBossLevel();
             _root.SetActive(true);
-            // Hero selection: hide the 3D lair and expand the panel so
-            // all heroes show without scrolling (Patrick 2026-11-10).
+            // Hero selection: the scene stays visible (boss +
+            // staged heroes) behind the compact panel
+            // (Patrick 2026-11-13).
             SetSelectMode(true);
             // A fresh open always shows the header + bottom panel (they
             // are hidden during a fight — see OnFightClicked).
@@ -750,17 +764,23 @@ namespace LunarDominion.UI
             if (_root != null) _root.SetActive(false);
         }
 
-        // Hero selection mode (Patrick 2026-11-10): while the player is
-        // picking heroes, hide the 3D lair scene and expand the bottom
-        // panel to fill the area below the header, so all heroes show
-        // without scrolling. During the fight the 3D scene shows and
-        // the panel returns to its normal size (and the UI hides).
+        // Hero selection mode: while the player is picking heroes
+        // the 3D lair scene stays visible — the boss and the
+        // selected heroes stand in the arena — behind a compact
+        // bottom panel (the rows scroll if they overflow). The
+        // 2026-11-10 layout hid the scene and expanded the panel
+        // to 0.80; Patrick asked for the heroes in the lair
+        // (2026-11-13). During the fight the panel returns to
+        // its normal size (and the UI hides). The scene root
+        // itself stays active the whole time the view is open;
+        // Hide() is what turns it off.
         private void SetSelectMode(bool select)
         {
-            if (_sceneRoot != null) _sceneRoot.SetActive(!select);
+            _selectMode = select;
+            if (_sceneRoot != null) _sceneRoot.SetActive(true);
             if (_bottomRt != null)
             {
-                _bottomRt.anchorMax = select ? new Vector2(1, 0.80f) : new Vector2(1, 0.45f);
+                _bottomRt.anchorMax = select ? new Vector2(1, 0.52f) : new Vector2(1, 0.45f);
             }
         }
 
@@ -1000,62 +1020,30 @@ namespace LunarDominion.UI
             _heroFigures.Clear();
             _heroOrigPos.Clear();
             if (_controller == null || _controller.State == null || _controller.State.Heroes == null) return;
-            // Real-time mode has no preview figures: the arena
-            // combatants spawn when the fight starts.
-            if (UseRealtime()) return;
-            var zSpots = new float[] { -3f, 0f, 3f };
+            // A fight builds its own figures at these same spots;
+            // the staged heroes stand down while one is running.
+            if (_fighting || _turnActive || _realtimeActive) return;
+            // The selected heroes, staged in the arena at the
+            // fight's own spots (Patrick 2026-11-13: the heroes
+            // stand in the lair while you pick them). Built with
+            // the fight's figure builder, so what you see while
+            // picking is what fights. (This replaces the old
+            // cave-layout preview figures, which the arena
+            // presentation made unreachable.)
+            var xSpots = new float[] { -4f, 0f, 4f };
             for (int s = 0; s < _selectedHeroIndices.Count && s < 3; s++)
             {
                 int heroIndex = _selectedHeroIndices[s];
                 if (heroIndex < 0 || heroIndex >= _controller.State.Heroes.Count) continue;
                 var hero = _controller.State.Heroes[heroIndex];
                 if (hero == null) continue;
-                var color = HeroColorFor(hero.Id);
-                var fig = new GameObject("HeroFigure");
-                fig.transform.SetParent(_sceneRoot.transform, false);
-                // Closer to the camera and to centre (x -3.5, not -4) so
-                // the heroes read clearly in the open middle band. The
-                // figures are BIG (~3.5 tall, near-human scale next to
-                // the 5+ tall robot) so the fight is actually visible.
-                fig.transform.localPosition = new Vector3(-3.5f, 0f, zSpots[s]);
-                // The hero's real model when installed; the
-                // primitive figure otherwise. Modeled figures turn
-                // to face the robot (+X in cave space).
                 var def = _controller.UnitDefinitions != null
                     ? _controller.UnitDefinitions.Find(d => d.Id == hero.Id)
                     : null;
-                bool modeled = def != null && TryAddHeroModel(fig, def);
-                if (modeled)
-                {
-                    fig.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
-                }
-                else
-                {
-                    // Body: capsule, ~2.6 tall. Head: sphere on top.
-                    var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                    body.name = "HeroBody";
-                    body.transform.SetParent(fig.transform, false);
-                    body.transform.localPosition = new Vector3(0f, 1.3f, 0f);
-                    body.transform.localScale = new Vector3(1.0f, 1.3f, 1.0f);
-                    SetColor(body.GetComponent<Renderer>(), color);
-                    Destroy(body.GetComponent<Collider>());
-                    var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    head.name = "HeroHead";
-                    head.transform.SetParent(fig.transform, false);
-                    head.transform.localPosition = new Vector3(0f, 2.9f, 0f);
-                    head.transform.localScale = Vector3.one * 0.8f;
-                    SetColor(head.GetComponent<Renderer>(), new Color(0.85f, 0.75f, 0.65f));
-                    Destroy(head.GetComponent<Collider>());
-                }
-                // A flat coloured disc under the hero so it stands out
-                // against the dark cave floor.
-                var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                disc.name = "HeroDisc";
-                disc.transform.SetParent(fig.transform, false);
-                disc.transform.localPosition = new Vector3(0f, 0.05f, 0f);
-                disc.transform.localScale = new Vector3(1.6f, 0.1f, 1.6f);
-                SetColor(disc.GetComponent<Renderer>(), color);
-                Destroy(disc.GetComponent<Collider>());
+                if (def == null) continue;
+                var fig = BuildCombatFigure(def, HeroColorFor(hero.Id));
+                fig.transform.SetParent(_sceneRoot.transform, false);
+                fig.transform.position = new Vector3(500f + xSpots[s], 0f, -2f);
                 _heroFigures.Add(fig);
                 _heroOrigPos.Add(fig.transform.localPosition);
             }
@@ -1075,6 +1063,9 @@ namespace LunarDominion.UI
             var heroIndices = new List<int>(_selectedHeroIndices);
             _fighting = true;
             RefreshFightButton();
+            // The fight builds its own figures at the same
+            // spots — stand the staged heroes down.
+            RefreshHeroFigures();
             // Present the cave set (in case the level selection
             // crossed fight modes) and leave hero-selection mode:
             // show the 3D lair for the fight (the panel returns to
@@ -1237,6 +1228,9 @@ namespace LunarDominion.UI
             var heroIndices = new List<int>(_selectedHeroIndices);
             _fighting = true;
             RefreshFightButton();
+            // Stand the staged heroes down (the fight builds
+            // its own combatants).
+            RefreshHeroFigures();
             // Leave hero-selection mode and present the arena (the
             // header + bottom panel hide, as in the turn-based flow;
             // the fight HUD takes over).
@@ -1253,6 +1247,7 @@ namespace LunarDominion.UI
                 if (_bottomGo != null) _bottomGo.SetActive(true);
                 _resultText.text = reason;
                 RefreshFightButton();
+                RefreshHeroFigures();
                 return;
             }
             _controller.SaveGame();
@@ -1879,6 +1874,9 @@ namespace LunarDominion.UI
             var heroIndices = new List<int>(_selectedHeroIndices);
             _fighting = true;
             RefreshFightButton();
+            // Stand the staged heroes down (the fight builds
+            // its own figures at the same spots).
+            RefreshHeroFigures();
             SetSelectMode(false);
             if (_headerGo != null) _headerGo.SetActive(false);
             if (_bottomGo != null) _bottomGo.SetActive(false);
@@ -1892,6 +1890,7 @@ namespace LunarDominion.UI
                 if (_bottomGo != null) _bottomGo.SetActive(true);
                 _resultText.text = reason;
                 RefreshFightButton();
+                RefreshHeroFigures();
                 return;
             }
             _controller.SaveGame();
