@@ -127,6 +127,9 @@ namespace LunarDominion.Bootstrap
             // and the lair hooks below crossfade it from there.
             _music = new GameObject("MusicDirector").AddComponent<MusicDirector>();
             _music.PlayBase();
+            // Sound effects (C5): created once here; the boss
+            // fight reaches it through SfxDirector.Instance.
+            new GameObject("SfxDirector").AddComponent<SfxDirector>();
 
             _controller.OnStateChanged += RefreshAll;
             RefreshAll();

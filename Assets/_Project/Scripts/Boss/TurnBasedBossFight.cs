@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using LunarDominion.Core;
+using LunarDominion.Audio;
 using LunarDominion.Expeditions;
 using UnityEngine;
 
@@ -744,6 +745,7 @@ namespace LunarDominion.Boss
             if (Director != null) Director.PlayShot(BossShot.HeroStrike, hero.Figure.transform);
             Vector3 targetPos = drone != null ? drone.Figure.transform.position : _bossRoot.position;
             Vector3 impact = targetPos + Vector3.up * (drone != null ? 2.2f : 8.5f);
+            if (hero.Class == UnitClass.Ranged) SfxDirector.Play(SfxClip.HeroShoot);
             if (hero.Class == UnitClass.Ranged)
             {
                 yield return BoltRoutine(FigureChest(hero.Figure.transform), impact,
@@ -754,6 +756,7 @@ namespace LunarDominion.Boss
                 yield return LungeRoutine(hero.Figure.transform, hero.Home, targetPos,
                     drone != null ? 2.6f : 5.2f);
             }
+            if (hero.Class != UnitClass.Ranged) SfxDirector.Play(SfxClip.HeroHit);
             StartCoroutine(ContactFlashRoutine(impact, ImpactTint()));
             int dmg = CombatService.Damage(HeroAtk(hero), drone != null ? 0 : BossEffDef,
                 hero.Class, UnitClass.Mechanized, hero.Level, BossLevel);
@@ -793,6 +796,7 @@ namespace LunarDominion.Boss
                     {
                         if (ally.Alive) ally.AtkBuffRounds = RallyRounds;
                     }
+                    SfxDirector.Play(SfxClip.Buff);
                     AddLog($"{hero.Name} uses RALLY — team ATK up for {RallyRounds} rounds!");
                     yield return PulseAllHeroes();
                     break;
@@ -802,12 +806,14 @@ namespace LunarDominion.Boss
                     {
                         if (ally.Alive) ally.DefBuffRounds = BulwarkRounds;
                     }
+                    SfxDirector.Play(SfxClip.Buff);
                     AddLog($"{hero.Name} uses BULWARK — team DEF up for {BulwarkRounds} rounds!");
                     yield return PulseAllHeroes();
                     break;
 
                 case HeroSkillId.Deadeye:
                     hero.DeadeyeCharges = DeadeyeChargesGranted;
+                    SfxDirector.Play(SfxClip.Buff);
                     AddLog($"{hero.Name} uses DEADEYE — next {DeadeyeChargesGranted} attacks at x{DeadeyeMult} damage.");
                     yield return FlashRoutine(hero.Figure.transform, 1.10f);
                     break;
@@ -818,6 +824,7 @@ namespace LunarDominion.Boss
                         drone != null ? drone.Figure.transform.position : bossPos,
                         drone != null ? 2.6f : 5.2f);
                     HitStop(0.06f);
+                    SfxDirector.Play(drone != null ? SfxClip.SkillHit : SfxClip.Crit);
                     StartCoroutine(ContactFlashRoutine(
                         (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         ImpactTint()));
@@ -837,6 +844,7 @@ namespace LunarDominion.Boss
                         (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         new Color(1f, 0.75f, 0.35f));
                     HitStop(0.05f);
+                    SfxDirector.Play(drone != null ? SfxClip.SkillHit : SfxClip.Crit);
                     StartCoroutine(ContactFlashRoutine(
                         (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         new Color(0.45f, 0.9f, 1f)));
@@ -850,6 +858,7 @@ namespace LunarDominion.Boss
                 }
 
                 case HeroSkillId.SuppressingFire:
+                    SfxDirector.Play(SfxClip.HeroShoot);
                     yield return BoltRoutine(FigureChest(hero.Figure.transform), bossPos + Vector3.up * 8.5f,
                         new Color(1f, 0.55f, 0.2f));
                     _bossAtkDebuffRounds = SuppressRounds;
@@ -866,6 +875,7 @@ namespace LunarDominion.Boss
                         ally.Shield = shield;
                         ally.ShieldRounds = AegisRounds;
                     }
+                    SfxDirector.Play(SfxClip.Buff);
                     AddLog($"{hero.Name} uses AEGIS PROTOCOL — team shielded for {shield} HP!");
                     yield return PulseAllHeroes();
                     break;
@@ -874,6 +884,7 @@ namespace LunarDominion.Boss
                 case HeroSkillId.GuardianTaunt:
                     _tauntRounds = TauntRounds;
                     _tauntHero = hero;
+                    SfxDirector.Play(SfxClip.Buff);
                     AddLog($"{hero.Name} uses GUARDIAN TAUNT — the boss must attack her for {TauntRounds} rounds.");
                     yield return FlashRoutine(hero.Figure.transform, 1.12f);
                     break;
@@ -883,6 +894,7 @@ namespace LunarDominion.Boss
                     yield return LungeRoutine(hero.Figure.transform, hero.Home,
                         drone != null ? drone.Figure.transform.position : bossPos,
                         drone != null ? 2.6f : 5.2f);
+                    SfxDirector.Play(SfxClip.SkillHit);
                     StartCoroutine(ContactFlashRoutine(
                         (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
                         ImpactTint()));
@@ -936,6 +948,7 @@ namespace LunarDominion.Boss
                 if (!_dronesSummoned) _pendingSummon = true;
                 AddLog("A.R.E.S. core exposed — PHASE 2. Drones incoming!");
                 OnPhase2?.Invoke();
+                SfxDirector.Play(SfxClip.Phase2);
                 if (Director != null) Director.PlayShot(BossShot.Phase2Push);
                 HitStop(0.06f);
             }
@@ -957,6 +970,7 @@ namespace LunarDominion.Boss
             if (drone.Hp <= 0 && drone.Alive)
             {
                 drone.Alive = false;
+                SfxDirector.Play(SfxClip.DroneDown);
                 if (drone.BarRoot != null) drone.BarRoot.SetActive(false);
                 AddLog($"{drone.Name} destroyed!");
                 StartCoroutine(DroneFallRoutine(drone));
@@ -1045,6 +1059,7 @@ namespace LunarDominion.Boss
                 hero.Alive = false;
                 AddLog($"{hero.Name} is DOWN!");
                 AddShake(0.25f);
+                SfxDirector.Play(SfxClip.HeroFall);
                 HitStop(0.05f);
                 StartCoroutine(TipOverRoutine(hero));
             }
@@ -1115,6 +1130,7 @@ namespace LunarDominion.Boss
             if (_bossTurn % 5 == 4)
             {
                 _slamCharged = true;
+                SfxDirector.Play(SfxClip.SlamCharge);
                 AddLog("A.R.E.S. is charging SEISMIC SLAM — it lands next turn!");
                 OnChanged?.Invoke();
                 if (Director != null) Director.PlayShot(BossShot.BossCharge);
@@ -1164,6 +1180,7 @@ namespace LunarDominion.Boss
             yield return StartCoroutine(BlastRoutine(
                 _bossRoot.position + Vector3.up * 7.5f,
                 FigureChest(target.Figure.transform)));
+            SfxDirector.Play(SfxClip.BossHit);
             StartCoroutine(ContactFlashRoutine(FigureChest(target.Figure.transform),
                 new Color(1f, 0.45f, 0.2f)));
             int dmg = CombatService.Damage(BossEffAtk, target.EffDef,
@@ -1176,6 +1193,7 @@ namespace LunarDominion.Boss
         private IEnumerator SweepRoutine()
         {
             AddLog("A.R.E.S. fires THERMAL SWEEP!");
+            SfxDirector.Play(SfxClip.Sweep);
             OnChanged?.Invoke();
             if (Director != null) Director.PlayShot(BossShot.BossCharge);
             // Phase 4 presentation: a target marker lights up
@@ -1246,6 +1264,7 @@ namespace LunarDominion.Boss
             // shakes the camera (Phase 5).
             AddShake(0.55f);
             HitStop(0.07f);
+            SfxDirector.Play(SfxClip.SlamHit);
             StartCoroutine(ShockwaveRoutine(_bossRoot.position));
             int atk = Mathf.RoundToInt(BossEffAtk * SlamAtkMult);
             foreach (var hero in Heroes)
@@ -1262,6 +1281,7 @@ namespace LunarDominion.Boss
         private IEnumerator SummonDronesRoutine()
         {
             AddLog("A.R.E.S. launches sub-drones!");
+            SfxDirector.Play(SfxClip.DroneLaunch);
             OnChanged?.Invoke();
             if (Director != null) Director.PlayShot(BossShot.BossCharge);
             SetPose(0f, 0f, 30f);
@@ -1303,6 +1323,7 @@ namespace LunarDominion.Boss
         {
             var target = LowestHpHero();
             if (target == null) yield break;
+            SfxDirector.Play(SfxClip.DroneShoot);
             yield return BoltRoutine(drone.Figure.transform.position,
                 FigureChest(target.Figure.transform), new Color(1f, 0.5f, 0.2f), 0.10f);
             StartCoroutine(ContactFlashRoutine(FigureChest(target.Figure.transform),
@@ -1320,6 +1341,7 @@ namespace LunarDominion.Boss
             if (_phase2 && _bossTurn % 3 == 2)
             {
                 _ventActive = true;
+                SfxDirector.Play(SfxClip.Vent);
                 AddLog("The core VENTS — searing heat! A.R.E.S. takes +25% damage until it acts.");
                 OnChanged?.Invoke();
                 yield return new WaitForSeconds(0.35f);
@@ -1384,6 +1406,7 @@ namespace LunarDominion.Boss
             if (victory && _bossVisual != null)
             {
                 AddShake(0.45f);
+                SfxDirector.Play(SfxClip.Victory);
                 if (Director != null) Director.PlayShot(BossShot.Victory);
                 // Defeat collapse (Phase 3): the rig crumples —
                 // hips sink, knees bend, torso pitches forward,
@@ -1415,6 +1438,7 @@ namespace LunarDominion.Boss
                 // The boss still stands: return the rig to its
                 // authored pose before handing back to the lair.
                 // The defeat shot (C1) gets a beat longer to land.
+                SfxDirector.Play(SfxClip.Defeat);
                 if (Director != null) Director.PlayShot(BossShot.Defeat);
                 RestoreRig();
                 yield return new WaitForSeconds(1.1f);
