@@ -1991,7 +1991,7 @@ namespace LunarDominion.UI
                     var kind = _searchCategory == SearchCategory.Biomass ? MapPointKind.Biomass
                         : _searchCategory == SearchCategory.Alloy ? MapPointKind.Alloy
                         : MapPointKind.Helium3;
-                    for (int i = 0; i < 9 && i < NodeDefs.Length; i++)
+                    for (int i = 0; i < NodeDefs.Length; i++)
                     {
                         if (NodeDefs[i].Kind != kind) continue;
                         if (_nodeHidden[i] || _nodeOccupied[i]) continue;
@@ -2009,7 +2009,7 @@ namespace LunarDominion.UI
                     }
                     break;
                 case SearchCategory.Lair:
-                    _searchMatches.Add(NodeDefs[12].Position);
+                    _searchMatches.Add(NodeDefs[21].Position);
                     break;
             }
             // Nearest first, measured from where the camera is
