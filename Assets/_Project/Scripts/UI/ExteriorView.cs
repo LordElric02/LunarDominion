@@ -242,7 +242,7 @@ namespace LunarDominion.UI
         // structure for its CURRENT tier, swapped in on demand (the
         // creature figures that used to ring the camps were removed
         // 2026-11-14). Slot points carry Index = CampSlotIndexBase + slot
-        // so they never collide with node (0-8) or lair (12) indices.
+        // so they never collide with node (0-17) or lair (21) indices.
         public const int CampSlotCount = 36;
         public const int CampSlotIndexBase = 100;
         private static readonly Vector3[] CampSlotPositions =
@@ -1764,14 +1764,14 @@ namespace LunarDominion.UI
 
         // Show or hide the boss lair (2026-11-09; ladder 2026-11-10):
         // the boss never vanishes now, so this is always called with
-        // true. Hiding also hides it from taps. The lair (index 12)
-        // and its robot both carry Data.Index == 12, so one pass hides
+        // true. Hiding also hides it from taps. The lair (index 21)
+        // and its robot both carry Data.Index == 21, so one pass hides
         // the whole lair.
         public void SetBossVisible(bool visible)
         {
             foreach (var point in _mapPoints)
             {
-                if (point.Data == null || point.Data.Index != 12) continue;
+                if (point.Data == null || point.Data.Index != 21) continue;
                 if (point.Data.Kind != MapPointKind.BossLair) continue;
                 if (point.Go != null) point.Go.SetActive(visible);
             }
@@ -1813,8 +1813,8 @@ namespace LunarDominion.UI
         private bool _gliding;
         private Vector3 _glideTarget;
         private float _searchTime;
-        private readonly bool[] _nodeOccupied = new bool[9];
-        private readonly bool[] _nodeHidden = new bool[9];
+        private readonly bool[] _nodeOccupied = new bool[18];
+        private readonly bool[] _nodeHidden = new bool[18];
 
         private static Color SearchColor(SearchCategory cat)
         {
