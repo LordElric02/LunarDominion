@@ -110,19 +110,26 @@ namespace LunarDominion.Boss
             bloom.scatter.overrideState = true;
             bloom.scatter.value = 0.7f;
 
+            // Tuned 2026-11-15 (Patrick: "tune the grade
+            // more" after the first check read "looking
+            // better"): moodier and richer — exposure down so
+            // the shadows deepen, contrast / saturation up so
+            // the cyan and amber accents carry, vignette a
+            // touch stronger. Bloom unchanged: the shafts
+            // already bloom well and more risks haze.
             var grade = profile.Add<ColorAdjustments>();
             grade.active = true;
             grade.postExposure.overrideState = true;
-            grade.postExposure.value = 0.12f;
+            grade.postExposure.value = 0.02f;
             grade.contrast.overrideState = true;
-            grade.contrast.value = 16f;
+            grade.contrast.value = 24f;
             grade.saturation.overrideState = true;
-            grade.saturation.value = 12f;
+            grade.saturation.value = 20f;
 
             var vignette = profile.Add<Vignette>();
             vignette.active = true;
             vignette.intensity.overrideState = true;
-            vignette.intensity.value = 0.32f;
+            vignette.intensity.value = 0.42f;
             vignette.smoothness.overrideState = true;
             vignette.smoothness.value = 0.55f;
 
