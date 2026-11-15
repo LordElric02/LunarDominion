@@ -421,9 +421,14 @@ namespace LunarDominion.UI
             // guaranteed bright, the same route as the contact
             // flashes (URP/Unlit is in Always Included Shaders, so
             // it survives phone builds too).
+            // The brow stripe (2026-11-14) gets the same treatment:
+            // it kept the speckled lit glow texture, and in the dim
+            // lair only its two hottest speckles punch through —
+            // reading as two dots above the visor. Unlit makes it
+            // the clean thin line it is in the model.
             foreach (var t in aresModel.GetComponentsInChildren<Transform>())
             {
-                if (t.name != "Visor") continue;
+                if (t.name != "Visor" && t.name != "AresV4_BrowStripe") continue;
                 var visorRenderer = t.GetComponent<Renderer>();
                 if (visorRenderer == null) continue;
                 var visorShader = Shader.Find("Universal Render Pipeline/Unlit");
