@@ -1421,7 +1421,7 @@ namespace LunarDominion.Boss
                     Figure = fig,
                     Home = home,
                     Name = names[i],
-                    MaxHp = Mathf.RoundToInt(DroneBaseHp * Mathf.Pow(1.3f, BossLevel - 1) * _enemyScale),
+                    MaxHp = Mathf.RoundToInt(DroneBaseHp * Mathf.Pow(EncounterCatalog.BossHpGrowth, BossLevel - 1) * _enemyScale),
                     Atk = Mathf.RoundToInt(BossAtk * DroneAtkFrac),
                     Speed = DroneSpeed,
                 };

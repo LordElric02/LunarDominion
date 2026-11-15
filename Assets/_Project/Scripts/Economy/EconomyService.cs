@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using LunarDominion.Core;
 using LunarDominion.Research;
 
@@ -20,6 +21,11 @@ namespace LunarDominion.Economy
         // back to the plain linear formula.
         public BuildingDefinition NexusDefinition { get; set; }
 
+        // Set by GameController after construction (same pattern as
+        // NexusDefinition). Null means no building-upgrade floor: the
+        // cap is the plain formula plus any Nexus floor.
+        public List<BuildingDefinition> BuildingDefinitions { get; set; }
+
         public EconomyService(GameState state, BalanceData balance)
         {
             _state = state;
@@ -31,6 +37,10 @@ namespace LunarDominion.Economy
             get
             {
                 int baseCap = _balance.StorageBase + _balance.StoragePerNexusLevel * _state.NexusLevel;
+                // The > 0 guard keeps the floors working if a BalanceData
+                // asset predates this field and deserializes it as 0.
+                float factor = _balance.StorageCapNexusCostFactor > 0f
+                    ? _balance.StorageCapNexusCostFactor : 1.5f;
                 // Storage-cap floor (2026-11-05, soft-lock fix): the linear
                 // cap grows slower than Nexus costs (x1.22 per level), so
                 // at Nexus 17 the cap (4750) was already below the Nexus 18
@@ -41,14 +51,38 @@ namespace LunarDominion.Economy
                 // binding resource (Nexus base 200B vs 160A, Helium only as
                 // a sampled extra at 20/25/30), so flooring on Biomass
                 // covers Alloy and Helium-3 too. No floor past max level.
-                // The > 0 guard keeps the fix working if a BalanceData asset
-                // predates this field and deserializes it as 0.
                 if (NexusDefinition != null && _state.NexusLevel < _balance.MaxBuildingLevel)
                 {
-                    float factor = _balance.StorageCapNexusCostFactor > 0f
-                        ? _balance.StorageCapNexusCostFactor : 1.5f;
                     int nextNexusBiomass = UpgradeCost(NexusDefinition, _state.NexusLevel + 1).Biomass;
                     int floor = (int)Math.Ceiling(nextNexusBiomass * factor);
+                    if (floor > baseCap) baseCap = floor;
+                }
+                // Building-upgrade floor (2026-11-15, Nexus-30 trap fix):
+                // the Nexus floor above switches off at max Nexus, where
+                // the plain cap (8,000) sat far below a level-30 barracks
+                // upgrade (up to 65,466 Alloy) — taking Nexus 30 before
+                // maxing the barracks froze them mid-levels forever, with
+                // tiers 4-6 locked behind barracks 25/28/30. Floor the
+                // cap at the same factor over the priciest next upgrade
+                // among all buildings, so any building's next step is
+                // always saveable. Below max Nexus the Nexus floor
+                // almost always exceeds this; the one exception — a
+                // building sitting at the Nexus cap — just lets the
+                // player pre-save for its next step, which is the
+                // floor's purpose. At max Nexus the floor ratchets up
+                // as buildings level.
+                if (BuildingDefinitions != null)
+                {
+                    int priciest = 0;
+                    foreach (var def in BuildingDefinitions)
+                    {
+                        int lvl = _state.GetLevel(def.Id);
+                        if (lvl >= _balance.MaxBuildingLevel) continue;
+                        var c = UpgradeCost(def, lvl + 1);
+                        int m = Math.Max(c.Biomass, Math.Max(c.Alloy, c.Helium3));
+                        if (m > priciest) priciest = m;
+                    }
+                    int floor = (int)Math.Ceiling(priciest * factor);
                     if (floor > baseCap) baseCap = floor;
                 }
                 float mult = Research != null ? Research.StorageMultiplier() : 1f;

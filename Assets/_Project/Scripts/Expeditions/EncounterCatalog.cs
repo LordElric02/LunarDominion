@@ -10,20 +10,31 @@ namespace LunarDominion.Expeditions
     /// EncounterDefinition assets yet.</summary>
     public static class EncounterCatalog
     {
-        // Boss ladder (2026-11-10 redesign; difficulty cranked up
-        // 2026-11-10): 15 levels of War Robot. Defeating a level unlocks
-        // the next; the boss never vanishes. Patrick (Player Lv 9, top
-        // hero Lv 12) beat Level 8 on the old curve, but should only
-        // beat Level 3 — so the curve is much steeper now. Level 1 is
-        // the entry fight (HP 5000 / ATK 120 / DEF 50). Each level
-        // compounds: HP x1.30, ATK x1.18, DEF x1.12, energy +15, reward
-        // and XP pool x level. Level 3 (HP 8450) is a hard fight for
-        // Patrick's team (~15 rounds, losing Vega); Level 4 (HP 10985)
-        // is unbeatable for them (timeout). A maxed Lv 20 team caps
-        // around Level 4-5; Levels 12-15 need Nexus 30/35 and tiers
-        // above the current 3 max (future) — they are impossible now,
-        // by design.
+        // Boss ladder (2026-11-10 redesign): 15 levels of A.R.E.S.-09.
+        // Defeating a level unlocks the next; the boss never vanishes.
+        // Level 1 is the entry fight (HP 5000 / ATK 120 / DEF 50);
+        // each level compounds by the growth constants below, energy
+        // +15, reward and XP pool x level.
+        //
+        // Retuned 2026-11-15. The 2026-11-10 crank (HP x1.30 /
+        // ATK x1.18 / DEF x1.12) assumed future unit tiers would
+        // eventually reach the top levels, but boss fights are
+        // heroes-only for good (Patrick's 2026-11-12 decision), and
+        // hero damage only grows x2.52 over 20 levels — so L15
+        // (196,869 HP before Nexus scaling) was mathematically
+        // unbeatable: a maxed team deals ~1,050/round against the
+        // 20-round cap, and the boss's ATK one-shot maxed heroes.
+        // The new curve grows HP/DEF gently and ATK faster, so
+        // higher levels get deadlier rather than spongier. Tuned
+        // with a simulator port of the real fight rules: a maxed
+        // 4-hero team (Ward included) wins L15 in ~19 rounds at the
+        // capped Nexus scale (see BossLairView.BossScale), the
+        // 3-hero team times out, and mid-ladder frontier fights
+        // land in the teens of rounds.
         public const int MaxBossLevel = 15;
+        public const float BossHpGrowth = 1.06f;
+        public const float BossAtkGrowth = 1.09f;
+        public const float BossDefGrowth = 1.06f;
 
         /// <summary>War Robot encounter for a boss level (1-15, clamped).
         /// Level 1 = the entry boss; higher levels scale up steeply.</summary>
@@ -37,9 +48,9 @@ namespace LunarDominion.Expeditions
             boss.EnergyCost = 50 + 15 * (level - 1);
             boss.Reward = new ResourceCost(1500 * level, 1200 * level, 400 * level);
             boss.XpPool = 1000 * level;
-            int hp = (int)Math.Round(5000 * Math.Pow(1.30, level - 1));
-            int atk = (int)Math.Round(120 * Math.Pow(1.18, level - 1));
-            int def = (int)Math.Round(50 * Math.Pow(1.12, level - 1));
+            int hp = (int)Math.Round(5000 * Math.Pow(BossHpGrowth, level - 1));
+            int atk = (int)Math.Round(120 * Math.Pow(BossAtkGrowth, level - 1));
+            int def = (int)Math.Round(50 * Math.Pow(BossDefGrowth, level - 1));
             boss.Spawns = new List<EnemySpawn>
             {
                 new EnemySpawn { DisplayName = "A.R.E.S.-09", Class = UnitClass.Mechanized, Health = hp, Attack = atk, Defense = def, Count = 1 }

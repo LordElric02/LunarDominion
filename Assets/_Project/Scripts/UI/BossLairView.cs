@@ -328,6 +328,20 @@ namespace LunarDominion.UI
         // whenever the arena models are not installed.
         private const bool AresOnWholeLadder = true;
 
+        // The ladder boss stops scaling with Nexus distance at
+        // +25% (2026-11-15). EnemyScale's |Nexus - gate| growth is
+        // right for map content, but on the ladder it made the
+        // capstone 80% harder at Nexus 30 — punishing the exact
+        // progression (the Nexus/barracks grind) the endgame
+        // requires. The ladder curve in EncounterCatalog is tuned
+        // against this capped scale.
+        private const float BossScaleCap = 1.25f;
+
+        private static float BossScale(int nexusLevel, int requiredNexusLevel)
+        {
+            return Mathf.Min(CombatService.EnemyScale(nexusLevel, requiredNexusLevel), BossScaleCap);
+        }
+
         private bool UseRealtime()
         {
             if (!_arenaAvailable) return false;
@@ -887,7 +901,7 @@ namespace LunarDominion.UI
                 // ladder stats x the Nexus scale, no real-time
                 // inflation (the header still showed the dormant
                 // real-time x8 HP until 2026-11-10).
-                float scale = CombatService.EnemyScale(_controller.State.NexusLevel, boss.RequiredNexusLevel);
+                float scale = BossScale(_controller.State.NexusLevel, boss.RequiredNexusLevel);
                 int hp = Mathf.RoundToInt(boss.Spawns[0].Health * scale);
                 int atk = Mathf.RoundToInt(boss.Spawns[0].Attack * scale);
                 int def = Mathf.RoundToInt(boss.Spawns[0].Defense * scale);
@@ -1353,7 +1367,7 @@ namespace LunarDominion.UI
 
             var spawn = boss.Spawns[0];
             var stats = AresStats.FromLadder(spawn.Health, spawn.Attack, spawn.Defense,
-                CombatService.EnemyScale(_controller.State.NexusLevel, boss.RequiredNexusLevel));
+                BossScale(_controller.State.NexusLevel, boss.RequiredNexusLevel));
             var fighters = new List<IHeroCombatant>();
             foreach (var combatant in _combatants) fighters.Add(combatant);
             _aresController.Setup(stats, fighters, _droneTemplate, _aresVisual.transform,
@@ -1396,7 +1410,7 @@ namespace LunarDominion.UI
                 if (_controller.Research != null)
                     _controller.Research.ClassMultipliers(member.Definition.Class, out hpMult, out atkMult, out defMult);
                 var spawn = _realtimeEncounter.Spawns[0];
-                float bossDefense = spawn.Defense * CombatService.EnemyScale(
+                float bossDefense = spawn.Defense * BossScale(
                     _controller.State.NexusLevel, _realtimeEncounter.RequiredNexusLevel);
                 combatant.Setup(member.Unit, member.Definition, _aresRoot.transform,
                     bearing, range, bossDefense, _selectedBossLevel, hpMult, atkMult, defMult);
@@ -1995,7 +2009,7 @@ namespace LunarDominion.UI
             var heroes = BuildTurnHeroes(squad);
 
             var spawn = boss.Spawns[0];
-            float scale = CombatService.EnemyScale(_controller.State.NexusLevel, boss.RequiredNexusLevel);
+            float scale = BossScale(_controller.State.NexusLevel, boss.RequiredNexusLevel);
             int bossHp = Mathf.RoundToInt(spawn.Health * scale);
             int bossAtk = Mathf.RoundToInt(spawn.Attack * scale);
             int bossDef = Mathf.RoundToInt(spawn.Defense * scale);
