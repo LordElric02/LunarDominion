@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace LunarDominion.Boss
 {
@@ -48,6 +49,10 @@ namespace LunarDominion.Boss
         private float _prevReflectionIntensity;
         private Cubemap _lairReflection;
 
+        // Lair post-processing volume (built once, toggled by
+        // Apply/ReleaseEnvironment like the RenderSettings above).
+        private Volume _postVolume;
+
         /// <summary>Build the rig under the arena root. tubeInstance
         /// is the instantiated LavaTube model (beacon domes and vent
         /// grates are found by name).</summary>
@@ -61,6 +66,68 @@ namespace LunarDominion.Boss
             BuildDust();
             BuildHeroDust();
             BuildSteam(tubeInstance);
+            BuildPostProcessing();
+        }
+
+        /// <summary>Post-processing pass (2026-11-14, the first
+        /// step toward the Watcher-of-Realms presentation): a
+        /// global Volume that lives only while the lair
+        /// environment is applied — ApplyEnvironment enables it,
+        /// ReleaseEnvironment disables it, so the base and map
+        /// keep their current look untouched. Priority 20 sits
+        /// above BaseView's always-on Bloom volume (10), so the
+        /// lair's Bloom values replace the base ones in here.
+        /// ACES tonemapping is the filmic curve those games use:
+        /// highlights roll off instead of clipping, and the HDR
+        /// emissives (visor, chest bar, lava glow) grade instead
+        /// of blowing out. The grade adds a little contrast and
+        /// saturation back, which ACES tends to flatten, plus a
+        /// small exposure lift; the vignette is a gentle constant
+        /// darkening at the edges (separate from BossLairView's
+        /// red hit-pulse strips, which are UI). Every value is a
+        /// starting point for Patrick's eyes — tune the numbers
+        /// here, one line each.</summary>
+        private void BuildPostProcessing()
+        {
+            if (_postVolume != null) return;
+            var postGo = new GameObject("Lair Post Volume");
+            _postVolume = postGo.AddComponent<Volume>();
+            _postVolume.isGlobal = true;
+            _postVolume.priority = 20f;
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+
+            var tonemapping = profile.Add<Tonemapping>();
+            tonemapping.active = true;
+            tonemapping.mode.overrideState = true;
+            tonemapping.mode.value = TonemappingMode.ACES;
+
+            var bloom = profile.Add<Bloom>();
+            bloom.active = true;
+            bloom.threshold.overrideState = true;
+            bloom.threshold.value = 0.75f;
+            bloom.intensity.overrideState = true;
+            bloom.intensity.value = 0.6f;
+            bloom.scatter.overrideState = true;
+            bloom.scatter.value = 0.7f;
+
+            var grade = profile.Add<ColorAdjustments>();
+            grade.active = true;
+            grade.postExposure.overrideState = true;
+            grade.postExposure.value = 0.12f;
+            grade.contrast.overrideState = true;
+            grade.contrast.value = 16f;
+            grade.saturation.overrideState = true;
+            grade.saturation.value = 12f;
+
+            var vignette = profile.Add<Vignette>();
+            vignette.active = true;
+            vignette.intensity.overrideState = true;
+            vignette.intensity.value = 0.32f;
+            vignette.smoothness.overrideState = true;
+            vignette.smoothness.value = 0.55f;
+
+            _postVolume.profile = profile;
+            _postVolume.enabled = false;
         }
 
         /// <summary>V7: the floor's metallic finish. The V7 set's
@@ -484,6 +551,9 @@ namespace LunarDominion.Boss
             RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
             RenderSettings.customReflection = GetLairReflection();
             RenderSettings.reflectionIntensity = 1.15f;
+            // Post-processing pass: on with the lair, off with
+            // ReleaseEnvironment below.
+            if (_postVolume != null) _postVolume.enabled = true;
         }
 
         private Cubemap GetLairReflection()
@@ -514,6 +584,10 @@ namespace LunarDominion.Boss
 
         public void ReleaseEnvironment()
         {
+            // Off first, before the capture guard: disabling an
+            // already-off volume is harmless, and the grade must
+            // never leak into the base or map views.
+            if (_postVolume != null) _postVolume.enabled = false;
             if (!_captured) return;
             RenderSettings.ambientMode = _prevAmbientMode;
             RenderSettings.ambientSkyColor = _prevSky;
