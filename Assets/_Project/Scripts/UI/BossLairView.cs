@@ -433,6 +433,33 @@ namespace LunarDominion.UI
                 visorRenderer.sharedMaterial = visorMaterial;
             }
 
+            // Boss key light (2026-11-14): the lair's own lights
+            // leave the boss's front in flat ambient — the ceiling
+            // shafts fall from above/behind and the beacons are
+            // amber points — so the panel definition V3-V4 added
+            // crushed out at the fight's home view (Patrick, with
+            // the V4 model verified installed: "he looks the
+            // same"). A warm spotlight from the camera side, aimed
+            // at the chest, gives the plating a key light to model
+            // against. No shadows: the hero shaft owns the lair's
+            // one shadow-casting light (mobile budget).
+            var keyGo = new GameObject("BossKeyLight");
+            var keyLight = keyGo.AddComponent<Light>();
+            keyLight.type = LightType.Spot;
+            keyLight.color = new Color(1.0f, 0.93f, 0.82f);
+            keyLight.intensity = 3.4f;
+            keyLight.range = 55f;
+            keyLight.spotAngle = 46f;
+            keyLight.innerSpotAngle = 28f;
+            Vector3 bossBase = _aresVisual.transform.position;
+            Vector3 keyTarget = bossBase + new Vector3(0f, 9f, 0f);
+            keyGo.transform.position =
+                bossBase + new Vector3(7f, 15f, -14f);
+            keyGo.transform.rotation = Quaternion.LookRotation(
+                (keyTarget - keyGo.transform.position).normalized,
+                Vector3.up);
+            keyGo.transform.SetParent(_arenaRoot.transform, true);
+
             // Telegraph rings at the boss's feet.
             _slamRing = MakeRing(new Color(1f, 0.30f, 0.10f));
             _ventRing = MakeRing(new Color(1f, 0.55f, 0.10f));
