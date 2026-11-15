@@ -23,9 +23,14 @@ namespace LunarDominion.Units
     /// the lair view.</summary>
     public class RecruitmentService
     {
-        // Max heroes (2026-11-10): one of each named hero (Reyes,
-        // Vega, Okafor) — 3 total.
-        public const int MaxHeroes = 3;
+        // Max heroes: one of each named hero — 3 at launch
+        // (2026-11-10: Reyes, Vega, Okafor), 4 since the Medic
+        // (2026-11-15: Ward).
+        public const int MaxHeroes = 4;
+
+        // The Medic's recruit gate (2026-11-15): a late-game
+        // hero, unlocked by the Hospital rather than a barracks.
+        public const int MedicHospitalLevel = 10;
 
         private readonly GameState _state;
         private readonly EconomyService _economy;
@@ -42,7 +47,8 @@ namespace LunarDominion.Units
         /// troop). Heroes live in GameState.Heroes and fight bosses.</summary>
         public static bool IsHeroUnit(UnitId id)
         {
-            return id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor;
+            return id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor
+                || id == UnitId.HeroWard;
         }
 
         /// <summary>How many heroes the player has recruited (0-3).</summary>
@@ -115,6 +121,17 @@ namespace LunarDominion.Units
                 {
                     reason = $"{def.DisplayName} is already recruited.";
                     return RecruitStatus.TierLocked;
+                }
+                // The Medic (2026-11-15) is a late-game recruit:
+                // his gate is the Hospital, not a barracks.
+                if (def.Id == UnitId.HeroWard)
+                {
+                    int hospital = _state.GetLevel(BuildingId.Hospital);
+                    if (hospital < MedicHospitalLevel)
+                    {
+                        reason = $"Requires Hospital level {MedicHospitalLevel} (currently {hospital}).";
+                        return RecruitStatus.TierLocked;
+                    }
                 }
                 if (CountHeroes() >= MaxHeroes)
                 {

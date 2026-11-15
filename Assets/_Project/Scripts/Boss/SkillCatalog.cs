@@ -18,6 +18,9 @@ namespace LunarDominion.Boss
         AegisProtocol,
         GuardianTaunt,
         ArmorBreak,
+        FieldTreatment,
+        NanoWeave,
+        VitalitySerum,
     }
 
     public class SkillDefinition
@@ -98,6 +101,28 @@ namespace LunarDominion.Boss
                 Id = HeroSkillId.ArmorBreak, Hero = UnitId.HeroOkafor, Name = "Armor Break",
                 Cooldown = 3, IsAttack = true,
                 Blurb = "One hit at 130% damage; the boss's DEF -20% for 2 rounds.",
+            },
+            // Dr. Elias Ward — Support: the medic. All three skills
+            // resolve on fixed targets (the most-wounded ally, or
+            // the whole team), so none of them enters target
+            // selection even while drones are out.
+            new SkillDefinition
+            {
+                Id = HeroSkillId.FieldTreatment, Hero = UnitId.HeroWard, Name = "Field Treatment",
+                Cooldown = 3, IsAttack = false,
+                Blurb = "The most-wounded hero recovers 30% of their max HP.",
+            },
+            new SkillDefinition
+            {
+                Id = HeroSkillId.NanoWeave, Hero = UnitId.HeroWard, Name = "Nano-Weave",
+                Cooldown = 4, IsAttack = false,
+                Blurb = "All heroes +20% DEF for 3 rounds (stacks with Bulwark).",
+            },
+            new SkillDefinition
+            {
+                Id = HeroSkillId.VitalitySerum, Hero = UnitId.HeroWard, Name = "Vitality Serum",
+                Cooldown = 5, IsAttack = false,
+                Blurb = "The most-wounded hero's max HP +15% for the rest of the fight, and heals by that much.",
             },
         };
 

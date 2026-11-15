@@ -204,7 +204,8 @@ namespace LunarDominion.Save
                 for (int i = state.Injured.Count - 1; i >= 0; i--)
                 {
                     var id = state.Injured[i].Id;
-                    if (id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor)
+                    if (id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor
+                        || id == UnitId.HeroWard)
                     {
                         state.Heroes.Add(state.Injured[i]);
                         state.Injured.RemoveAt(i);
@@ -408,9 +409,10 @@ namespace LunarDominion.Save
                 if (unit == null) continue;
                 int id = (int)unit.Id;
                 // Valid UnitIds: 0-8 regular units, 9-11 heroes,
-                // 12-20 the tier 4-6 units (2026-11-10). Anything else
-                // is dropped, never a whole save.
-                if (id < 0 || id > 20)
+                // 12-20 the tier 4-6 units (2026-11-10), 21 the
+                // Medic hero (2026-11-15). Anything else is
+                // dropped, never a whole save.
+                if (id < 0 || id > 21)
                 {
                     // Phase 6 fix (S4): §9 asks for a warning on drop.
                     Debug.LogWarning($"[Lunar Dominion] Dropped unknown unit ID {id} from save.");
@@ -475,7 +477,8 @@ namespace LunarDominion.Save
                     if (roster.Count >= 8) break;
                     if (claimed.Contains(serial)) continue;
                     if (!bySerial.TryGetValue(serial, out var unit)) continue;
-                    bool isHero = unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor;
+                    bool isHero = unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor
+                        || unit.Id == UnitId.HeroWard;
                     if (isHero && heroes >= 1) continue;
                     roster.Add(unit);
                     claimed.Add(serial);

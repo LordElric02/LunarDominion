@@ -851,7 +851,8 @@ namespace LunarDominion.UI
 
         private static bool IsHeroId(UnitId id)
         {
-            return id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor;
+            return id == UnitId.HeroReyes || id == UnitId.HeroVega || id == UnitId.HeroOkafor
+                || id == UnitId.HeroWard;
         }
 
         private static string HeroModelPath(UnitId id)
@@ -861,6 +862,7 @@ namespace LunarDominion.UI
                 case UnitId.HeroReyes: return "Models/HeroReyes";
                 case UnitId.HeroVega: return "Models/HeroVega";
                 case UnitId.HeroOkafor: return "Models/HeroOkafor";
+                case UnitId.HeroWard: return "Models/HeroWard";
                 default: return null;
             }
         }
@@ -883,6 +885,7 @@ namespace LunarDominion.UI
             {
                 case UnitClass.Ranged: return new Color(0.95f, 0.50f, 0.15f);
                 case UnitClass.Mechanized: return new Color(0.40f, 0.60f, 0.35f);
+                case UnitClass.Support: return new Color(0.45f, 0.92f, 0.85f);
                 default: return new Color(0.40f, 0.55f, 0.80f);
             }
         }

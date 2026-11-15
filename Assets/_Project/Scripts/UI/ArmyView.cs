@@ -164,7 +164,8 @@ namespace LunarDominion.UI
 
         private bool IsHero(OwnedUnit unit)
         {
-            return unit != null && (unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor);
+            return unit != null && (unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor
+                || unit.Id == UnitId.HeroWard);
         }
 
         private OwnedUnit RosterHero(int army)

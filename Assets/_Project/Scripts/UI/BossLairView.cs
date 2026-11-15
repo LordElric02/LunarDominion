@@ -99,11 +99,11 @@ namespace LunarDominion.UI
         // medallions, and the action-bar card state.
         private Image _bossPhaseMarker;
         private Text _slamIcon;
-        private readonly Image[] _portraitFrames = new Image[3];
-        private readonly RawImage[] _portraitImages = new RawImage[3];
-        private readonly Image[] _portraitHpFills = new Image[3];
-        private readonly GameObject[] _portraitSlashes = new GameObject[3];
-        private readonly UnitId[] _portraitIds = new UnitId[3];
+        private readonly Image[] _portraitFrames = new Image[4];
+        private readonly RawImage[] _portraitImages = new RawImage[4];
+        private readonly Image[] _portraitHpFills = new Image[4];
+        private readonly GameObject[] _portraitSlashes = new GameObject[4];
+        private readonly UnitId[] _portraitIds = new UnitId[4];
         private int _actingPortrait = -1;
         private readonly Image[] _cardFrames = new Image[5];
         private readonly Image[] _skillIcons = new Image[3];
@@ -207,13 +207,30 @@ namespace LunarDominion.UI
             new Color(0.25f, 0.65f, 1.0f),
             new Color(1.0f, 0.55f, 0.15f),
             new Color(0.25f, 0.85f, 0.45f),
+            new Color(0.45f, 0.92f, 0.85f),
         };
 
         private static Color HeroColorFor(UnitId id)
         {
             if (id == UnitId.HeroReyes) return HeroColors[0];
             if (id == UnitId.HeroVega) return HeroColors[1];
+            if (id == UnitId.HeroWard) return HeroColors[3];
             return HeroColors[2];
+        }
+
+        /// <summary>How many heroes may be picked for the
+        /// selected boss level (Patrick 2026-11-15): 3 on levels
+        /// 1-9, 4 on levels 10-15 — the top of the ladder was
+        /// outgrowing a 3-hero team's math.</summary>
+        private int TeamCap => _selectedBossLevel >= 10 ? 4 : 3;
+
+        /// <summary>Formation spots by team size: three heroes
+        /// stand -4 / 0 / +4; a fourth widens the line.</summary>
+        private static float[] TeamSpots(int count)
+        {
+            return count >= 4
+                ? new float[] { -6f, -2f, 2f, 6f }
+                : new float[] { -4f, 0f, 4f };
         }
 
         public void Build(Canvas canvas, GameController controller)
@@ -882,7 +899,8 @@ namespace LunarDominion.UI
             }
             bool energyShort = _controller.State.Energy < boss.EnergyCost;
             _energyText.text = $"Energy: {_controller.State.Energy} / {boss.EnergyCost}  •  Unlocks at Nexus {boss.RequiredNexusLevel} (you are Nexus {_controller.State.NexusLevel})"
-                + (energyShort ? "  •  NOT ENOUGH ENERGY" : "");
+                + (energyShort ? "  •  NOT ENOUGH ENERGY" : "")
+                + $"  •  Team up to {TeamCap} heroes" + (TeamCap < 4 ? " (4 from level 10)" : "");
             _energyText.color = energyShort ? UIHelpers.Hex("#FF7043") : UIHelpers.Hex("#C0C8D0");
             UIHelpers.SetButtonEnabled(_prevLevelButton, _selectedBossLevel > 1);
             UIHelpers.SetButtonEnabled(_nextLevelButton, _selectedBossLevel < highest);
@@ -905,7 +923,15 @@ namespace LunarDominion.UI
             if (next < 1 || next > highest) return;
             _selectedBossLevel = next;
             _resultText.text = "";
+            // The team cap follows the selected level: stepping
+            // back below 10 with a 4-hero pick drops the most
+            // recent selections.
+            while (_selectedHeroIndices.Count > TeamCap)
+                _selectedHeroIndices.RemoveAt(_selectedHeroIndices.Count - 1);
             RefreshBossInfo();
+            UpdateRowHighlights();
+            RefreshHeroFigures();
+            RefreshFightButton();
         }
 
         private EncounterDefinition BossEncounter()
@@ -997,7 +1023,7 @@ namespace LunarDominion.UI
             }
             else
             {
-                if (_selectedHeroIndices.Count >= 3) return;
+                if (_selectedHeroIndices.Count >= TeamCap) return;
                 _selectedHeroIndices.Add(row.HeroIndex);
             }
             UpdateRowHighlights();
@@ -1028,7 +1054,7 @@ namespace LunarDominion.UI
             // "Not enough energy (90 / 110)." as the reason.
             bool canFight = !_fighting && boss != null
                 && _selectedHeroIndices.Count >= 1
-                && _selectedHeroIndices.Count <= 3
+                && _selectedHeroIndices.Count <= TeamCap
                 && _controller != null && _controller.State != null;
             UIHelpers.SetButtonEnabled(_fightButton, canFight);
         }
@@ -1048,6 +1074,7 @@ namespace LunarDominion.UI
                 case UnitId.HeroReyes: return "Models/HeroReyes";
                 case UnitId.HeroVega: return "Models/HeroVega";
                 case UnitId.HeroOkafor: return "Models/HeroOkafor";
+                case UnitId.HeroWard: return "Models/HeroWard";
                 default: return null;
             }
         }
@@ -1096,8 +1123,8 @@ namespace LunarDominion.UI
             // picking is what fights. (This replaces the old
             // cave-layout preview figures, which the arena
             // presentation made unreachable.)
-            var xSpots = new float[] { -4f, 0f, 4f };
-            for (int s = 0; s < _selectedHeroIndices.Count && s < 3; s++)
+            var xSpots = TeamSpots(_selectedHeroIndices.Count);
+            for (int s = 0; s < _selectedHeroIndices.Count && s < xSpots.Length; s++)
             {
                 int heroIndex = _selectedHeroIndices[s];
                 if (heroIndex < 0 || heroIndex >= _controller.State.Heroes.Count) continue;
@@ -1120,7 +1147,7 @@ namespace LunarDominion.UI
             if (_fighting) return;
             var boss = BossEncounter();
             if (boss == null) return;
-            if (_selectedHeroIndices.Count < 1 || _selectedHeroIndices.Count > 3) return;
+            if (_selectedHeroIndices.Count < 1 || _selectedHeroIndices.Count > TeamCap) return;
             if (UseTurnBased())
             {
                 StartTurnBasedFight(boss);
@@ -1645,9 +1672,9 @@ namespace LunarDominion.UI
             portraitsRt.anchorMax = new Vector2(0.225f, 0.150f);
             portraitsRt.offsetMin = Vector2.zero;
             portraitsRt.offsetMax = Vector2.zero;
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
-                float x0 = i / 3f, x1 = (i + 1) / 3f;
+                float x0 = i / 4f, x1 = (i + 1) / 4f;
                 var frame = PlatePiece(portraits.transform, "PortraitFrame" + i,
                     Color.gray,
                     new Vector2(x0 + 0.006f, 0.04f), new Vector2(x1 - 0.006f, 0.96f),
@@ -2027,8 +2054,8 @@ namespace LunarDominion.UI
         {
             CleanupTurnFigures();
             var heroes = new List<TurnHeroState>();
-            var xSpots = new float[] { -4f, 0f, 4f };
-            for (int s = 0; s < squad.Count && s < 3; s++)
+            var xSpots = TeamSpots(squad.Count);
+            for (int s = 0; s < squad.Count && s < xSpots.Length; s++)
             {
                 var member = squad[s];
                 var color = HeroColorFor(member.Definition.Id);
@@ -2786,6 +2813,7 @@ namespace LunarDominion.UI
             {
                 case UnitClass.Ranged: return new Color(0.95f, 0.50f, 0.15f);
                 case UnitClass.Mechanized: return new Color(0.40f, 0.60f, 0.35f);
+                case UnitClass.Support: return new Color(0.45f, 0.92f, 0.85f);
                 default: return new Color(0.40f, 0.55f, 0.80f);
             }
         }
@@ -2811,6 +2839,7 @@ namespace LunarDominion.UI
                 case UnitId.HeroReyes: path = "Textures/HeroIcon_Reyes"; break;
                 case UnitId.HeroVega: path = "Textures/HeroIcon_Vega"; break;
                 case UnitId.HeroOkafor: path = "Textures/HeroIcon_Okafor"; break;
+                case UnitId.HeroWard: path = "Textures/HeroIcon_Ward"; break;
             }
             return path != null ? Resources.Load<Texture2D>(path) : null;
         }
@@ -2883,7 +2912,7 @@ namespace LunarDominion.UI
         {
             if (_turnFight == null) return;
             _actingPortrait = -1;
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
                 if (_portraitFrames[i] == null) continue;
                 bool has = i < _turnFight.Heroes.Count;

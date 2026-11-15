@@ -14,8 +14,8 @@ namespace LunarDominion.UI
     /// list, so it scales as more heroes become available over time
     /// (Patrick 2026-11-10) — no class tabs, since heroes span classes
     /// and the roster will grow. Each hero is unique (one of each);
-    /// the cap is RecruitmentService.MaxHeroes (3 for the current 3 —
-    /// raise it when new heroes are added). Heroes fight the War Robot
+    /// the cap is RecruitmentService.MaxHeroes (4 since the Medic,
+    /// 2026-11-15 — raise it when new heroes are added). Heroes fight the War Robot
     /// in the lair and level up from boss-fight XP.</summary>
     public class HeroesView : MonoBehaviour
     {
@@ -396,6 +396,7 @@ namespace LunarDominion.UI
                 case UnitId.HeroReyes: path = "Textures/HeroIcon_Reyes"; break;
                 case UnitId.HeroVega: path = "Textures/HeroIcon_Vega"; break;
                 case UnitId.HeroOkafor: path = "Textures/HeroIcon_Okafor"; break;
+                case UnitId.HeroWard: path = "Textures/HeroIcon_Ward"; break;
             }
             return path != null ? Resources.Load<Texture2D>(path) : null;
         }

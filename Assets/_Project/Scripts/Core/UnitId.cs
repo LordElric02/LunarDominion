@@ -30,6 +30,9 @@ namespace LunarDominion.Core
         VoidAnnihilator,
         JuggernautMech,
         ColossusWalker,
-        LeviathanPrime
+        LeviathanPrime,
+        // The Medic (2026-11-15): a fourth hero, appended at the
+        // very end so every earlier value keeps its number.
+        HeroWard
     }
 }

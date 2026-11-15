@@ -31,6 +31,7 @@ namespace LunarDominion.Boss
         public bool Defending;
         public int AtkBuffRounds;
         public int DefBuffRounds;
+        public int WardDefBuffRounds;
         public int DeadeyeCharges;
         public readonly int[] Cooldowns = new int[3];
 
@@ -38,9 +39,13 @@ namespace LunarDominion.Boss
         public UnitClass Class => Member.Definition.Class;
         public int Level => Member.Unit.Level;
 
-        /// <summary>Defense with Bulwark applied (the boss's
-        /// hits are computed against this).</summary>
-        public int EffDef => Mathf.RoundToInt(Def * (DefBuffRounds > 0 ? TurnBasedBossFight.BulwarkDefMult : 1f));
+        /// <summary>Defense with the active DEF buffs applied
+        /// (the boss's hits are computed against this): Reyes'
+        /// Bulwark and Ward's Nano-Weave are separate counters
+        /// and stack multiplicatively while both run.</summary>
+        public int EffDef => Mathf.RoundToInt(Def
+            * (DefBuffRounds > 0 ? TurnBasedBossFight.BulwarkDefMult : 1f)
+            * (WardDefBuffRounds > 0 ? TurnBasedBossFight.NanoWeaveDefMult : 1f));
     }
 
     /// <summary>One sub-drone in the turn-based boss fight
@@ -105,6 +110,17 @@ namespace LunarDominion.Boss
         public const float ArmorBreakMult = 1.30f;
         public const float ArmorBreakDefMult = 0.80f;
         public const int ArmorBreakRounds = 2;
+        // The Medic (2026-11-15): Ward's kit. The heal is a
+        // fraction of the TARGET's max HP, so it scales with the
+        // team instead of a flat number going stale; Nano-Weave
+        // is its own DEF buff (weaker than Bulwark, longer) and
+        // stacks multiplicatively with it; Vitality Serum grows
+        // the target's max HP for the rest of the fight only
+        // (TurnHeroState is never saved).
+        public const float HealFrac = 0.30f;
+        public const float NanoWeaveDefMult = 1.20f;
+        public const int NanoWeaveRounds = 3;
+        public const float VitalityFrac = 0.15f;
 
         private const float SweepAtkMult = 0.60f;
         private const float SlamAtkMult = 1.20f;
@@ -738,6 +754,34 @@ namespace LunarDominion.Boss
             return Mathf.RoundToInt(hero.Atk * (hero.AtkBuffRounds > 0 ? RallyAtkMult : 1f));
         }
 
+        /// <summary>Ranged heroes — and Ward (Support) — fight
+        /// standing back: bolt presentation instead of a lunge,
+        /// and no core-vent burn (the vent checks this too).</summary>
+        private static bool FightsAtRange(TurnHeroState hero)
+        {
+            return hero.Class == UnitClass.Ranged || hero.Class == UnitClass.Support;
+        }
+
+        /// <summary>The living hero with the lowest HP fraction
+        /// (Ward's heal and serum target; ties go to the earliest
+        /// in team order). Includes Ward himself.</summary>
+        private TurnHeroState MostWoundedAlly()
+        {
+            TurnHeroState best = null;
+            float bestFrac = float.MaxValue;
+            foreach (var ally in Heroes)
+            {
+                if (!ally.Alive || ally.MaxHp <= 0) continue;
+                float frac = ally.Hp / (float)ally.MaxHp;
+                if (frac < bestFrac)
+                {
+                    bestFrac = frac;
+                    best = ally;
+                }
+            }
+            return best;
+        }
+
         private IEnumerator AttackRoutine(TurnHeroState hero, TurnDroneState drone)
         {
             Busy = true;
@@ -745,8 +789,8 @@ namespace LunarDominion.Boss
             if (Director != null) Director.PlayShot(BossShot.HeroStrike, hero.Figure.transform);
             Vector3 targetPos = drone != null ? drone.Figure.transform.position : _bossRoot.position;
             Vector3 impact = targetPos + Vector3.up * (drone != null ? 2.2f : 8.5f);
-            if (hero.Class == UnitClass.Ranged) SfxDirector.Play(SfxClip.HeroShoot);
-            if (hero.Class == UnitClass.Ranged)
+            if (FightsAtRange(hero)) SfxDirector.Play(SfxClip.HeroShoot);
+            if (FightsAtRange(hero))
             {
                 yield return BoltRoutine(FigureChest(hero.Figure.transform), impact,
                     new Color(0.6f, 0.9f, 1f));
@@ -756,7 +800,7 @@ namespace LunarDominion.Boss
                 yield return LungeRoutine(hero.Figure.transform, hero.Home, targetPos,
                     drone != null ? 2.6f : 5.2f);
             }
-            if (hero.Class != UnitClass.Ranged) SfxDirector.Play(SfxClip.HeroHit);
+            if (!FightsAtRange(hero)) SfxDirector.Play(SfxClip.HeroHit);
             StartCoroutine(ContactFlashRoutine(impact, ImpactTint()));
             // Amped impacts (2026-11-14): spark bursts on hero
             // hits. Melee on the boss is the big one (the
@@ -764,7 +808,7 @@ namespace LunarDominion.Boss
             // hits get smaller sprays.
             if (drone != null)
                 SpawnSparks(impact, new Color(1f, 0.85f, 0.55f), 12, 3.5f);
-            else if (hero.Class == UnitClass.Ranged)
+            else if (FightsAtRange(hero))
                 SpawnSparks(impact, new Color(0.65f, 0.9f, 1f), 14, 4.5f);
             else
             {
@@ -947,6 +991,44 @@ namespace LunarDominion.Boss
                         _bossDefDebuffRounds = ArmorBreakRounds;
                         AddLog($"A.R.E.S.'s armor is cracked — DEF down for {ArmorBreakRounds} rounds.");
                     }
+                    break;
+                }
+
+                case HeroSkillId.FieldTreatment:
+                {
+                    var target = MostWoundedAlly();
+                    int before = target.Hp;
+                    target.Hp = Mathf.Min(target.MaxHp,
+                        target.Hp + Mathf.RoundToInt(target.MaxHp * HealFrac));
+                    SfxDirector.Play(SfxClip.Buff);
+                    AddLog($"{hero.Name} uses FIELD TREATMENT — {target.Name} recovers {target.Hp - before} HP.");
+                    StartCoroutine(ContactFlashRoutine(FigureChest(target.Figure.transform),
+                        new Color(0.45f, 1f, 0.6f)));
+                    yield return FlashRoutine(target.Figure.transform, 1.08f);
+                    break;
+                }
+
+                case HeroSkillId.NanoWeave:
+                    foreach (var ally in Heroes)
+                    {
+                        if (ally.Alive) ally.WardDefBuffRounds = NanoWeaveRounds;
+                    }
+                    SfxDirector.Play(SfxClip.Buff);
+                    AddLog($"{hero.Name} uses NANO-WEAVE — team DEF +20% for {NanoWeaveRounds} rounds!");
+                    yield return PulseAllHeroes();
+                    break;
+
+                case HeroSkillId.VitalitySerum:
+                {
+                    var target = MostWoundedAlly();
+                    int boost = Mathf.RoundToInt(target.MaxHp * VitalityFrac);
+                    target.MaxHp += boost;
+                    target.Hp += boost;
+                    SfxDirector.Play(SfxClip.Buff);
+                    AddLog($"{hero.Name} uses VITALITY SERUM — {target.Name}'s max HP rises by {boost}!");
+                    StartCoroutine(ContactFlashRoutine(FigureChest(target.Figure.transform),
+                        new Color(0.45f, 1f, 0.6f)));
+                    yield return FlashRoutine(target.Figure.transform, 1.10f);
                     break;
                 }
             }
@@ -1382,7 +1464,7 @@ namespace LunarDominion.Boss
                 int atk = Mathf.RoundToInt(BossEffAtk * VentBurnMult);
                 foreach (var hero in Heroes)
                 {
-                    if (!hero.Alive || hero.Class == UnitClass.Ranged) continue;
+                    if (!hero.Alive || FightsAtRange(hero)) continue;
                     int dmg = CombatService.Damage(atk, hero.EffDef / 2,
                         UnitClass.Mechanized, hero.Class, BossLevel, hero.Level);
                     ApplyHeroDamage(hero, dmg, "CORE VENT");
@@ -1398,6 +1480,7 @@ namespace LunarDominion.Boss
             {
                 if (hero.AtkBuffRounds > 0) hero.AtkBuffRounds--;
                 if (hero.DefBuffRounds > 0) hero.DefBuffRounds--;
+                if (hero.WardDefBuffRounds > 0) hero.WardDefBuffRounds--;
                 if (hero.ShieldRounds > 0)
                 {
                     hero.ShieldRounds--;

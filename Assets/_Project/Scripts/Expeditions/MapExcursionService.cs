@@ -412,7 +412,8 @@ namespace LunarDominion.Expeditions
             slot.HeroSquad = new List<OwnedUnit>();
             foreach (var unit in HealthyRoster(armyIndex))
             {
-                if (unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor)
+                if (unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor
+                    || unit.Id == UnitId.HeroWard)
                     slot.HeroSquad.Add(unit);
                 else
                     slot.Squad.Add(unit);

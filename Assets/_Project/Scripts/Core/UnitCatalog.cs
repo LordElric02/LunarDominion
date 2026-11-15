@@ -33,6 +33,13 @@ namespace LunarDominion.Core
             list.Add(MakeHero(UnitId.HeroReyes, "Commander Elena Reyes", UnitClass.Infantry, 800, 120, 50, 50, 500, 500, 200));
             list.Add(MakeHero(UnitId.HeroVega, "Sergeant Marcus Vega", UnitClass.Ranged, 550, 180, 30, 65, 500, 500, 200));
             list.Add(MakeHero(UnitId.HeroOkafor, "Lieutenant Obinna Okafor", UnitClass.Mechanized, 1200, 80, 80, 40, 500, 500, 200));
+            // The Medic (2026-11-15): Dr. Elias Ward, a fourth hero
+            // and the roster's first Support class — a healer, not a
+            // damage dealer (weak sidearm ATK, mid HP, fast enough to
+            // land a heal early in the round). His recruit gate is
+            // the Hospital, not this catalog (RecruitmentService);
+            // the cost is a step up from the original three.
+            list.Add(MakeHero(UnitId.HeroWard, "Dr. Elias Ward", UnitClass.Support, 700, 60, 40, 55, 800, 800, 400));
             // Tiers 4-6 (2026-11-10): the endgame tiers. Tiers 1-3 grow
             // ~x1.75 per tier; tiers 4-6 grow ~x2.2 per tier — the jump
             // is deliberate: a maxed (Lv 20) full Tier 6 squad is the
