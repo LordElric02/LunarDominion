@@ -447,7 +447,7 @@ namespace LunarDominion.UI
             var keyLight = keyGo.AddComponent<Light>();
             keyLight.type = LightType.Spot;
             keyLight.color = new Color(1.0f, 0.93f, 0.82f);
-            keyLight.intensity = 3.4f;
+            keyLight.intensity = 5.5f;
             keyLight.range = 55f;
             keyLight.spotAngle = 46f;
             keyLight.innerSpotAngle = 28f;
