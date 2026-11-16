@@ -15,7 +15,9 @@ It writes ExteriorTerrainNormal.png next to itself; copy
 that into Assets/_Project/Resources/Textures (keep the
 name) and set its Texture Type to Normal Map once.
 Relief: fBm grain on the fields + domed cobblestones.
-Seeded and deterministic - same script, same PNG.
+Seeded and deterministic within one environment (the
+grain rides on Pillow's resize, whose rounding varies
+slightly between Pillow versions).
 """
 import numpy as np
 from PIL import Image
@@ -37,13 +39,30 @@ if not os.path.exists(os.path.join(_SCRIPT_DIR, 'BuildExteriorTerrainV13.py')):
     except Exception:
         pass
 SRC = os.path.join(_SCRIPT_DIR, 'BuildExteriorTerrainV13.py')
-for _m in ('bpy', 'bmesh', 'mathutils'):
-    sys.modules.setdefault(_m, types.ModuleType(_m))
 class _Dummy:
     def __init__(self, *a, **k): pass
     def __call__(self, *a, **k): return _Dummy()
-sys.modules['mathutils'].Vector = _Dummy
-sys.modules['mathutils'].Matrix = _Dummy
+# Stub the Blender modules ONLY when running outside
+# Blender (plain Python). Inside Blender they are real and
+# must never be touched: an earlier version overwrote the
+# live mathutils module's Vector/Matrix with _Dummy even
+# in Blender, which poisoned the whole session - every
+# later script doing "from mathutils import Matrix" got
+# the dummy and died (BuildMapSitesV6, 2026-11-16). A
+# session poisoned by the old version needs a Blender
+# restart; this version cannot poison one.
+try:
+    import bpy as _probe_bpy
+    _IN_BLENDER = True
+except Exception:
+    _IN_BLENDER = False
+if not _IN_BLENDER:
+    for _m in ('bpy', 'bmesh'):
+        sys.modules.setdefault(_m, types.ModuleType(_m))
+    _mu = types.ModuleType('mathutils')
+    _mu.Vector = _Dummy
+    _mu.Matrix = _Dummy
+    sys.modules['mathutils'] = _mu
 ns = {'__file__': SRC, '__name__': 'terrain_v13_defs'}
 with open(SRC) as f:
     _code = f.read()
