@@ -166,6 +166,28 @@ namespace LunarDominion.UI
         // point, so the 48.5-degree pitch never changes. Clamped so the
         // view stays on the 1120x960 map.
         private Vector3 _panOffset = Vector3.zero;
+
+        // Alien Twilight ambience (Patrick 2026-11-15): while the
+        // Map is up, the view gets a twilight sky dome with a
+        // ringed planet, a warm low sun, teal haze (fog) and
+        // drifting spore motes. Everything global it touches
+        // (ambient, fog, the shared lights, the camera backdrop)
+        // is captured on show and restored on hide — the same
+        // discipline as the lair's environment pass — so the
+        // Base and Lair views are never affected.
+        private GameObject _ambienceRoot;
+        private Transform _motes;
+        private bool _ambApplied;
+        private UnityEngine.Rendering.AmbientMode _ambPrevMode;
+        private Color _ambPrevSky, _ambPrevEquator, _ambPrevGround;
+        private bool _ambPrevFog;
+        private Color _ambPrevFogColor;
+        private FogMode _ambPrevFogMode;
+        private float _ambPrevFogDensity, _ambPrevFogNear, _ambPrevFogFar;
+        private Color _ambPrevSunColor, _ambPrevFillColor;
+        private float _ambPrevSunIntensity, _ambPrevFillIntensity;
+        private Color _ambPrevCamBg;
+        private Light _ambSun, _ambFill;
         private static readonly float PanSpeed = 40f; // units/second, arrow keys
         private static readonly float PanLimitX = 480f;
         private static readonly float PanLimitZ = 420f;
@@ -636,6 +658,7 @@ namespace LunarDominion.UI
             // raise it so the far side of the world never clips.
             var mainCam = Camera.main;
             if (mainCam != null && mainCam.farClipPlane < 3000f) mainCam.farClipPlane = 3000f;
+            BuildAmbience();
             GameObject terrainPrefab = null;
             try
             {
@@ -1237,6 +1260,8 @@ namespace LunarDominion.UI
         private void Update()
         {
             if (!_visible) return;
+            // Spore motes drift around the player's current view.
+            if (_motes != null) _motes.position = new Vector3(_panOffset.x, 16f, _panOffset.z);
             // Excursion marches: each army slot's marker walks from its
             // start to its target at a steady speed, then fires the
             // arrival callback (the service resolves the outcome and
@@ -2162,10 +2187,341 @@ namespace LunarDominion.UI
             }
         }
 
+        // ---- Alien Twilight ambience (2026-11-15) ----
+
+        private void BuildAmbience()
+        {
+            _ambienceRoot = new GameObject("ExteriorAmbience");
+            _ambienceRoot.SetActive(false);
+
+            // Sky dome: a code-built sphere (radius 1350, inside
+            // the 3000 far plane) with its triangles wound so the
+            // inside faces the camera, textured with a runtime
+            // gradient — deep teal zenith, warm peach horizon,
+            // faint stars up high.
+            var dome = new GameObject("TwilightSky");
+            dome.transform.SetParent(_ambienceRoot.transform, false);
+            dome.AddComponent<MeshFilter>().sharedMesh = BuildSkyDomeMesh(1350f, 32, 16);
+            var domeRenderer = dome.AddComponent<MeshRenderer>();
+            var skyShader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (skyShader != null)
+            {
+                var skyMat = new Material(skyShader);
+                skyMat.SetFloat("_Cull", 0f); // seen from inside; winding-proof
+                skyMat.SetTexture("_BaseMap", MakeSkyTexture());
+                skyMat.SetColor("_BaseColor", Color.white);
+                domeRenderer.sharedMaterial = skyMat;
+            }
+            domeRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            domeRenderer.receiveShadow = false;
+
+            BuildRingedPlanet(_ambienceRoot.transform);
+            BuildMotes(_ambienceRoot.transform);
+        }
+
+        private static Mesh BuildSkyDomeMesh(float radius, int segments, int rings)
+        {
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            for (int j = 0; j <= rings; j++)
+            {
+                float v = (float)j / rings;                 // 0 = bottom pole, 1 = top pole
+                float phi = (v - 0.5f) * Mathf.PI;           // latitude -90..+90 degrees
+                float y = radius * Mathf.Sin(phi);
+                float ringR = radius * Mathf.Cos(phi);
+                for (int i = 0; i <= segments; i++)
+                {
+                    float u = (float)i / segments;
+                    float a = u * 2f * Mathf.PI;
+                    verts.Add(new Vector3(ringR * Mathf.Cos(a), y, ringR * Mathf.Sin(a)));
+                    uvs.Add(new Vector2(u, v));
+                }
+            }
+            int row = segments + 1;
+            for (int j = 0; j < rings; j++)
+            {
+                for (int i = 0; i < segments; i++)
+                {
+                    int a0 = j * row + i, b0 = a0 + 1, c0 = a0 + row, d0 = c0 + 1;
+                    // Reversed winding: the dome is seen from inside.
+                    tris.Add(a0); tris.Add(d0); tris.Add(c0);
+                    tris.Add(a0); tris.Add(b0); tris.Add(d0);
+                }
+            }
+            var mesh = new Mesh { name = "TwilightSkyDome" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            return mesh;
+        }
+
+        private static Texture2D MakeSkyTexture()
+        {
+            // v: 0 bottom (below the horizon, hidden by terrain),
+            // 0.5 the horizon, 1 the zenith.
+            var tex = new Texture2D(1024, 512, TextureFormat.RGBA32, false);
+            var deep = new Color(0.04f, 0.10f, 0.12f);
+            var horizon = new Color(0.99f, 0.58f, 0.33f);
+            var mid = new Color(0.13f, 0.36f, 0.40f);
+            var zenith = new Color(0.02f, 0.06f, 0.10f);
+            var rng = new System.Random(20261115);
+            for (int y = 0; y < 512; y++)
+            {
+                float v = y / 511f;
+                Color c;
+                if (v < 0.46f) c = deep;
+                else if (v < 0.52f) c = Color.Lerp(deep, horizon, TerrainSmoothstep(0.46f, 0.52f, v));
+                else if (v < 0.62f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.52f, 0.62f, v));
+                else c = Color.Lerp(mid, zenith, TerrainSmoothstep(0.62f, 0.95f, v));
+                for (int x = 0; x < 1024; x++) tex.SetPixel(x, y, c);
+            }
+            // Faint stars in the upper sky only.
+            for (int s = 0; s < 420; s++)
+            {
+                int x = rng.Next(0, 1024);
+                int y = (int)(512 * (0.68f + 0.30f * (float)rng.NextDouble()));
+                float b = 0.35f + 0.55f * (float)rng.NextDouble();
+                tex.SetPixel(x, y, new Color(b, b, b * 1.05f));
+            }
+            tex.Apply();
+            return tex;
+        }
+
+        private void BuildRingedPlanet(Transform parent)
+        {
+            var group = new GameObject("RingedPlanet");
+            group.transform.SetParent(parent, false);
+            // High over the north-western horizon: it appears
+            // when the player pans toward that corner.
+            group.transform.position = new Vector3(-880f, 305f, -720f);
+            group.transform.LookAt(new Vector3(0f, 30f, 0f));
+            group.transform.Rotate(0f, 0f, -14f, Space.Self);
+
+            var unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlit == null) return;
+
+            // Disc with gas-giant bands.
+            var disc = new GameObject("PlanetDisc");
+            disc.transform.SetParent(group.transform, false);
+            disc.AddComponent<MeshFilter>().sharedMesh = BuildDiscMesh(95f, 40);
+            var discRenderer = disc.AddComponent<MeshRenderer>();
+            var discMat = new Material(unlit);
+            discMat.SetFloat("_Cull", 0f); // double-sided: visible however the group tilts
+            discMat.SetTexture("_BaseMap", MakePlanetTexture());
+            discMat.SetColor("_BaseColor", Color.white);
+            discRenderer.sharedMaterial = discMat;
+            discRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            discRenderer.receiveShadow = false;
+
+            // Ring: a flat translucent annulus in the same plane.
+            var ring = new GameObject("PlanetRing");
+            ring.transform.SetParent(group.transform, false);
+            ring.AddComponent<MeshFilter>().sharedMesh = BuildRingMesh(128f, 208f, 48);
+            var ringRenderer = ring.AddComponent<MeshRenderer>();
+            var ringMat = new Material(unlit);
+            ringMat.SetFloat("_Cull", 0f);
+            ringMat.SetColor("_BaseColor", new Color(0.78f, 0.88f, 0.92f, 0.50f));
+            ringMat.SetFloat("_Surface", 1f);
+            ringMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            ringMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            ringMat.SetInt("_ZWrite", 0);
+            ringMat.renderQueue = 3000;
+            ringRenderer.sharedMaterial = ringMat;
+            ringRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            ringRenderer.receiveShadow = false;
+        }
+
+        private static Mesh BuildDiscMesh(float radius, int segments)
+        {
+            var verts = new List<Vector3> { Vector3.zero };
+            var uvs = new List<Vector2> { new Vector2(0.5f, 0.5f) };
+            var tris = new List<int>();
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = (float)i / segments * 2f * Mathf.PI;
+                float cx = Mathf.Cos(a), sy = Mathf.Sin(a);
+                verts.Add(new Vector3(radius * cx, radius * sy, 0f));
+                uvs.Add(new Vector2(0.5f + 0.5f * cx, 0.5f + 0.5f * sy));
+            }
+            for (int i = 1; i <= segments; i++) { tris.Add(0); tris.Add(i); tris.Add(i + 1); }
+            var mesh = new Mesh { name = "PlanetDisc" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            return mesh;
+        }
+
+        private static Mesh BuildRingMesh(float inner, float outer, int segments)
+        {
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = (float)i / segments * 2f * Mathf.PI;
+                float cx = Mathf.Cos(a), sy = Mathf.Sin(a);
+                verts.Add(new Vector3(inner * cx, inner * sy, 0f));
+                verts.Add(new Vector3(outer * cx, outer * sy, 0f));
+            }
+            for (int i = 0; i < segments; i++)
+            {
+                int a0 = i * 2, b0 = a0 + 1, c0 = a0 + 2, d0 = a0 + 3;
+                tris.Add(a0); tris.Add(b0); tris.Add(c0);
+                tris.Add(b0); tris.Add(d0); tris.Add(c0);
+            }
+            var mesh = new Mesh { name = "PlanetRing" };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            return mesh;
+        }
+
+        private static Texture2D MakePlanetTexture()
+        {
+            // Horizontal gas-giant bands (v runs across the disc),
+            // with a soft darker limb toward the rim.
+            var tex = new Texture2D(256, 256, TextureFormat.RGBA32, false);
+            var bands = new[]
+            {
+                new Color(0.92f, 0.78f, 0.62f), new Color(0.85f, 0.60f, 0.42f),
+                new Color(0.95f, 0.85f, 0.70f), new Color(0.78f, 0.52f, 0.36f),
+                new Color(0.90f, 0.72f, 0.55f), new Color(0.84f, 0.62f, 0.45f),
+                new Color(0.93f, 0.80f, 0.64f),
+            };
+            for (int y = 0; y < 256; y++)
+            {
+                float v = y / 255f;
+                float f = v * (bands.Length - 1);
+                int bi = Mathf.Min((int)f, bands.Length - 2);
+                Color c = Color.Lerp(bands[bi], bands[bi + 1], f - bi);
+                for (int x = 0; x < 256; x++)
+                {
+                    float dx = (x - 127.5f) / 128f, dy = (y - 127.5f) / 128f;
+                    float limb = Mathf.Clamp01(1.15f - 0.45f * (dx * dx + dy * dy));
+                    tex.SetPixel(x, y, c * limb);
+                }
+            }
+            tex.Apply();
+            return tex;
+        }
+
+        private void BuildMotes(Transform parent)
+        {
+            // Mirrors LavaTubeAmbience.BuildDust, scaled up for
+            // the open field: slow spore motes drifting around
+            // the player's current view (Update re-centres the
+            // system on the pan offset).
+            var go = new GameObject("SporeMotes");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(0f, 16f, 0f);
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.loop = true;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(14f, 24f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.2f, 0.5f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 1.1f);
+            main.startColor = new Color(0.75f, 0.95f, 0.90f, 0.30f);
+            main.maxParticles = 240;
+            var emission = ps.emission;
+            emission.rateOverTime = 22f;
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(760f, 40f, 760f);
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shader != null && renderer != null)
+            {
+                var mat = new Material(shader);
+                mat.SetTexture("_BaseMap", MakeDotTexture());
+                mat.SetColor("_BaseColor", new Color(0.75f, 0.95f, 0.90f, 0.5f));
+                mat.SetFloat("_Surface", 1f);
+                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One); // additive
+                mat.SetInt("_ZWrite", 0);
+                mat.renderQueue = 3000;
+                renderer.material = mat;
+            }
+            _motes = go.transform;
+        }
+
+        private static Texture2D MakeDotTexture()
+        {
+            var tex = new Texture2D(32, 32, TextureFormat.RGBA32, false);
+            for (int y = 0; y < 32; y++)
+            {
+                for (int x = 0; x < 32; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x, y), new Vector2(15.5f, 15.5f)) / 16f;
+                    float a = Mathf.Clamp01(1f - d);
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a * a));
+                }
+            }
+            tex.Apply();
+            return tex;
+        }
+
+        private void ApplyAmbience()
+        {
+            if (_ambApplied) return;
+            _ambPrevMode = RenderSettings.ambientMode;
+            _ambPrevSky = RenderSettings.ambientSkyColor;
+            _ambPrevEquator = RenderSettings.ambientEquatorColor;
+            _ambPrevGround = RenderSettings.ambientGroundColor;
+            _ambPrevFog = RenderSettings.fog;
+            _ambPrevFogColor = RenderSettings.fogColor;
+            _ambPrevFogMode = RenderSettings.fogMode;
+            _ambPrevFogDensity = RenderSettings.fogDensity;
+            _ambPrevFogNear = RenderSettings.fogStartDistance;
+            _ambPrevFogFar = RenderSettings.fogEndDistance;
+            if (_ambSun == null) { var go = GameObject.Find("Directional Light"); if (go != null) _ambSun = go.GetComponent<Light>(); }
+            if (_ambFill == null) { var go = GameObject.Find("Fill Light"); if (go != null) _ambFill = go.GetComponent<Light>(); }
+            if (_ambSun != null) { _ambPrevSunColor = _ambSun.color; _ambPrevSunIntensity = _ambSun.intensity; }
+            if (_ambFill != null) { _ambPrevFillColor = _ambFill.color; _ambPrevFillIntensity = _ambFill.intensity; }
+            var cam = Camera.main;
+            if (cam != null) _ambPrevCamBg = cam.backgroundColor;
+            _ambApplied = true;
+
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.38f, 0.44f, 0.46f);
+            RenderSettings.ambientEquatorColor = new Color(0.34f, 0.28f, 0.22f);
+            RenderSettings.ambientGroundColor = new Color(0.12f, 0.13f, 0.11f);
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.32f, 0.47f, 0.46f);
+            RenderSettings.fogStartDistance = 550f;
+            RenderSettings.fogEndDistance = 2400f;
+            if (_ambSun != null) { _ambSun.color = new Color(1.0f, 0.74f, 0.50f); _ambSun.intensity = 1.35f; }
+            if (_ambFill != null) { _ambFill.color = new Color(0.55f, 0.70f, 0.78f); _ambFill.intensity = 0.45f; }
+            if (cam != null) cam.backgroundColor = new Color(0.03f, 0.09f, 0.12f);
+        }
+
+        private void ReleaseAmbience()
+        {
+            if (!_ambApplied) return;
+            _ambApplied = false;
+            RenderSettings.ambientMode = _ambPrevMode;
+            RenderSettings.ambientSkyColor = _ambPrevSky;
+            RenderSettings.ambientEquatorColor = _ambPrevEquator;
+            RenderSettings.ambientGroundColor = _ambPrevGround;
+            RenderSettings.fog = _ambPrevFog;
+            RenderSettings.fogColor = _ambPrevFogColor;
+            RenderSettings.fogMode = _ambPrevFogMode;
+            RenderSettings.fogDensity = _ambPrevFogDensity;
+            RenderSettings.fogStartDistance = _ambPrevFogNear;
+            RenderSettings.fogEndDistance = _ambPrevFogFar;
+            if (_ambSun != null) { _ambSun.color = _ambPrevSunColor; _ambSun.intensity = _ambPrevSunIntensity; }
+            if (_ambFill != null) { _ambFill.color = _ambPrevFillColor; _ambFill.intensity = _ambPrevFillIntensity; }
+            var cam = Camera.main;
+            if (cam != null) cam.backgroundColor = _ambPrevCamBg;
+        }
+
         public void SetVisible(bool visible)
         {
             _visible = visible;
             if (_terrain != null) _terrain.SetActive(visible);
+            if (_ambienceRoot != null) _ambienceRoot.SetActive(visible);
             if (_baseCastle != null) _baseCastle.SetActive(visible);
             foreach (var point in _mapPoints)
             {
@@ -2180,6 +2536,7 @@ namespace LunarDominion.UI
             // service cancels the excursion on tab switch, and this is
             // the backstop so the markers never linger in the Base view.
             if (!visible) CancelAllMarches();
+            if (!visible) ReleaseAmbience();
             // Search (Phase 3): the Find UI lives and dies with the
             // Map, and leaving the Map clears any active search.
             if (!visible)
@@ -2213,6 +2570,7 @@ namespace LunarDominion.UI
                 _pointerDown = false;
                 _isDrag = false;
                 ApplyCamera();
+                ApplyAmbience();
             }
             // Hiding the Map does NOT touch the camera (2026-11-14
             // fix): this method used to reset it to a stale local
