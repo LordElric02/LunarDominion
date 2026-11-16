@@ -43,6 +43,10 @@ namespace LunarDominion.Save
         // Map excursions (2026-11-09): node regen timestamps, one per
         // resource node. Old saves without this field load as all "".
         public string[] NodeRegenUtc = new string[18];
+        // Resource node levels (2026-11-16): one per node, 0-6.
+        // Old saves without this field load as all 0 (never
+        // rolled) and MapExcursionService rolls them on first use.
+        public int[] NodeLevel = new int[18];
         // Node occupation (2026-11-09): the army farming a node.
         // Old saves load with no occupation (-1). LEGACY singular
         // fields (pre two-armies): still read on load and migrated
@@ -142,6 +146,7 @@ namespace LunarDominion.Save
                 ProductionCarryAlloy = state.ProductionCarryAlloy,
                 ProductionCarryHelium3 = state.ProductionCarryHelium3,
                 NodeRegenUtc = state.NodeRegenUtc != null ? (string[])state.NodeRegenUtc.Clone() : new string[18],
+                NodeLevel = state.NodeLevel != null ? (int[])state.NodeLevel.Clone() : new int[18],
                 OccupiedNodeIndices = CopyIntSlots(state.OccupiedNodeIndex, -1),
                 OccupationEndUtcs = CopyStringSlots(state.OccupationEndUtc),
                 OccupationAmounts = CopyIntSlots(state.OccupationAmount, 0),
@@ -195,6 +200,7 @@ namespace LunarDominion.Save
                     ProductionCarryAlloy = Math.Max(0f, data.ProductionCarryAlloy),
                     ProductionCarryHelium3 = Math.Max(0f, data.ProductionCarryHelium3),
                     NodeRegenUtc = ValidateNodeRegenUtc(data.NodeRegenUtc),
+                    NodeLevel = ValidateNodeLevel(data.NodeLevel),
                     BossRespawnUtc = data.BossRespawnUtc ?? "",
                     BossLevelDefeated = Math.Max(0, Math.Min(data.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
                     CampSlotTier = ValidateCampSlotTiers(data.CampSlotTier),
@@ -287,7 +293,21 @@ namespace LunarDominion.Save
             if (saved == null) return result;
             for (int i = 0; i < result.Length && i < saved.Length; i++)
             {
-                result[i] = Math.Max(0, Math.Min(saved[i], 3));
+                // Camp tiers run 1-6 since 2026-11-16 (was 1-3 —
+                // this clamp silently downgraded T4-T6 camps to
+                // T3 on load until it was raised with the tiers).
+                result[i] = Math.Max(0, Math.Min(saved[i], 6));
+            }
+            return result;
+        }
+
+        private int[] ValidateNodeLevel(int[] saved)
+        {
+            var result = new int[18];
+            if (saved == null) return result;
+            for (int i = 0; i < result.Length && i < saved.Length; i++)
+            {
+                result[i] = Math.Max(0, Math.Min(saved[i], 6));
             }
             return result;
         }

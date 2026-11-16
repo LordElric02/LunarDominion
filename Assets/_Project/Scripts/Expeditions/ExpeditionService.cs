@@ -357,12 +357,12 @@ namespace LunarDominion.Expeditions
                     var member = squad[outcome.SurvivingSquadIndices[i]];
                     int gained = share + (i == 0 ? remainder : 0);
                     // Heroes level at half rate from BOSS fights only
-                    // (HeroXpRate, Tier 4): a solo hero would otherwise
+                    // (HeroXpRate, IsBoss): a solo hero would otherwise
                     // take the whole 1000+ XP boss pool and rocket to
-                    // Lv 10 in a few fights. Map camp fights (Tier 1-3)
+                    // Lv 10 in a few fights. Map camp fights (Tier 1-6)
                     // give full XP — that is the heroes' steady XP path
                     // now that they march with the army (2026-11-10).
-                    if (member.Definition.IsHero && encounter.Tier == 4)
+                    if (member.Definition.IsHero && encounter.IsBoss)
                     {
                         gained = (int)Math.Round(gained * HeroXpRate);
                     }
@@ -507,7 +507,7 @@ namespace LunarDominion.Expeditions
                     int gained = share + (i == 0 ? remainder : 0);
                     // Heroes level at half rate from boss fights
                     // (HeroXpRate — see ResolveFight).
-                    if (member.Definition.IsHero && encounter.Tier == 4)
+                    if (member.Definition.IsHero && encounter.IsBoss)
                     {
                         gained = (int)Math.Round(gained * HeroXpRate);
                     }

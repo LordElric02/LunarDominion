@@ -196,6 +196,9 @@ namespace LunarDominion.Expeditions
             // spot, not the original one. Same for the boss lair.
             SyncCamps();
             SyncBoss();
+            // Node levels: roll any the save has never rolled and
+            // push every level to the view's mirror.
+            EnsureNodeLevels();
         }
 
         // The occupation arrays are per army slot; normalize their
@@ -675,6 +678,13 @@ namespace LunarDominion.Expeditions
             if (_state.NodeRegenUtc == null || _state.NodeRegenUtc.Length != 18)
                 _state.NodeRegenUtc = new string[18];
             _state.NodeRegenUtc[nodeIndex] = DateTime.UtcNow.AddHours(NodeRegenHours).ToString("o");
+            // The node's NEXT incarnation rolls its level now, so
+            // when it regenerates it comes back at the new level
+            // (the harvest just granted used the level stored in
+            // the occupation amount, rolled before this one).
+            EnsureNodeLevels();
+            _state.NodeLevel[nodeIndex] = RollNodeLevel();
+            if (_view != null) _view.SetNodeLevel(nodeIndex, _state.NodeLevel[nodeIndex]);
             ClearOccupation(slotIndex);
             _saveGame?.Invoke();
             _notifyChanged?.Invoke();
@@ -742,9 +752,11 @@ namespace LunarDominion.Expeditions
         }
 
         /// <summary>Tier for a newly spawning camp, weighted by Nexus
-        /// level (Patrick's design, 2026-11-10): Tier 2 camps join
+        /// level (Patrick's design, 2026-11-10; tiers 4-6 added
+        /// 2026-11-16 once armies ran to Tier 6): Tier 2 camps join
         /// once a Tier 2 army is possible (Nexus 10), Tier 3 at
-        /// Nexus 15, and Tier 1 is always sprinkled in — never gone.</summary>
+        /// Nexus 15, Tier 4 at 20, Tier 5 at 25, Tier 6 at 29, and
+        /// Tier 1 is always sprinkled in — never gone.</summary>
         private int RollCampTier()
         {
             int nexus = _state.NexusLevel;
@@ -752,7 +764,59 @@ namespace LunarDominion.Expeditions
             float roll = UnityEngine.Random.value;
             if (nexus < 15) return roll < 0.65f ? 1 : 2;
             if (nexus < 20) return roll < 0.45f ? 1 : (roll < 0.75f ? 2 : 3);
-            return roll < 0.30f ? 1 : (roll < 0.65f ? 2 : 3);
+            if (nexus < 25) return roll < 0.25f ? 1 : (roll < 0.55f ? 2 : (roll < 0.80f ? 3 : 4));
+            if (nexus < 29) return roll < 0.15f ? 1 : (roll < 0.40f ? 2 : (roll < 0.65f ? 3 : (roll < 0.85f ? 4 : 5)));
+            return roll < 0.10f ? 1 : (roll < 0.30f ? 2 : (roll < 0.55f ? 3 : (roll < 0.75f ? 4 : (roll < 0.90f ? 5 : 6))));
+        }
+
+        // Resource node levels (2026-11-16, Patrick: the resource
+        // nodes need levels too). GameState.NodeLevel[i] is node
+        // i's CURRENT level: rolled when the node regenerates
+        // after a harvest (CompleteOccupation) and once for every
+        // node an old save has never rolled. The cap grows with
+        // Nexus, mirroring the camp field; the roll lands at the
+        // cap half the time and steps down from there, so a
+        // high-Nexus field is mostly high-level nodes. The view
+        // mirrors each level (SetNodeLevel) and prices the yield
+        // from it (ExteriorView.NodeYieldMultiplier).
+        public const int MaxNodeLevel = 6;
+
+        private int RollNodeLevel()
+        {
+            int nexus = _state.NexusLevel;
+            int max = nexus < 8 ? 1 : nexus < 15 ? 2 : nexus < 20 ? 3 : nexus < 25 ? 4 : nexus < 29 ? 5 : 6;
+            float roll = UnityEngine.Random.value;
+            int drop = roll < 0.50f ? 0 : roll < 0.80f ? 1 : roll < 0.95f ? 2 : 3;
+            return Math.Max(1, max - drop);
+        }
+
+        /// <summary>Node index -> current level (1-6). Rolls any
+        /// never-rolled nodes first, so callers always see a real
+        /// level.</summary>
+        public int NodeLevelFor(int nodeIndex)
+        {
+            EnsureNodeLevels();
+            if (nodeIndex < 0 || nodeIndex >= _state.NodeLevel.Length) return 1;
+            return Math.Max(1, _state.NodeLevel[nodeIndex]);
+        }
+
+        private void EnsureNodeLevels()
+        {
+            if (_state.NodeLevel == null || _state.NodeLevel.Length != 18)
+                _state.NodeLevel = new int[18];
+            bool filled = false;
+            for (int i = 0; i < _state.NodeLevel.Length; i++)
+            {
+                if (_state.NodeLevel[i] <= 0)
+                {
+                    _state.NodeLevel[i] = RollNodeLevel();
+                    filled = true;
+                }
+                if (_view != null) _view.SetNodeLevel(i, _state.NodeLevel[i]);
+            }
+            if (!filled) return;
+            _saveGame?.Invoke();
+            _notifyChanged?.Invoke();
         }
 
         // Normalize the slot arrays, then populate every slot that
@@ -906,12 +970,13 @@ namespace LunarDominion.Expeditions
             _view.SetBossVisible(true);
         }
 
-        /// <summary>The War Robot encounter (Tier 4). Null when the
-        /// catalog has no Tier 4 encounter.</summary>
+        /// <summary>The War Robot encounter. Null when the catalog
+        /// has no boss. Keyed on IsBoss, not Tier: camp tiers run
+        /// to 6 since 2026-11-16, so Tier 4 is a camp now.</summary>
         private EncounterDefinition EncounterForBoss()
         {
             if (_encounters == null) return null;
-            return _encounters.Find(e => e != null && e.Tier == 4);
+            return _encounters.Find(e => e != null && e.IsBoss);
         }
 
         /// <summary>True while this node is being farmed by either
@@ -1176,7 +1241,10 @@ namespace LunarDominion.Expeditions
         private EncounterDefinition EncounterForTier(int tier)
         {
             if (_encounters == null) return null;
-            return _encounters.Find(e => e != null && e.Tier == tier);
+            // !IsBoss: the boss also carries Tier 4 — a Tier 4 camp
+            // must never resolve to it, whatever order the catalog
+            // lists them in.
+            return _encounters.Find(e => e != null && e.Tier == tier && !e.IsBoss);
         }
 
         /// <summary>True while the node's regen time is still in the future.

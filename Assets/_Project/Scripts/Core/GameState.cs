@@ -58,6 +58,15 @@ namespace LunarDominion.Core
         // ActiveResearchFinishUtc. Old saves load with all "" (available).
         public string[] NodeRegenUtc = new string[18];
 
+        // Resource node levels (2026-11-16): NodeLevel[i] is node
+        // i's current level (1-6; 0 = never rolled). Rolled fresh
+        // by Nexus level whenever the node regenerates after a
+        // harvest (MapExcursionService.RollNodeLevel), so the node
+        // field grows with the player like the camp field. The
+        // yield multiplier lives in ExteriorView (the view prices
+        // the node's Amount from the mirrored level).
+        public int[] NodeLevel = new int[18];
+
         // Enemy camp field (2026-11-10, replaces the 3-camp system):
         // 36 camp slots spread across the map. CampSlotTier[i] is the
         // tier of the camp in slot i (0 = empty, waiting to respawn);

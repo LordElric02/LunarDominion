@@ -348,8 +348,17 @@ namespace LunarDominion.UI
             "Models/EnemyCampT1",
             "Models/EnemyCampT2",
             "Models/EnemyCampT3",
+            // Tiers 4-6 (2026-11-16) reuse the three structures at
+            // larger scales (CampStructureScales) until they get
+            // models of their own: T4 = a grown Spore Nest,
+            // T5 = taller Stalker Spires, T6 = a giant Tyrant Maw.
+            "Models/EnemyCampT1",
+            "Models/EnemyCampT2",
+            "Models/EnemyCampT3",
         };
-        private readonly GameObject[] _campPrefabs = new GameObject[4];
+        private static readonly float[] CampStructureScales =
+            { 0f, 1f, 1f, 1f, 1.45f, 1.4f, 1.45f };
+        private readonly GameObject[] _campPrefabs = new GameObject[7];
 
         // Sculpted terrain height (2026-11-12, map revisit Phase 1):
         // the ExteriorTerrainV2 mesh is an analytic heightfield
@@ -524,6 +533,9 @@ namespace LunarDominion.UI
             {
                 case 2: return "Void Stalker Camp";
                 case 3: return "Brood Tyrant Camp";
+                case 4: return "Ashen Ravager Camp";
+                case 5: return "Dread Stalker Camp";
+                case 6: return "Void Tyrant Camp";
                 default: return "Spore Crawler Camp";
             }
         }
@@ -534,6 +546,9 @@ namespace LunarDominion.UI
             {
                 case 2: return "Tier 2 — Void Stalkers\nExpedition enemy";
                 case 3: return "Tier 3 — Brood Tyrant\nExpedition enemy";
+                case 4: return "Tier 4 — Ashen Ravagers\nExpedition enemy";
+                case 5: return "Tier 5 — Dread Stalkers\nExpedition enemy";
+                case 6: return "Tier 6 — Void Tyrant\nExpedition enemy";
                 default: return "Tier 1 — Spore Crawlers\nExpedition enemy";
             }
         }
@@ -558,7 +573,7 @@ namespace LunarDominion.UI
         // slot's current tier and are swapped in by SetCampSlot.
         private void BuildCampSlots()
         {
-            for (int tier = 1; tier <= 3; tier++)
+            for (int tier = 1; tier <= 6; tier++)
             {
                 try
                 {
@@ -603,7 +618,7 @@ namespace LunarDominion.UI
         public void SetCampSlot(int slot, int tier)
         {
             if (slot < 0 || slot >= CampSlotCount) return;
-            if (tier < 0 || tier > 3) tier = 0;
+            if (tier < 0 || tier > 6) tier = 0;
             if (_campSlotTier[slot] == tier) return;
             DestroySlotStructure(slot);
             _campSlotTier[slot] = tier;
@@ -662,7 +677,8 @@ namespace LunarDominion.UI
         }
 
         // Swap in the tier's structure as the slot root's child
-        // (authored at final size, so scale 1; the imported
+        // (tiers 1-3 are authored at final size, so scale 1;
+        // tiers 4-6 scale a reused model up — the imported
         // rotation is left alone, per the FBX rule) and refresh
         // the marker's renderer cache so the per-renderer tinting
         // in Update keeps working with the new model.
@@ -676,6 +692,9 @@ namespace LunarDominion.UI
             go.name = CampTitleForTier(tier) + " Structure";
             go.transform.SetParent(marker.Go.transform, false);
             go.transform.localPosition = Vector3.zero;
+            float structureScale = CampStructureScales[tier];
+            if (structureScale > 0f && structureScale != 1f)
+                go.transform.localScale = new Vector3(structureScale, structureScale, structureScale);
             _campSlotStructures[slot] = go;
             var renderers = go.GetComponentsInChildren<Renderer>();
             var colors = new Color[renderers.Length];
@@ -1368,19 +1387,81 @@ namespace LunarDominion.UI
             }
         }
 
-        // Structured data for a NodeDefs entry (nodes 0-17, camps 18-20, lair 21).
-        private static MapPointData DataForNodeDef(int index)
+        // Resource node levels (2026-11-16): the service owns the
+        // levels (GameState.NodeLevel) and mirrors them here via
+        // SetNodeLevel; DataForNodeDef prices the yield and labels
+        // the point from the mirrored level.
+        private readonly int[] _nodeLevel = new int[18];
+
+        /// <summary>Yield multiplier for a node level: level 1 pays
+        /// the node's base amount; each further level adds 30%
+        /// (level 6 = x2.5).</summary>
+        public static float NodeYieldMultiplier(int level)
+        {
+            if (level < 1) level = 1;
+            if (level > 6) level = 6;
+            return 1f + 0.3f * (level - 1);
+        }
+
+        /// <summary>Mirror one node's level from the service and
+        /// refresh its cached point in place (never replace the
+        /// data instance — the Bootstrap may hold it as the
+        /// selected point, same rule as SetCampSlot).</summary>
+        public void SetNodeLevel(int index, int level)
+        {
+            if (index < 0 || index >= _nodeLevel.Length) return;
+            if (level < 1) level = 1;
+            if (level > 6) level = 6;
+            if (_nodeLevel[index] == level) return;
+            _nodeLevel[index] = level;
+            foreach (var point in _mapPoints)
+            {
+                if (point.Data == null || point.Data.Index != index) continue;
+                if (point.Data.Kind != MapPointKind.Biomass
+                    && point.Data.Kind != MapPointKind.Alloy
+                    && point.Data.Kind != MapPointKind.Helium3) continue;
+                NodePointFields(index, out var title, out var info, out var amount);
+                point.Data.Title = title;
+                point.Data.Info = info;
+                point.Data.Amount = amount;
+            }
+        }
+
+        private void NodePointFields(int index, out string title, out string info, out int amount)
         {
             var def = NodeDefs[index];
+            title = def.Title;
+            info = def.Info;
+            amount = def.Amount;
+            if (index < 0 || index >= 18 || def.Amount <= 0) return;
+            int level = _nodeLevel[index];
+            if (level < 1) level = 1;
+            if (level > 6) level = 6;
+            float mult = NodeYieldMultiplier(level);
+            amount = Mathf.RoundToInt(def.Amount * mult);
+            title = def.Title + " Lv " + level;
+            if (level > 1)
+            {
+                string resName = def.Kind == MapPointKind.Biomass ? "Biomass"
+                    : def.Kind == MapPointKind.Alloy ? "Alloy" : "Helium-3";
+                info = resName + ": " + amount + " (Lv " + level + " node, x" + mult.ToString("0.0") + ")";
+            }
+        }
+
+        // Structured data for a NodeDefs entry (nodes 0-17, camps 18-20, lair 21).
+        private MapPointData DataForNodeDef(int index)
+        {
+            var def = NodeDefs[index];
+            NodePointFields(index, out var title, out var info, out var amount);
             return new MapPointData
             {
                 Index = index,
                 Kind = def.Kind,
                 Tier = def.Tier,
-                Amount = def.Amount,
+                Amount = amount,
                 Position = def.Position,
-                Title = def.Title,
-                Info = def.Info
+                Title = title,
+                Info = info
             };
         }
 

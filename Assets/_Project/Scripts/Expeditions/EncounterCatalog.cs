@@ -43,6 +43,7 @@ namespace LunarDominion.Expeditions
             level = Math.Max(1, Math.Min(level, MaxBossLevel));
             var boss = ScriptableObject.CreateInstance<EncounterDefinition>();
             boss.Tier = 4;
+            boss.IsBoss = true;
             boss.DisplayName = $"A.R.E.S.-09 Lv {level}";
             boss.RequiredNexusLevel = 10;
             boss.EnergyCost = 50 + 15 * (level - 1);
@@ -102,10 +103,61 @@ namespace LunarDominion.Expeditions
             };
             list.Add(tier3);
 
+            // Camp tiers 4-6 (2026-11-16, Patrick: armies now run
+            // to Tier 6, so the camp field does too). Stats sit on
+            // the T1-T3 curve — calibrated in the camp sim against
+            // full same-tier armies: camps are farm content that a
+            // same-tier army beats with room to spare, exactly like
+            // T1-T3 today; the boss ladder is the wall.
+            // RequiredNexusLevel is the EnemyScale gate and drives
+            // the "far stronger than your army" warning.
+            var tier4 = ScriptableObject.CreateInstance<EncounterDefinition>();
+            tier4.Tier = 4;
+            tier4.DisplayName = "Ashen Ravager Pack";
+            tier4.RequiredNexusLevel = 20;
+            tier4.EnergyCost = 40;
+            tier4.Reward = new ResourceCost(900, 750, 300);
+            tier4.XpPool = 700;
+            tier4.Spawns = new List<EnemySpawn>
+            {
+                new EnemySpawn { DisplayName = "Ashen Ravager", Class = UnitClass.Infantry, Health = 950, Attack = 58, Defense = 36, Count = 1 },
+                new EnemySpawn { DisplayName = "Ash Skirmisher", Class = UnitClass.Ranged, Health = 260, Attack = 34, Defense = 14, Count = 3 }
+            };
+            list.Add(tier4);
+
+            var tier5 = ScriptableObject.CreateInstance<EncounterDefinition>();
+            tier5.Tier = 5;
+            tier5.DisplayName = "Dread Stalker Pack";
+            tier5.RequiredNexusLevel = 25;
+            tier5.EnergyCost = 50;
+            tier5.Reward = new ResourceCost(1600, 1300, 550);
+            tier5.XpPool = 1500;
+            tier5.Spawns = new List<EnemySpawn>
+            {
+                new EnemySpawn { DisplayName = "Dread Stalker", Class = UnitClass.Ranged, Health = 1400, Attack = 78, Defense = 48, Count = 1 },
+                new EnemySpawn { DisplayName = "Dread Mauler", Class = UnitClass.Mechanized, Health = 380, Attack = 40, Defense = 22, Count = 4 }
+            };
+            list.Add(tier5);
+
+            var tier6 = ScriptableObject.CreateInstance<EncounterDefinition>();
+            tier6.Tier = 6;
+            tier6.DisplayName = "Void Tyrant";
+            tier6.RequiredNexusLevel = 28;
+            tier6.EnergyCost = 60;
+            tier6.Reward = new ResourceCost(2800, 2300, 1000);
+            tier6.XpPool = 3000;
+            tier6.Spawns = new List<EnemySpawn>
+            {
+                new EnemySpawn { DisplayName = "Void Tyrant", Class = UnitClass.Mechanized, Health = 2100, Attack = 105, Defense = 65, Count = 1 },
+                new EnemySpawn { DisplayName = "Void Brood", Class = UnitClass.Mechanized, Health = 550, Attack = 55, Defense = 30, Count = 4 }
+            };
+            list.Add(tier6);
+
             // Boss — War Robot (2026-11-09, Patrick's first boss; ladder
             // 2026-11-10): a single giant Mechanized enemy in a lair on
-            // the map (not a camp). Tier 4 keeps it out of the camp tier
-            // 1-3 loops. Infantry counters it (Mechanized is weak to
+            // the map (not a camp). The IsBoss flag (not the Tier)
+            // keeps it out of the camp tier loops now that camp tiers
+            // run to 6. Infantry counters it (Mechanized is weak to
             // Infantry). Single-phase: one big enemy, no special attacks
             // yet — those come later. The default list carries Level 1;
             // the lair view builds the level it fights on demand.
