@@ -1,10 +1,15 @@
 """MakeTerrainNormalMap.py - bakes ExteriorTerrainNormal.png
 (the terrain normal map, graphics step 3) from the V13
 terrain script's own road data, so the cobble relief always
-matches the tint's roads. Pure numpy + Pillow - no Blender
-needed. Run anywhere:
+matches the tint's roads. Pure numpy + Pillow. It can run
+in Blender's Text Editor, but Blender's bundled Python has
+numpy only - Pillow must be installed into it once, from
+PowerShell:
 
-    python MakeTerrainNormalMap.py
+    & "F:\\Blender Foundation\\Blender 5.2\\5.2\\python\\bin\\python.exe" -m pip install pillow
+
+Then Run Script works. (A system Python with numpy +
+Pillow installed works too.)
 
 It writes ExteriorTerrainNormal.png next to itself; copy
 that into Assets/_Project/Resources/Textures (keep the
