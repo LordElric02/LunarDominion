@@ -384,8 +384,17 @@ namespace LunarDominion.UI
             }
             else
             {
-                var btn = AddRowButton(row, "Assign", 0.68f, 0.97f);
-                bool canAssign = editable && RosterHero(army) == null && State.GetRoster(army).Count < 8;
+                // A dead "Assign" never said WHY (Patrick
+                // 2026-11-16: Army 3 was 8/8 troops and he
+                // couldn't tell why no hero would assign). The
+                // button now names the blocker: "Full" when the
+                // 8 slots are taken, "Has hero" when this army
+                // already fields one.
+                bool hasHero = RosterHero(army) != null;
+                bool full = State.GetRoster(army).Count >= 8;
+                string caption = hasHero ? "Has hero" : full ? "Full" : "Assign";
+                var btn = AddRowButton(row, caption, 0.68f, 0.97f);
+                bool canAssign = editable && !hasHero && !full;
                 UIHelpers.SetButtonEnabled(btn, canAssign);
                 if (canAssign) btn.onClick.AddListener(() => { State.GetRoster(army).Add(hero); AfterEdit(); });
             }
