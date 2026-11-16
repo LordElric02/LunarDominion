@@ -759,6 +759,24 @@ namespace LunarDominion.UI
                 renderer.material.mainTexture = tint;
                 renderer.material.mainTextureScale = new Vector2(1f, 1f);
                 renderer.material.color = Color.white;
+                // Terrain normal map (graphics step 3,
+                // 2026-11-16): ExteriorTerrainNormal.png in
+                // Resources/Textures — grain relief on the
+                // fields plus domed relief under the tint's
+                // cobblestones, world-mapped 1:1 like the
+                // tint. Its import type must be Normal Map
+                // (a one-time Inspector setting) or the
+                // encoding reads wrong. Absent = flat tint,
+                // exactly as before.
+                var normal = Resources.Load<Texture2D>("Textures/ExteriorTerrainNormal");
+                if (normal != null)
+                {
+                    normal.wrapMode = TextureWrapMode.Clamp;
+                    renderer.material.SetTexture("_BumpMap", normal);
+                    renderer.material.SetTextureScale("_BumpMap", new Vector2(1f, 1f));
+                    renderer.material.SetFloat("_BumpScale", 0.6f);
+                    renderer.material.EnableKeyword("_NORMALMAP");
+                }
             }
             else
             {
