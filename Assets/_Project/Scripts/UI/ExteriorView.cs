@@ -2259,8 +2259,11 @@ namespace LunarDominion.UI
 
         private static Texture2D MakeSkyTexture()
         {
-            // v: 0 bottom (below the horizon, hidden by terrain),
-            // 0.5 the horizon, 1 the zenith.
+            // v: 0 bottom, 0.5 the horizon, 1 the zenith. The Map
+            // camera always looks down ~48 deg, so the only dome
+            // band ever in frame sits BELOW the geometric horizon
+            // (v ~ 0.30-0.46): the peach glow is centred at v = 0.40
+            // so it shows just past the terrain edge, over the deep.
             var tex = new Texture2D(1024, 512, TextureFormat.RGBA32, false);
             var deep = new Color(0.04f, 0.10f, 0.12f);
             var horizon = new Color(0.99f, 0.58f, 0.33f);
@@ -2271,17 +2274,17 @@ namespace LunarDominion.UI
             {
                 float v = y / 511f;
                 Color c;
-                if (v < 0.46f) c = deep;
-                else if (v < 0.52f) c = Color.Lerp(deep, horizon, TerrainSmoothstep(0.46f, 0.52f, v));
-                else if (v < 0.62f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.52f, 0.62f, v));
-                else c = Color.Lerp(mid, zenith, TerrainSmoothstep(0.62f, 0.95f, v));
+                if (v < 0.36f) c = deep;
+                else if (v < 0.44f) c = Color.Lerp(deep, horizon, TerrainSmoothstep(0.36f, 0.40f, v));
+                else if (v < 0.56f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.44f, 0.52f, v));
+                else c = Color.Lerp(mid, zenith, TerrainSmoothstep(0.56f, 0.85f, v));
                 for (int x = 0; x < 1024; x++) tex.SetPixel(x, y, c);
             }
-            // Faint stars in the upper sky only.
+            // Faint stars, starting just above the visible band.
             for (int s = 0; s < 420; s++)
             {
                 int x = rng.Next(0, 1024);
-                int y = (int)(512 * (0.68f + 0.30f * (float)rng.NextDouble()));
+                int y = (int)(512 * (0.46f + 0.50f * (float)rng.NextDouble()));
                 float b = 0.35f + 0.55f * (float)rng.NextDouble();
                 tex.SetPixel(x, y, new Color(b, b, b * 1.05f));
             }
@@ -2293,9 +2296,12 @@ namespace LunarDominion.UI
         {
             var group = new GameObject("RingedPlanet");
             group.transform.SetParent(parent, false);
-            // High over the north-western horizon: it appears
-            // when the player pans toward that corner.
-            group.transform.position = new Vector3(-880f, 305f, -720f);
+            // Low on the north-western horizon: the down-looking
+            // camera only ever frames the dome band below the
+            // geometric horizon, so the planet sits past the map's
+            // NW corner (partly occluded by the terrain edge when
+            // panned fully NW) instead of up in the unseen sky.
+            group.transform.position = new Vector3(-880f, -210f, -820f);
             group.transform.LookAt(new Vector3(0f, 30f, 0f));
             group.transform.Rotate(0f, 0f, -14f, Space.Self);
 
