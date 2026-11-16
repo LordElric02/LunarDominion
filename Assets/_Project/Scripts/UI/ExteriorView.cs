@@ -108,6 +108,12 @@ namespace LunarDominion.UI
         // raise only touches the data).
         private readonly GameObject[] _marchMarkers = new GameObject[GameState.MaxArmies];
         private readonly bool[] _marching = new bool[GameState.MaxArmies];
+        // Background marches (2026-11-15): whether each slot's marker
+        // SHOULD be on screen whenever the Map is open (marching,
+        // parked at a node, or fighting). SetVisible only toggles the
+        // markers' active state — march state itself is never
+        // destroyed by a tab switch anymore.
+        private readonly bool[] _markerWanted = new bool[GameState.MaxArmies];
         private readonly Vector3[] _marchTargets = new Vector3[GameState.MaxArmies];
         private readonly Action[] _marchCallbacks = new Action[GameState.MaxArmies];
         // March speed: 20 u/s when the map enlarged (positions
@@ -1095,6 +1101,7 @@ namespace LunarDominion.UI
                 Vector3 p = Vector3.Lerp(a, b, (float)i / (count + 1));
                 var dot = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 dot.name = "RouteDot";
+                dot.SetActive(_visible);
                 dot.transform.position = new Vector3(p.x, TerrainHeight(p.x, p.z) + 0.32f, p.z);
                 dot.transform.localScale = new Vector3(1.1f, 0.08f, 1.1f);
                 var r = dot.GetComponent<Renderer>();
@@ -1116,6 +1123,7 @@ namespace LunarDominion.UI
         public void SetSquadParked(int slot)
         {
             if (slot < 0 || slot >= _marchMarkers.Length) return;
+            _markerWanted[slot] = true;
             _squadModes[slot] = SquadModeParked;
         }
 
@@ -1257,17 +1265,13 @@ namespace LunarDominion.UI
             }
         }
 
-        private void Update()
+        // Excursion marches: each army slot's marker walks from its
+        // start to its target at a steady speed, then fires the
+        // arrival callback (the service resolves the outcome and
+        // starts the return march). Runs whether or not the Map is
+        // visible — see Update.
+        private void TickMarches()
         {
-            if (!_visible) return;
-            // Spore motes drift around the player's current view.
-            if (_motes != null) _motes.position = new Vector3(_panOffset.x, 16f, _panOffset.z);
-            // Excursion marches: each army slot's marker walks from its
-            // start to its target at a steady speed, then fires the
-            // arrival callback (the service resolves the outcome and
-            // starts the return march). Only runs while the Map is
-            // visible — leaving the Map tab cancels the march before
-            // any outcome applies.
             for (int slot = 0; slot < _marchMarkers.Length; slot++)
             {
                 if (!_marching[slot] || _marchMarkers[slot] == null) continue;
@@ -1290,6 +1294,20 @@ namespace LunarDominion.UI
                     callback?.Invoke();
                 }
             }
+        }
+
+        private void Update()
+        {
+            // Marches run in real time even while the Map is hidden
+            // (Patrick 2026-11-15): the army keeps walking while the
+            // player manages the base, arrivals resolve through the
+            // service, and the results land in the Inbox. The markers
+            // are inactive while the Map is closed, so the tick just
+            // advances their transforms unseen.
+            TickMarches();
+            if (!_visible) return;
+            // Spore motes drift around the player's current view.
+            if (_motes != null) _motes.position = new Vector3(_panOffset.x, 16f, _panOffset.z);
             TickSquads(Time.deltaTime);
             TickSearch(Time.deltaTime);
             // Arrow keys pan the map camera (PC). Same pattern as the
@@ -1516,7 +1534,11 @@ namespace LunarDominion.UI
             SetFindBarOpen(false);
             from.y = TerrainHeight(from.x, from.z) + MarkerRideHeight;
             marker.transform.position = from;
-            marker.SetActive(true);
+            // A march can start while the Map is hidden (a harvest
+            // finished, an off-screen fight resolved): the marker
+            // only appears when the Map is open.
+            _markerWanted[slot] = true;
+            marker.SetActive(_visible);
             _squadModes[slot] = SquadModeMarching;
             BuildRouteDots(slot, from, to);
             _marchTargets[slot] = to;
@@ -1524,24 +1546,36 @@ namespace LunarDominion.UI
             _marching[slot] = true;
         }
 
-        // Stop one slot's march and hide its marker. Called when the
-        // player leaves the Map tab mid-excursion, or when a march
-        // completes. Cancelling before arrival means no outcome was
-        // applied.
+        // Stop one slot's march and hide its marker. Called when a
+        // march completes (the service ends the excursion) or when
+        // an off-screen occupation finishes and its cosmetic return
+        // is skipped. Tab switches no longer cancel marches — they
+        // only hide the markers (see SetMarkersVisible).
         public void CancelMarch(int slot)
         {
             if (slot < 0 || slot >= _marchMarkers.Length) return;
             _marching[slot] = false;
             _marchCallbacks[slot] = null;
+            _markerWanted[slot] = false;
             HideRouteDots(slot);
             if (_marchMarkers[slot] != null) _marchMarkers[slot].SetActive(false);
         }
 
-        // Stop every slot's march and hide every marker (the Map is
-        // closing, so no marker may linger in another view).
-        public void CancelAllMarches()
+        // Show or hide every slot's marker and route dots to match
+        // the Map's visibility, WITHOUT touching march state: an
+        // army mid-march keeps its position, target, and callback,
+        // and resumes on screen when the Map reopens (it never
+        // actually stopped — TickMarches runs while hidden too).
+        private void SetMarkersVisible(bool visible)
         {
-            for (int slot = 0; slot < _marchMarkers.Length; slot++) CancelMarch(slot);
+            for (int slot = 0; slot < _marchMarkers.Length; slot++)
+            {
+                if (_marchMarkers[slot] != null)
+                    _marchMarkers[slot].SetActive(visible && _markerWanted[slot]);
+                bool dotsVisible = visible && _marching[slot];
+                foreach (var dot in _routeDots[slot])
+                    if (dot != null) dot.SetActive(dotsVisible);
+            }
         }
 
         // Fight animation (2026-11-09, last feature of the phase;
@@ -1731,7 +1765,8 @@ namespace LunarDominion.UI
             if (_marchMarkers[slot] == null || _marching[slot]) return;
             position.y = TerrainHeight(position.x, position.z) + MarkerRideHeight;
             _marchMarkers[slot].transform.position = position;
-            _marchMarkers[slot].SetActive(true);
+            _markerWanted[slot] = true;
+            _marchMarkers[slot].SetActive(_visible);
             _squadModes[slot] = SquadModeParked;
             HideRouteDots(slot);
         }
@@ -2538,10 +2573,11 @@ namespace LunarDominion.UI
                 if (point.Go != null) point.Go.SetActive(visible);
             }
             for (int slot = 0; slot < CampSlotCount; slot++) ApplySlotVisibility(slot);
-            // Hiding the Map also stops any march in progress — the
-            // service cancels the excursion on tab switch, and this is
-            // the backstop so the markers never linger in the Base view.
-            if (!visible) CancelAllMarches();
+            // Marches are NOT stopped by tab switches anymore
+            // (2026-11-15): the markers and route dots simply hide
+            // with the Map and come back with it, while the march
+            // itself keeps running in the background.
+            SetMarkersVisible(visible);
             if (!visible) ReleaseAmbience();
             // Search (Phase 3): the Find UI lives and dies with the
             // Map, and leaving the Map clears any active search.

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using LunarDominion.Audio;
 using LunarDominion.Core;
 using LunarDominion.Expeditions;
+using LunarDominion.Inbox;
 using LunarDominion.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -25,6 +26,8 @@ namespace LunarDominion.Bootstrap
         private BossLairView _lairView;
         private MusicDirector _music;
         private MapExcursionService _excursions;
+        private InboxService _inbox;
+        private InboxView _inboxView;
         private MapPointData _selectedPoint;
         private BuildingPanelView _buildingPanel;
         private HeroesView _heroesView;
@@ -104,6 +107,20 @@ namespace LunarDominion.Bootstrap
             _excursions.OnExcursionResult += OnExcursionResult;
             _excursions.OnExcursionStateChanged += OnExcursionStateChanged;
             _mapInfoView.OnArmySendClicked += OnArmySendClicked;
+
+            // Inbox (2026-11-15, Patrick): statuses are delivered as
+            // messages instead of pop-ups. The service reads the
+            // state through the controller so a DEV reset can never
+            // strand it; the welcome message seeds here (old saves
+            // receive it too). The view hangs off the top bar button.
+            _inbox = new InboxService(() => _controller.State,
+                () => _controller.SaveGame(), () => _controller.NotifyChanged());
+            _inbox.OnChanged += () => _inboxView?.Refresh();
+            _inboxView = new GameObject("InboxView").AddComponent<InboxView>();
+            _inboxView.Build(canvas, _inbox);
+            _topBar.UnreadCountProvider = () => _inbox != null ? _inbox.UnreadCount : 0;
+            _topBar.OnInboxClicked += () => _inboxView?.Show();
+            _inbox.EnsureWelcome();
 
             _buildingPanel = new GameObject("BuildingPanelView").AddComponent<BuildingPanelView>();
             _buildingPanel.Build(canvas, _controller);
@@ -189,9 +206,40 @@ namespace LunarDominion.Bootstrap
         // A boss fight finished in the lair view. The boss never
         // vanishes now (2026-11-10 ladder) — the lair view already
         // unlocked the next level on a victory, and the player taps
-        // Back to Map to return. Just refresh the map.
+        // Back to Map to return. The lair shows its own result
+        // screen; a copy also lands in the Inbox (2026-11-15) as
+        // the fight's record, then the map refreshes.
         private void OnLairFightComplete(BattleResult result)
         {
+            if (_inbox != null && result != null)
+            {
+                var body = new System.Text.StringBuilder();
+                body.AppendLine($"{result.EncounterName}  •  Rounds: {result.Rounds}  •  Energy spent: {result.EnergySpent}");
+                if (result.Victory)
+                {
+                    var r = result.RewardEarned;
+                    body.AppendLine($"Reward: {r.Biomass} Biomass, {r.Alloy} Alloy, {r.Helium3} Helium-3");
+                    if (result.Flawless) body.AppendLine("Flawless victory: +25% XP bonus applied.");
+                }
+                else
+                {
+                    body.AppendLine("No reward (defeat). Energy is not refunded.");
+                }
+                if (result.HeroCasualtyNames != null && result.HeroCasualtyNames.Count > 0)
+                    body.AppendLine("Heroes down: " + string.Join(", ", result.HeroCasualtyNames) + " — heroes recover after the fight.");
+                body.AppendLine($"XP pool: {result.XpPool}");
+                if (result.XpGains != null)
+                {
+                    foreach (var gain in result.XpGains)
+                    {
+                        string levelText = gain.NewLevel > gain.OldLevel
+                            ? $"Lv {gain.OldLevel} → Lv {gain.NewLevel}"
+                            : $"Lv {gain.OldLevel}";
+                        body.AppendLine($"{gain.UnitName}: +{gain.XpGained} XP ({levelText})");
+                    }
+                }
+                _inbox.Add(result.Victory ? "Boss Lair — VICTORY!" : (result.Timeout ? "Boss Lair — DEFEAT (TIMEOUT)" : "Boss Lair — DEFEAT"), body.ToString());
+            }
             RefreshMapNodeStates();
         }
 
@@ -292,18 +340,14 @@ namespace LunarDominion.Bootstrap
             _excursions.StartExcursion(point, army);
         }
 
-        // An excursion resolved (collection / battle) or could not start:
-        // show the outcome in the info panel — but only while the Map is
-        // open. An occupation can complete while the player is on another
-        // tab; the harvest still lands (top bar updates) and the node is
-        // gone when they next open the Map, without the panel popping up
-        // over the Base view.
+        // An excursion resolved (harvest / battle) or could not
+        // start: the status goes to the Inbox (2026-11-15) — no
+        // pop-up panels anymore, on any tab. The map's node states
+        // still refresh so the field is current when it is next
+        // opened.
         private void OnExcursionResult(string title, string body)
         {
-            if (_exteriorView != null && _exteriorView.IsVisible)
-            {
-                _mapInfoView.ShowResult(title, body);
-            }
+            _inbox?.Add(title, body);
             RefreshMapNodeStates();
         }
 
@@ -364,9 +408,9 @@ namespace LunarDominion.Bootstrap
 
         private void OnTabSelected(NavTab tab)
         {
-            // Leaving the Map tab cancels an in-flight excursion before
-            // any outcome is applied (energy is only spent at arrival).
-            _excursions?.Cancel();
+            // Excursions are NOT cancelled by tab switches anymore
+            // (2026-11-15): marches run in the background and their
+            // results land in the Inbox.
             _selectedPoint = null;
             _buildingPanel.Hide();
             _mapInfoView.Hide();
@@ -374,6 +418,7 @@ namespace LunarDominion.Bootstrap
             _lairView?.Hide();
             _heroesView.Hide();
             _researchView.Hide();
+            _inboxView?.Hide();
             switch (tab)
             {
                 case NavTab.Base:

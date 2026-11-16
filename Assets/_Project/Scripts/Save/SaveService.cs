@@ -86,6 +86,12 @@ namespace LunarDominion.Save
         }
         public RosterSlot[] ArmyRosters;
         public int NextUnitSerial = 1;
+        // Inbox (2026-11-15): delivered status messages plus the
+        // welcome-seeded flag. Old saves without these fields load
+        // with an empty inbox, unseeded — the welcome message is
+        // delivered on their next launch.
+        public List<InboxMessage> Inbox;
+        public bool InboxSeeded;
     }
 
     public class SaveService
@@ -146,7 +152,9 @@ namespace LunarDominion.Save
                 CampSlotTier = ValidateCampSlotTiers(state.CampSlotTier),
                 CampSlotRespawnUtc = ValidateCampSlotRespawns(state.CampSlotRespawnUtc),
                 ArmyRosters = SerializeRosters(state),
-                NextUnitSerial = Math.Max(1, state.NextUnitSerial)
+                NextUnitSerial = Math.Max(1, state.NextUnitSerial),
+                Inbox = ValidateInbox(state.Inbox),
+                InboxSeeded = state.InboxSeeded
             };
             string json = JsonUtility.ToJson(data, true);
             string temp = SavePath + ".tmp";
@@ -190,7 +198,9 @@ namespace LunarDominion.Save
                     BossRespawnUtc = data.BossRespawnUtc ?? "",
                     BossLevelDefeated = Math.Max(0, Math.Min(data.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
                     CampSlotTier = ValidateCampSlotTiers(data.CampSlotTier),
-                    CampSlotRespawnUtc = ValidateCampSlotRespawns(data.CampSlotRespawnUtc)
+                    CampSlotRespawnUtc = ValidateCampSlotRespawns(data.CampSlotRespawnUtc),
+                    Inbox = ValidateInbox(data.Inbox),
+                    InboxSeeded = data.InboxSeeded
                 };
                 ApplyOccupations(data, state);
                 if (state.ActiveResearchId < 0)
@@ -289,6 +299,29 @@ namespace LunarDominion.Save
             {
                 result[i] = saved != null && i < saved.Length && saved[i] != null ? saved[i] : "";
             }
+            return result;
+        }
+
+        // Inbox (2026-11-15): drop null entries, repair null strings,
+        // and keep only the newest MaxInboxMessages. A fresh list is
+        // returned so the save DTO and the live state never alias.
+        private List<InboxMessage> ValidateInbox(List<InboxMessage> saved)
+        {
+            var result = new List<InboxMessage>();
+            if (saved == null) return result;
+            foreach (var m in saved)
+            {
+                if (m == null) continue;
+                result.Add(new InboxMessage
+                {
+                    Id = m.Id,
+                    Utc = m.Utc ?? "",
+                    Title = m.Title ?? "",
+                    Body = m.Body ?? "",
+                    Read = m.Read
+                });
+            }
+            while (result.Count > GameState.MaxInboxMessages) result.RemoveAt(0);
             return result;
         }
 

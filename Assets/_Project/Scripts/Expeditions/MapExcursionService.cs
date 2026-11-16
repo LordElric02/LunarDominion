@@ -561,36 +561,13 @@ namespace LunarDominion.Expeditions
             return counts;
         }
 
-        /// <summary>Cancel in-flight excursions (leaving the Map tab).
-        /// An outbound march (before arrival) is cancelled with no
-        /// outcome — energy is only spent and combat only runs at
-        /// arrival, so cancelling before then costs nothing. An active
-        /// OCCUPATION is never cancelled: the army keeps farming in
-        /// real time, and only its marker hides (it reappears at the
-        /// node when the Map reopens). A return march is cosmetic (the
-        /// outcome already landed), so it just stops. Applies to both
-        /// army slots.</summary>
-        public void Cancel()
-        {
-            bool changed = false;
-            for (int slot = 0; slot < ArmySlotCount; slot++)
-            {
-                var s = _slots[slot];
-                if (s.Occupying)
-                {
-                    _view.CancelMarch(slot);
-                    continue;
-                }
-                if (!s.Marching) continue;
-                _view.CancelMarch(slot);
-                s.Marching = false;
-                s.Point = null;
-                s.Squad = null;
-                s.HeroSquad = null;
-                changed = true;
-            }
-            if (changed) OnExcursionStateChanged?.Invoke();
-        }
+        // Tab switches used to cancel in-flight excursions here
+        // (2026-11-09 design). Since 2026-11-15 marches run in the
+        // background instead: leaving the Map hides the markers but
+        // the army keeps marching, arrivals resolve, and the results
+        // are delivered to the Inbox. There is deliberately no
+        // Cancel anymore — an excursion ends by arriving, fighting,
+        // and marching home.
 
         private void OnArrivedAtTarget(int slotIndex)
         {
@@ -1044,11 +1021,10 @@ namespace LunarDominion.Expeditions
             {
                 _saveGame?.Invoke();
                 _notifyChanged?.Invoke();
-                // Play the fight animation first (~2s on the map), then
-                // show the result, vanish the camp on victory, and march
-                // back. The combat itself already resolved above — the
-                // animation is purely visual.
-                _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, () =>
+                // The combat itself already resolved above — what
+                // follows is presentation and bookkeeping: report the
+                // result, vanish the camp on victory, and march back.
+                Action resolve = () =>
                 {
                     OnExcursionResult?.Invoke(
                         result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
@@ -1060,7 +1036,14 @@ namespace LunarDominion.Expeditions
                     // place, so the player can retry.
                     if (result.Victory) VanishCampSlot(SlotForPoint(point));
                     StartReturnMarch(slotIndex, point);
-                });
+                };
+                // On the Map, the fight animation plays first (~2s)
+                // and the bookkeeping runs when it ends. Off the Map
+                // (the march ran in the background, 2026-11-15) there
+                // is nothing to animate — resolve immediately; the
+                // result lands in the Inbox.
+                if (_view.IsVisible) _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, resolve);
+                else resolve();
             }
             else
             {

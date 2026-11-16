@@ -1,3 +1,4 @@
+using System;
 using LunarDominion.Core;
 using LunarDominion.Progression;
 using UnityEngine;
@@ -14,7 +15,15 @@ namespace LunarDominion.UI
         private Text _alloyText;
         private Text _heliumText;
         private Text _energyText;
+        private Button _inboxButton;
         private GameController _controller;
+
+        // Inbox (2026-11-15): the button sits right of the energy
+        // chip. The Bootstrap owns the Inbox service and wires both
+        // members; the unread count is pulled at Refresh time (which
+        // already runs on every state change).
+        public event Action OnInboxClicked;
+        public Func<int> UnreadCountProvider;
 
         public void Build(Canvas canvas, GameController controller)
         {
@@ -49,7 +58,18 @@ namespace LunarDominion.UI
             _heliumText = UIHelpers.LabelInRect(bar, "Helium", "", 30,
                 UIHelpers.Hex("#5AD1E6"), new Rect(0.615f, 0.05f, 0.8025f, 0.95f), TextAnchor.MiddleCenter);
             _energyText = UIHelpers.LabelInRect(bar, "Energy", "", 30,
-                UIHelpers.Hex("#FFD166"), new Rect(0.8025f, 0.05f, 0.99f, 0.95f), TextAnchor.MiddleCenter);
+                UIHelpers.Hex("#FFD166"), new Rect(0.8025f, 0.05f, 0.895f, 0.95f), TextAnchor.MiddleCenter);
+            // Inbox button, right of the energy chip (Patrick
+            // 2026-11-15). The label carries the unread count when
+            // there is one; Refresh keeps it current.
+            _inboxButton = UIHelpers.Button(bar, "Inbox", "INBOX", 26,
+                UIHelpers.Hex("#2A3B52"), Color.white);
+            var inboxRt = _inboxButton.GetComponent<RectTransform>();
+            inboxRt.anchorMin = new Vector2(0.90f, 0.14f);
+            inboxRt.anchorMax = new Vector2(0.99f, 0.86f);
+            inboxRt.offsetMin = Vector2.zero;
+            inboxRt.offsetMax = Vector2.zero;
+            _inboxButton.onClick.AddListener(() => OnInboxClicked?.Invoke());
             Refresh();
         }
 
@@ -69,6 +89,14 @@ namespace LunarDominion.UI
             {
                 int level = _controller.PlayerLevel != null ? _controller.PlayerLevel.Level() : 0;
                 _levelText.text = $"Level:{level}";
+            }
+            if (_inboxButton != null)
+            {
+                int unread = UnreadCountProvider != null ? UnreadCountProvider() : 0;
+                var t = _inboxButton.GetComponentInChildren<Text>();
+                if (t != null) t.text = unread > 0 ? $"INBOX ({unread})" : "INBOX";
+                var img = _inboxButton.GetComponent<Image>();
+                if (img != null) img.color = unread > 0 ? UIHelpers.Hex("#8A6D1F") : UIHelpers.Hex("#2A3B52");
             }
         }
     }

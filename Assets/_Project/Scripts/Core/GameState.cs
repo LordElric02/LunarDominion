@@ -111,6 +111,18 @@ namespace LunarDominion.Core
         public List<OwnedUnit>[] ArmyRosters = new List<OwnedUnit>[MaxArmies];
         public int NextUnitSerial = 1;
 
+        // Inbox (2026-11-15, Patrick): game statuses (battle results,
+        // harvests, boss reports) are delivered here instead of
+        // pop-ups, so they can land while the player is on any tab.
+        // Chronological order (oldest first); the view shows newest
+        // first. Capped at MaxInboxMessages — the oldest are dropped.
+        // InboxSeeded records that the one-time welcome message has
+        // been delivered (old saves load unseeded and receive it on
+        // their next launch).
+        public const int MaxInboxMessages = 60;
+        public List<InboxMessage> Inbox = new List<InboxMessage>();
+        public bool InboxSeeded;
+
         /// <summary>The roster list for an army (created on first
         /// use). Null for an out-of-range army index.</summary>
         public List<OwnedUnit> GetRoster(int army)
