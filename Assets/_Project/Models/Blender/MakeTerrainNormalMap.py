@@ -22,7 +22,21 @@ from PIL import Image
 import os
 import sys, types
 
-SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'BuildExteriorTerrainV13.py')
+# Own directory. Under Blender's Text Editor __file__ is
+# unreliable (it resolves to the drive root), so fall back
+# to the text block's real filepath when the terrain
+# script isn't found beside __file__.
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if not os.path.exists(os.path.join(_SCRIPT_DIR, 'BuildExteriorTerrainV13.py')):
+    try:
+        import bpy as _bpy
+        for _t in _bpy.data.texts:
+            if _t.name.startswith('MakeTerrainNormalMap') and _t.filepath:
+                _SCRIPT_DIR = os.path.dirname(os.path.abspath(_t.filepath))
+                break
+    except Exception:
+        pass
+SRC = os.path.join(_SCRIPT_DIR, 'BuildExteriorTerrainV13.py')
 for _m in ('bpy', 'bmesh', 'mathutils'):
     sys.modules.setdefault(_m, types.ModuleType(_m))
 class _Dummy:
@@ -104,12 +118,12 @@ del gx, gz
 inv = 1.0 / np.sqrt(nx * nx + ny * ny + nz * nz)
 rgb = np.stack([(nx * inv * 0.5 + 0.5), (ny * inv * 0.5 + 0.5),
                 (nz * inv * 0.5 + 0.5)], axis=-1)
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ExteriorTerrainNormal.png')
+out = os.path.join(_SCRIPT_DIR, 'ExteriorTerrainNormal.png')
 Image.fromarray((np.clip(rgb, 0, 1) * 255).astype(np.uint8)).save(out)
 print('saved', out, os.path.getsize(out))
 
 # hillshade sanity image (light from NW)
 shade = np.clip(0.55 + (nx * -0.55 + ny * 0.75 + nz * 0.35) * 0.45, 0, 1)
 Image.fromarray((shade * 255).astype(np.uint8)).resize((1024, 1024)).save(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'normal_hillshade.png'))
+    os.path.join(_SCRIPT_DIR, 'normal_hillshade.png'))
 print('hillshade saved')
