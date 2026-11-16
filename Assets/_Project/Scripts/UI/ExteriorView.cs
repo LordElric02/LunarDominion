@@ -1361,9 +1361,15 @@ namespace LunarDominion.UI
             var zoomMouse = UnityEngine.InputSystem.Mouse.current;
             if (zoomMouse != null)
             {
+                // Wheel units vary by device and host (120 per notch
+                // in a Windows build, ~1 per notch in the Editor), so
+                // step by SIGN, not magnitude — the first version's
+                // 0.06 factor assumed the big units and the Editor's
+                // small ones moved the target by a hair (Patrick's
+                // wheel "did nothing", 2026-11-15).
                 float wheel = zoomMouse.scroll.ReadValue().y;
                 if (wheel != 0f)
-                    _camDistTarget = Mathf.Clamp(_camDistTarget - wheel * 0.06f, CamDistMin, CamDistMax);
+                    _camDistTarget = Mathf.Clamp(_camDistTarget - Mathf.Sign(wheel) * 9f, CamDistMin, CamDistMax);
             }
             var zoomTouch = UnityEngine.InputSystem.Touchscreen.current;
             if (zoomTouch != null)
@@ -1391,7 +1397,7 @@ namespace LunarDominion.UI
 #else
             float wheelLegacy = Input.GetAxis("Mouse ScrollWheel");
             if (wheelLegacy != 0f)
-                _camDistTarget = Mathf.Clamp(_camDistTarget - wheelLegacy * 60f, CamDistMin, CamDistMax);
+                _camDistTarget = Mathf.Clamp(_camDistTarget - Mathf.Sign(wheelLegacy) * 9f, CamDistMin, CamDistMax);
             if (Input.touchCount == 2)
             {
                 pinching = true;
@@ -1401,6 +1407,25 @@ namespace LunarDominion.UI
                 _pinchPrevDist = pinchDist;
             }
             else _pinchPrevDist = -1f;
+#endif
+            // Keyboard zoom (PageUp / + and PageDown / - held):
+            // a wheel-independent way to drive the same target, so
+            // the zoom machinery can be verified even on a mouse
+            // whose wheel the Editor is not passing through.
+#if ENABLE_INPUT_SYSTEM
+            var zoomKeys = UnityEngine.InputSystem.Keyboard.current;
+            if (zoomKeys != null)
+            {
+                if (zoomKeys.pageUpKey.isPressed || zoomKeys.equalsKey.isPressed)
+                    _camDistTarget = Mathf.Clamp(_camDistTarget - 55f * Time.deltaTime, CamDistMin, CamDistMax);
+                if (zoomKeys.pageDownKey.isPressed || zoomKeys.minusKey.isPressed)
+                    _camDistTarget = Mathf.Clamp(_camDistTarget + 55f * Time.deltaTime, CamDistMin, CamDistMax);
+            }
+#else
+            if (Input.GetKey(KeyCode.PageUp) || Input.GetKey(KeyCode.Equals))
+                _camDistTarget = Mathf.Clamp(_camDistTarget - 55f * Time.deltaTime, CamDistMin, CamDistMax);
+            if (Input.GetKey(KeyCode.PageDown) || Input.GetKey(KeyCode.Minus))
+                _camDistTarget = Mathf.Clamp(_camDistTarget + 55f * Time.deltaTime, CamDistMin, CamDistMax);
 #endif
             if (pinching)
             {
