@@ -223,6 +223,7 @@ namespace LunarDominion.UI
         private GameObject _ambienceRoot;
         private Transform _motes;
         private bool _ambApplied;
+        private UnityEngine.Rendering.Volume _mapPostVolume;
         private UnityEngine.Rendering.AmbientMode _ambPrevMode;
         private Color _ambPrevSky, _ambPrevEquator, _ambPrevGround;
         private bool _ambPrevFog;
@@ -2783,8 +2784,8 @@ namespace LunarDominion.UI
             // Sky dome: a code-built sphere (radius 1350, inside
             // the 3000 far plane) with its triangles wound so the
             // inside faces the camera, textured with a runtime
-            // gradient — deep teal zenith, warm peach horizon,
-            // faint stars up high.
+            // gradient — bright azure day sky since Round 3
+            // Phase 4 (was the Alien Twilight gradient).
             var dome = new GameObject("TwilightSky");
             dome.transform.SetParent(_ambienceRoot.transform, false);
             dome.AddComponent<MeshFilter>().sharedMesh = BuildSkyDomeMesh(1350f, 32, 16);
@@ -2803,6 +2804,53 @@ namespace LunarDominion.UI
 
             BuildRingedPlanet(_ambienceRoot.transform);
             BuildMotes(_ambienceRoot.transform);
+            BuildMapPostProcessing();
+        }
+
+        /// <summary>Bright-day post grade (Round 3 Phase 4): a
+        /// global Volume that lives only while the Map is open —
+        /// ApplyAmbience enables it, ReleaseAmbience disables it,
+        /// so the base and lair keep their own looks. Priority 15
+        /// sits between BaseView's always-on Bloom volume (10)
+        /// and the lair's (20). ACES for the filmic highlight
+        /// roll-off, a whisper of exposure / contrast /
+        /// saturation, and gentler bloom than the lair's: the
+        /// daylight scene is already bright, this just polishes
+        /// it. Tune the numbers here, one line each.</summary>
+        private void BuildMapPostProcessing()
+        {
+            if (_mapPostVolume != null) return;
+            var postGo = new GameObject("Map Post Volume");
+            _mapPostVolume = postGo.AddComponent<UnityEngine.Rendering.Volume>();
+            _mapPostVolume.isGlobal = true;
+            _mapPostVolume.priority = 15f;
+            _mapPostVolume.enabled = false;
+            var profile = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
+
+            var tonemapping = profile.Add<UnityEngine.Rendering.Universal.Tonemapping>();
+            tonemapping.active = true;
+            tonemapping.mode.overrideState = true;
+            tonemapping.mode.value = UnityEngine.Rendering.Universal.TonemappingMode.ACES;
+
+            var bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>();
+            bloom.active = true;
+            bloom.threshold.overrideState = true;
+            bloom.threshold.value = 0.85f;
+            bloom.intensity.overrideState = true;
+            bloom.intensity.value = 0.35f;
+            bloom.scatter.overrideState = true;
+            bloom.scatter.value = 0.6f;
+
+            var color = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>();
+            color.active = true;
+            color.postExposure.overrideState = true;
+            color.postExposure.value = 0.05f;
+            color.contrast.overrideState = true;
+            color.contrast.value = 6f;
+            color.saturation.overrideState = true;
+            color.saturation.value = 10f;
+
+            _mapPostVolume.profile = profile;
         }
 
         private static Mesh BuildSkyDomeMesh(float radius, int segments, int rings)
@@ -2845,34 +2893,57 @@ namespace LunarDominion.UI
 
         private static Texture2D MakeSkyTexture()
         {
-            // v: 0 bottom, 0.5 the horizon, 1 the zenith. The Map
-            // camera always looks down ~48 deg, so the only dome
-            // band ever in frame sits BELOW the geometric horizon
-            // (v ~ 0.30-0.46): the peach glow is centred at v = 0.40
-            // so it shows just past the terrain edge, over the deep.
+            // BRIGHT DAY (Round 3 Phase 4, replacing the Alien
+            // Twilight gradient). v: 0 bottom, 0.5 the horizon, 1
+            // the zenith. The camera looks down 21-53 deg
+            // depending on zoom, so the framed band runs from
+            // below the horizon up to mid sky: pale haze below
+            // the horizon line (it reads as hazy distance past
+            // the terrain edge), a warm-white glare band at the
+            // horizon, azure above, deepening to the zenith.
+            // A sun glow sits at u = 0.625 — the camera's fixed
+            // view azimuth (toward the NW corner, where the
+            // ringed planet hangs) — and soft cloud bands drift
+            // through the mid sky. No stars: it's daytime.
             var tex = new Texture2D(1024, 512, TextureFormat.RGBA32, false);
-            var deep = new Color(0.04f, 0.10f, 0.12f);
-            var horizon = new Color(0.99f, 0.58f, 0.33f);
-            var mid = new Color(0.13f, 0.36f, 0.40f);
-            var zenith = new Color(0.02f, 0.06f, 0.10f);
-            var rng = new System.Random(20261115);
+            var haze = new Color(0.66f, 0.78f, 0.89f);
+            var horizon = new Color(0.99f, 0.98f, 0.93f);
+            var mid = new Color(0.36f, 0.63f, 0.95f);
+            var zenith = new Color(0.14f, 0.42f, 0.86f);
+            var sunCore = new Color(1.0f, 0.99f, 0.94f);
             for (int y = 0; y < 512; y++)
             {
                 float v = y / 511f;
                 Color c;
-                if (v < 0.36f) c = deep;
-                else if (v < 0.44f) c = Color.Lerp(deep, horizon, TerrainSmoothstep(0.36f, 0.40f, v));
-                else if (v < 0.56f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.44f, 0.52f, v));
-                else c = Color.Lerp(mid, zenith, TerrainSmoothstep(0.56f, 0.85f, v));
-                for (int x = 0; x < 1024; x++) tex.SetPixel(x, y, c);
-            }
-            // Faint stars, starting just above the visible band.
-            for (int s = 0; s < 420; s++)
-            {
-                int x = rng.Next(0, 1024);
-                int y = (int)(512 * (0.46f + 0.50f * (float)rng.NextDouble()));
-                float b = 0.35f + 0.55f * (float)rng.NextDouble();
-                tex.SetPixel(x, y, new Color(b, b, b * 1.05f));
+                if (v < 0.44f) c = haze;
+                else if (v < 0.54f) c = Color.Lerp(haze, horizon, TerrainSmoothstep(0.44f, 0.50f, v));
+                else if (v < 0.72f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.54f, 0.64f, v));
+                else c = Color.Lerp(mid, zenith, TerrainSmoothstep(0.72f, 0.95f, v));
+                for (int x = 0; x < 1024; x++)
+                {
+                    float u = x / 1023f;
+                    Color px = c;
+                    // Sun glow: wrapped angular distance from
+                    // the sun spot (u 0.625, v 0.50).
+                    float du = Mathf.Abs(u - 0.625f);
+                    if (du > 0.5f) du = 1f - du;
+                    float dv = (v - 0.50f) * 2f;
+                    float sd = Mathf.Sqrt(du * du * 4f + dv * dv);
+                    float glow = Mathf.Clamp01(1f - sd / 0.55f);
+                    px = Color.Lerp(px, sunCore, glow * glow * 0.85f);
+                    // Cloud bands: two slow sine fields, only
+                    // in the mid sky, whitening toward white.
+                    if (v > 0.52f && v < 0.92f)
+                    {
+                        float cl = Mathf.Sin(u * 37.7f + 2.1f * Mathf.Sin(v * 21.0f))
+                                 * Mathf.Sin(v * 34.0f + 1.3f);
+                        float cloud = TerrainSmoothstep(0.55f, 0.95f, cl)
+                                    * TerrainSmoothstep(0.52f, 0.60f, v)
+                                    * (1f - TerrainSmoothstep(0.82f, 0.92f, v));
+                        px = Color.Lerp(px, Color.white, cloud * 0.28f);
+                    }
+                    tex.SetPixel(x, y, px);
+                }
             }
             tex.Apply();
             return tex;
@@ -2902,7 +2973,17 @@ namespace LunarDominion.UI
             var discMat = new Material(unlit);
             discMat.SetFloat("_Cull", 0f); // double-sided: visible however the group tilts
             discMat.SetTexture("_BaseMap", MakePlanetTexture());
-            discMat.SetColor("_BaseColor", Color.white);
+            // Bright day (Phase 4): the disc goes translucent
+            // like its ring, so the planet reads as a pale
+            // daytime sky object instead of a solid twilight
+            // billboard. The texture's limb falloff already
+            // fades alpha toward the rim.
+            discMat.SetColor("_BaseColor", new Color(1f, 1f, 1f, 0.55f));
+            discMat.SetFloat("_Surface", 1f);
+            discMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            discMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            discMat.SetInt("_ZWrite", 0);
+            discMat.renderQueue = 3000;
             discRenderer.sharedMaterial = discMat;
             discRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             discRenderer.receiveShadows = false;
@@ -2914,7 +2995,7 @@ namespace LunarDominion.UI
             var ringRenderer = ring.AddComponent<MeshRenderer>();
             var ringMat = new Material(unlit);
             ringMat.SetFloat("_Cull", 0f);
-            ringMat.SetColor("_BaseColor", new Color(0.78f, 0.88f, 0.92f, 0.50f));
+            ringMat.SetColor("_BaseColor", new Color(0.78f, 0.88f, 0.92f, 0.35f));
             ringMat.SetFloat("_Surface", 1f);
             ringMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             ringMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
@@ -3014,10 +3095,10 @@ namespace LunarDominion.UI
             main.startLifetime = new ParticleSystem.MinMaxCurve(14f, 24f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.2f, 0.5f);
             main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 1.1f);
-            main.startColor = new Color(0.75f, 0.95f, 0.90f, 0.30f);
+            main.startColor = new Color(0.75f, 0.95f, 0.90f, 0.22f);
             main.maxParticles = 240;
             var emission = ps.emission;
-            emission.rateOverTime = 22f;
+            emission.rateOverTime = 14f; // Phase 4: subtler in daylight — drifting pollen, not spores
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
             shape.scale = new Vector3(760f, 40f, 760f);
@@ -3027,7 +3108,7 @@ namespace LunarDominion.UI
             {
                 var mat = new Material(shader);
                 mat.SetTexture("_BaseMap", MakeDotTexture());
-                mat.SetColor("_BaseColor", new Color(0.75f, 0.95f, 0.90f, 0.5f));
+                mat.SetColor("_BaseColor", new Color(0.75f, 0.95f, 0.90f, 0.38f));
                 mat.SetFloat("_Surface", 1f);
                 mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
                 mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One); // additive
@@ -3075,18 +3156,24 @@ namespace LunarDominion.UI
             if (cam != null) _ambPrevCamBg = cam.backgroundColor;
             _ambApplied = true;
 
+            // BRIGHT DAY values (Round 3 Phase 4; these were
+            // the Alien Twilight set before): bright blue bounce
+            // from the sky, pale blue distance haze, a white
+            // midday sun, and a cooler, weaker fill so the sun
+            // does the modelling.
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.38f, 0.44f, 0.46f);
-            RenderSettings.ambientEquatorColor = new Color(0.34f, 0.28f, 0.22f);
-            RenderSettings.ambientGroundColor = new Color(0.12f, 0.13f, 0.11f);
+            RenderSettings.ambientSkyColor = new Color(0.55f, 0.68f, 0.85f);
+            RenderSettings.ambientEquatorColor = new Color(0.48f, 0.52f, 0.42f);
+            RenderSettings.ambientGroundColor = new Color(0.28f, 0.26f, 0.20f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.32f, 0.47f, 0.46f);
-            RenderSettings.fogStartDistance = 550f;
-            RenderSettings.fogEndDistance = 2400f;
-            if (_ambSun != null) { _ambSun.color = new Color(1.0f, 0.74f, 0.50f); _ambSun.intensity = 1.35f; }
-            if (_ambFill != null) { _ambFill.color = new Color(0.55f, 0.70f, 0.78f); _ambFill.intensity = 0.45f; }
-            if (cam != null) cam.backgroundColor = new Color(0.03f, 0.09f, 0.12f);
+            RenderSettings.fogColor = new Color(0.62f, 0.76f, 0.88f);
+            RenderSettings.fogStartDistance = 700f;
+            RenderSettings.fogEndDistance = 2600f;
+            if (_ambSun != null) { _ambSun.color = new Color(1.0f, 0.98f, 0.94f); _ambSun.intensity = 1.6f; }
+            if (_ambFill != null) { _ambFill.color = new Color(0.50f, 0.62f, 0.80f); _ambFill.intensity = 0.35f; }
+            if (cam != null) cam.backgroundColor = new Color(0.35f, 0.58f, 0.85f);
+            if (_mapPostVolume != null) _mapPostVolume.enabled = true;
         }
 
         private void ReleaseAmbience()
@@ -3107,6 +3194,7 @@ namespace LunarDominion.UI
             if (_ambFill != null) { _ambFill.color = _ambPrevFillColor; _ambFill.intensity = _ambPrevFillIntensity; }
             var cam = Camera.main;
             if (cam != null) cam.backgroundColor = _ambPrevCamBg;
+            if (_mapPostVolume != null) _mapPostVolume.enabled = false;
         }
 
         public void SetVisible(bool visible)
