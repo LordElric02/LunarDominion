@@ -71,12 +71,22 @@ namespace LunarDominion.UI
         // True while the Map tab is the active view.
         public bool IsVisible => _visible;
 
-        // Exterior camera: 5x the base camera distance, same pitch.
-        // Base camera (10,16,10) frames the 56x48 ground; the
-        // exterior framing is unchanged since the original map —
-        // the 2026-11-12 enlargement keeps this camera and the
-        // player pans across the bigger map (see PanLimitX/Z).
-        private static readonly Vector3 ExteriorCameraPosition = new Vector3(50f, 80f, 50f);
+        // Exterior camera (Round 3 prototype, Patrick 2026-11-15):
+        // the camera rides a fixed 45-degree yaw around the pan
+        // centre at a zoomable distance. The default distance
+        // reproduces the original framing exactly (offset
+        // (50, 80, 50), 48.5-degree pitch); zooming in also
+        // flattens the pitch toward ~21 degrees, approaching the
+        // bright-day mockup's low, cinematic framing. Zoomed all
+        // the way out it steepens slightly for a wider command
+        // view. The Base view's camera is separate and keeps its
+        // locked framing (see PanLimitX/Z for the pan bounds).
+        private const float CamDistDefault = 106.77f; // |(50, 80, 50)|
+        private const float CamDistMin = 34f;
+        private const float CamDistMax = 150f;
+        private const float CamPitchDefault = 48.54f;
+        private const float CamPitchClose = 21f;
+        private const float CamPitchFar = 53f;
 
         private GameObject _terrain;
         private GameObject _baseCastle;
@@ -169,9 +179,16 @@ namespace LunarDominion.UI
         // base, so the camera can be panned across it — arrow keys on
         // PC, touch/mouse drag on the phone (and in the Editor). The
         // pan offset moves both the camera position and its look-at
-        // point, so the 48.5-degree pitch never changes. Clamped so the
-        // view stays on the 1120x960 map.
+        // point. Clamped so the view stays on the 1120x960 map.
         private Vector3 _panOffset = Vector3.zero;
+
+        // Zoom state (Round 3 prototype): the current distance
+        // eases toward the target the wheel/pinch sets. Pan speed
+        // needs no matching code — ScreenDeltaToWorld already
+        // derives world-per-pixel from the live camera distance.
+        private float _camDist = CamDistDefault;
+        private float _camDistTarget = CamDistDefault;
+        private float _pinchPrevDist = -1f;
 
         // Alien Twilight ambience (Patrick 2026-11-15): while the
         // Map is up, the view gets a twilight sky dome with a
@@ -1335,6 +1352,63 @@ namespace LunarDominion.UI
                 AddPan(keyPan * PanSpeed * Time.deltaTime);
             }
 
+            // Zoom (Round 3 prototype): mouse wheel in the Editor,
+            // two-finger pinch on the phone. While a pinch is in
+            // progress the one-finger press is cancelled, so the
+            // gesture never pans the map or fires as a tap.
+            bool pinching = false;
+#if ENABLE_INPUT_SYSTEM
+            var zoomMouse = UnityEngine.InputSystem.Mouse.current;
+            if (zoomMouse != null)
+            {
+                float wheel = zoomMouse.scroll.ReadValue().y;
+                if (wheel != 0f)
+                    _camDistTarget = Mathf.Clamp(_camDistTarget - wheel * 0.06f, CamDistMin, CamDistMax);
+            }
+            var zoomTouch = UnityEngine.InputSystem.Touchscreen.current;
+            if (zoomTouch != null)
+            {
+                Vector2 pinchA = Vector2.zero, pinchB = Vector2.zero;
+                int pinchCount = 0;
+                var allTouches = zoomTouch.touches;
+                for (int i = 0; i < allTouches.Count && pinchCount < 2; i++)
+                {
+                    if (!allTouches[i].press.isPressed) continue;
+                    if (pinchCount == 0) pinchA = allTouches[i].position.ReadValue();
+                    else pinchB = allTouches[i].position.ReadValue();
+                    pinchCount++;
+                }
+                if (pinchCount == 2)
+                {
+                    pinching = true;
+                    float pinchDist = Vector2.Distance(pinchA, pinchB);
+                    if (_pinchPrevDist > 0f)
+                        _camDistTarget = Mathf.Clamp(_camDistTarget + (_pinchPrevDist - pinchDist) * 0.12f, CamDistMin, CamDistMax);
+                    _pinchPrevDist = pinchDist;
+                }
+                else _pinchPrevDist = -1f;
+            }
+#else
+            float wheelLegacy = Input.GetAxis("Mouse ScrollWheel");
+            if (wheelLegacy != 0f)
+                _camDistTarget = Mathf.Clamp(_camDistTarget - wheelLegacy * 60f, CamDistMin, CamDistMax);
+            if (Input.touchCount == 2)
+            {
+                pinching = true;
+                float pinchDist = Vector2.Distance(Input.GetTouch(0).position, Input.GetTouch(1).position);
+                if (_pinchPrevDist > 0f)
+                    _camDistTarget = Mathf.Clamp(_camDistTarget + (_pinchPrevDist - pinchDist) * 0.12f, CamDistMin, CamDistMax);
+                _pinchPrevDist = pinchDist;
+            }
+            else _pinchPrevDist = -1f;
+#endif
+            if (pinching)
+            {
+                _pointerDown = false;
+                _isDrag = true; // a pinch release must not fire as a tap
+            }
+            TickZoom(Time.deltaTime);
+
             // Pointer input: a press that barely moves is a TAP (select
             // a node/camp or hide the panel); a press that moves past
             // the threshold is a DRAG (pan the camera) and must not
@@ -1442,7 +1516,7 @@ namespace LunarDominion.UI
             if (cam == null) return Vector3.zero;
             // Distance from the camera to the point it looks at (the
             // pan offset cancels out — the camera and its look-at move
-            // together, so the distance is constant at ~107).
+            // together, so this is just the current zoom distance).
             float distance = Vector3.Distance(cam.transform.position, Vector3.zero + _panOffset);
             float worldPerPixel = 2f * distance * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1f, (float)Screen.height);
             return CamRight * (-pixelDelta.x * worldPerPixel) + CamGroundForward * (pixelDelta.y * worldPerPixel);
@@ -1458,11 +1532,41 @@ namespace LunarDominion.UI
             ApplyCamera();
         }
 
+        // Ease the camera distance toward its target so wheel and
+        // pinch zooms glide instead of stepping.
+        private void TickZoom(float dt)
+        {
+            if (Mathf.Abs(_camDistTarget - _camDist) < 0.05f)
+            {
+                if (_camDist != _camDistTarget)
+                {
+                    _camDist = _camDistTarget;
+                    ApplyCamera();
+                }
+                return;
+            }
+            _camDist = Mathf.Lerp(_camDist, _camDistTarget, 1f - Mathf.Exp(-10f * dt));
+            ApplyCamera();
+        }
+
         private void ApplyCamera()
         {
             var cam = Camera.main;
             if (cam == null) return;
-            cam.transform.position = ExteriorCameraPosition + _panOffset;
+            // Pitch flattens as the camera closes in: today's
+            // 48.5 degrees at the default distance, ~21 degrees at
+            // the closest zoom, a touch steeper zoomed fully out.
+            // Yaw stays at the fixed 45-degree diagonal.
+            float pitchDeg = _camDist >= CamDistDefault
+                ? Mathf.Lerp(CamPitchDefault, CamPitchFar, (_camDist - CamDistDefault) / (CamDistMax - CamDistDefault))
+                : Mathf.Lerp(CamPitchClose, CamPitchDefault, (_camDist - CamDistMin) / (CamDistDefault - CamDistMin));
+            float pitch = pitchDeg * Mathf.Deg2Rad;
+            float horiz = _camDist * Mathf.Cos(pitch);
+            Vector3 pos = new Vector3(horiz * 0.70710678f, _camDist * Mathf.Sin(pitch), horiz * 0.70710678f) + _panOffset;
+            // Never sink the camera into a highland or a geyser cone.
+            float floorY = TerrainHeight(pos.x, pos.z) + 5f;
+            if (pos.y < floorY) pos.y = floorY;
+            cam.transform.position = pos;
             cam.transform.LookAt(Vector3.zero + _panOffset);
         }
 
