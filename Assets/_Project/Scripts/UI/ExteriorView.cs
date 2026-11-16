@@ -126,12 +126,22 @@ namespace LunarDominion.UI
         private readonly bool[] _markerWanted = new bool[GameState.MaxArmies];
         private readonly Vector3[] _marchTargets = new Vector3[GameState.MaxArmies];
         private readonly Action[] _marchCallbacks = new Action[GameState.MaxArmies];
+        // Road pathing (Round 3 Phase 2): the waypoint list each
+        // slot is following along the road network, and which
+        // waypoint it is currently heading for (_marchTargets
+        // always holds that current waypoint, so the squad
+        // figures' facing code keeps working unchanged).
+        private readonly List<Vector3>[] _marchPaths = new List<Vector3>[GameState.MaxArmies];
+        private readonly int[] _marchPathIndex = new int[GameState.MaxArmies];
         // March speed: 20 u/s when the map enlarged (positions
         // doubled, so trip times matched the old map's 10 u/s);
         // slowed to 14 u/s for Phase 2 (Patrick 2026-11-12) — real
         // marching figures read hurried at 20, and a far corner now
-        // takes ~24s, which suits an army on the move.
-        private static readonly float MarchSpeed = 14f; // units/second
+        // takes ~24s, which suits an army on the move. Raised to
+        // 18 u/s with the road network (Round 3 Phase 2, Patrick
+        // 2026-11-15): road routes run ~1.1x the straight line on
+        // average, so trip times land about where they were.
+        private static readonly float MarchSpeed = 18f; // units/second
 
         // Map Phase 2 (2026-11-12, Patrick's pick: real Blender mini
         // troops over code-built figures): each slot's marker root
@@ -1105,17 +1115,30 @@ namespace LunarDominion.UI
 
         // Dotted route line in the army colour from the march start
         // to its target, laid over the terrain. Rebuilt per march.
-        private void BuildRouteDots(int slot, Vector3 from, Vector3 to)
+        private void BuildRouteDots(int slot, Vector3 from, List<Vector3> waypoints)
         {
             HideRouteDots(slot);
-            Vector3 a = new Vector3(from.x, 0f, from.z);
-            Vector3 b = new Vector3(to.x, 0f, to.z);
-            float dist = Vector3.Distance(a, b);
-            int count = Mathf.Clamp(Mathf.RoundToInt(dist / 9f), 3, 18);
+            // Dots trace the road path (Round 3 Phase 2): walk
+            // the waypoint polyline at even arc-length intervals.
+            var pts = new List<Vector3> { new Vector3(from.x, 0f, from.z) };
+            foreach (var w in waypoints) pts.Add(new Vector3(w.x, 0f, w.z));
+            float total = 0f;
+            for (int i = 0; i + 1 < pts.Count; i++) total += Vector3.Distance(pts[i], pts[i + 1]);
+            int count = Mathf.Clamp(Mathf.RoundToInt(total / 9f), 3, 48);
             if (_routeDotMats[slot] == null) _routeDotMats[slot] = MakeLitMaterial(ArmyColors[slot], 0.7f);
+            int seg = 0;
+            float segStart = 0f;
             for (int i = 1; i <= count; i++)
             {
-                Vector3 p = Vector3.Lerp(a, b, (float)i / (count + 1));
+                float want = total * i / (count + 1);
+                while (seg + 1 < pts.Count - 1 && segStart + Vector3.Distance(pts[seg], pts[seg + 1]) < want)
+                {
+                    segStart += Vector3.Distance(pts[seg], pts[seg + 1]);
+                    seg++;
+                }
+                float segLen = Vector3.Distance(pts[seg], pts[seg + 1]);
+                float t = segLen > 0f ? (want - segStart) / segLen : 0f;
+                Vector3 p = Vector3.Lerp(pts[seg], pts[seg + 1], t);
                 var dot = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 dot.name = "RouteDot";
                 dot.SetActive(_visible);
@@ -1304,11 +1327,24 @@ namespace LunarDominion.UI
                 float dzz = next.z - _marchTargets[slot].z;
                 if (dxz * dxz + dzz * dzz < 0.01f)
                 {
-                    _marching[slot] = false;
-                    HideRouteDots(slot);
-                    var callback = _marchCallbacks[slot];
-                    _marchCallbacks[slot] = null;
-                    callback?.Invoke();
+                    var path = _marchPaths[slot];
+                    if (path != null && _marchPathIndex[slot] < path.Count - 1)
+                    {
+                        // Waypoint reached: head for the next one.
+                        // The march, its route dots and its arrival
+                        // callback all carry on.
+                        _marchPathIndex[slot]++;
+                        _marchTargets[slot] = path[_marchPathIndex[slot]];
+                    }
+                    else
+                    {
+                        _marching[slot] = false;
+                        _marchPaths[slot] = null;
+                        HideRouteDots(slot);
+                        var callback = _marchCallbacks[slot];
+                        _marchCallbacks[slot] = null;
+                        callback?.Invoke();
+                    }
                 }
             }
         }
@@ -1647,6 +1683,278 @@ namespace LunarDominion.UI
             if (!hitPoint && !focused) OnEmptyMapTapped?.Invoke();
         }
 
+        // ---- Road network (Round 3 Phase 2, Patrick 2026-11-15) ----
+        // The same tables BuildExteriorTerrainV8.py paints into
+        // the terrain tint (both generated by gen_roads.py):
+        // junction 0 is the base; 1..48 are a polar grid (16 rays
+        // x 3 rings); 49..52 are the corner nodes. Junctions were
+        // nudged clear of every site disc and landform.
+        private static readonly Vector2[] RoadJunctions =
+        {
+            new Vector2(0.0f, 0.0f),
+            new Vector2(160.0f, 0.0f),
+            new Vector2(320.0f, 0.0f),
+            new Vector2(470.0f, 0.0f),
+            new Vector2(147.8f, 61.2f),
+            new Vector2(295.6f, 122.5f),
+            new Vector2(434.2f, 179.9f),
+            new Vector2(113.1f, 113.1f),
+            new Vector2(226.3f, 226.3f),
+            new Vector2(320.5f, 343.7f),
+            new Vector2(61.2f, 147.8f),
+            new Vector2(132.7f, 291.2f),
+            new Vector2(171.3f, 413.6f),
+            new Vector2(0.0f, 160.0f),
+            new Vector2(0.0f, 320.0f),
+            new Vector2(-50.4f, 410.5f),
+            new Vector2(-56.0f, 149.9f),
+            new Vector2(-122.5f, 295.6f),
+            new Vector2(-142.1f, 424.5f),
+            new Vector2(-117.0f, 109.1f),
+            new Vector2(-226.3f, 226.3f),
+            new Vector2(-332.3f, 332.3f),
+            new Vector2(-147.8f, 61.2f),
+            new Vector2(-295.6f, 122.5f),
+            new Vector2(-427.7f, 194.9f),
+            new Vector2(-160.0f, 0.0f),
+            new Vector2(-320.0f, 0.0f),
+            new Vector2(-470.0f, 0.0f),
+            new Vector2(-147.8f, -61.2f),
+            new Vector2(-295.6f, -122.5f),
+            new Vector2(-434.2f, -179.9f),
+            new Vector2(-89.5f, -132.6f),
+            new Vector2(-226.3f, -226.3f),
+            new Vector2(-332.3f, -332.3f),
+            new Vector2(-61.2f, -147.8f),
+            new Vector2(-122.5f, -295.6f),
+            new Vector2(-142.1f, -424.5f),
+            new Vector2(-0.0f, -160.0f),
+            new Vector2(-22.3f, -319.2f),
+            new Vector2(-0.0f, -413.6f),
+            new Vector2(78.8f, -139.3f),
+            new Vector2(122.5f, -295.6f),
+            new Vector2(171.3f, -413.6f),
+            new Vector2(113.1f, -113.1f),
+            new Vector2(226.3f, -226.3f),
+            new Vector2(332.3f, -332.3f),
+            new Vector2(159.0f, -18.1f),
+            new Vector2(278.5f, -157.6f),
+            new Vector2(434.2f, -179.9f),
+            new Vector2(452.0f, 379.2f),
+            new Vector2(-477.3f, 346.8f),
+            new Vector2(-438.5f, -394.8f),
+            new Vector2(464.9f, -363.2f),
+        };
+        private static readonly int[,] RoadEdges =
+        {
+            { 0, 1 },
+            { 0, 4 },
+            { 0, 7 },
+            { 0, 10 },
+            { 0, 13 },
+            { 0, 16 },
+            { 0, 19 },
+            { 0, 22 },
+            { 0, 25 },
+            { 0, 28 },
+            { 0, 31 },
+            { 0, 34 },
+            { 0, 37 },
+            { 0, 40 },
+            { 0, 43 },
+            { 0, 46 },
+            { 1, 2 },
+            { 1, 4 },
+            { 1, 46 },
+            { 2, 3 },
+            { 2, 5 },
+            { 2, 47 },
+            { 3, 6 },
+            { 3, 48 },
+            { 4, 5 },
+            { 4, 7 },
+            { 5, 6 },
+            { 5, 8 },
+            { 6, 9 },
+            { 6, 49 },
+            { 7, 8 },
+            { 7, 10 },
+            { 8, 9 },
+            { 8, 11 },
+            { 9, 12 },
+            { 9, 49 },
+            { 10, 11 },
+            { 10, 13 },
+            { 11, 12 },
+            { 11, 14 },
+            { 12, 15 },
+            { 13, 14 },
+            { 13, 16 },
+            { 14, 15 },
+            { 14, 17 },
+            { 15, 18 },
+            { 16, 17 },
+            { 16, 19 },
+            { 17, 18 },
+            { 17, 20 },
+            { 18, 21 },
+            { 19, 20 },
+            { 19, 22 },
+            { 20, 21 },
+            { 20, 23 },
+            { 21, 24 },
+            { 21, 50 },
+            { 22, 23 },
+            { 22, 25 },
+            { 23, 24 },
+            { 23, 26 },
+            { 24, 27 },
+            { 24, 50 },
+            { 25, 26 },
+            { 25, 28 },
+            { 26, 27 },
+            { 26, 29 },
+            { 27, 30 },
+            { 28, 29 },
+            { 28, 31 },
+            { 29, 30 },
+            { 29, 32 },
+            { 30, 33 },
+            { 30, 51 },
+            { 31, 32 },
+            { 31, 34 },
+            { 32, 33 },
+            { 32, 35 },
+            { 33, 36 },
+            { 33, 51 },
+            { 34, 35 },
+            { 34, 37 },
+            { 35, 36 },
+            { 35, 38 },
+            { 36, 39 },
+            { 37, 38 },
+            { 37, 40 },
+            { 38, 39 },
+            { 38, 41 },
+            { 39, 42 },
+            { 40, 41 },
+            { 40, 43 },
+            { 41, 42 },
+            { 41, 44 },
+            { 42, 45 },
+            { 43, 44 },
+            { 43, 46 },
+            { 44, 45 },
+            { 44, 47 },
+            { 45, 48 },
+            { 45, 52 },
+            { 46, 47 },
+            { 47, 48 },
+            { 48, 52 },
+        };
+
+        private static List<int>[] _roadAdj;
+
+        private static int NearestRoadJunction(Vector2 p)
+        {
+            int best = 0;
+            float bestSq = float.MaxValue;
+            for (int i = 0; i < RoadJunctions.Length; i++)
+            {
+                float dx = p.x - RoadJunctions[i].x;
+                float dy = p.y - RoadJunctions[i].y;
+                float sq = dx * dx + dy * dy;
+                if (sq < bestSq) { bestSq = sq; best = i; }
+            }
+            return best;
+        }
+
+        // Dijkstra over the junction graph (53 nodes - a plain
+        // O(n^2) scan is plenty and has no heap to get wrong).
+        private static List<int> JunctionPath(int start, int goal)
+        {
+            if (_roadAdj == null)
+            {
+                _roadAdj = new List<int>[RoadJunctions.Length];
+                for (int i = 0; i < _roadAdj.Length; i++) _roadAdj[i] = new List<int>();
+                for (int e = 0; e < RoadEdges.GetLength(0); e++)
+                {
+                    int a = RoadEdges[e, 0], b = RoadEdges[e, 1];
+                    _roadAdj[a].Add(b);
+                    _roadAdj[b].Add(a);
+                }
+            }
+            int n = RoadJunctions.Length;
+            var dist = new float[n];
+            var prev = new int[n];
+            var done = new bool[n];
+            for (int i = 0; i < n; i++) { dist[i] = float.MaxValue; prev[i] = -1; }
+            dist[start] = 0f;
+            for (int iter = 0; iter < n; iter++)
+            {
+                int u = -1;
+                float bestD = float.MaxValue;
+                for (int i = 0; i < n; i++)
+                    if (!done[i] && dist[i] < bestD) { bestD = dist[i]; u = i; }
+                if (u < 0) break;
+                done[u] = true;
+                if (u == goal) break;
+                foreach (int v in _roadAdj[u])
+                {
+                    float nd = dist[u] + Vector2.Distance(RoadJunctions[u], RoadJunctions[v]);
+                    if (nd < dist[v]) { dist[v] = nd; prev[v] = u; }
+                }
+            }
+            var path = new List<int>();
+            int cur = goal;
+            while (cur != -1)
+            {
+                path.Add(cur);
+                if (cur == start) break;
+                cur = prev[cur];
+            }
+            path.Reverse();
+            return path;
+        }
+
+        // The waypoint list for a march: from -> nearest junction
+        // -> along the roads -> nearest junction -> to. Mirrors
+        // gen_roads.py exactly, including its driveway rule: when
+        // one end is the base and the road route would run more
+        // than 1.45x the straight line, the site has its own
+        // direct road (painted in the tint as a driveway) and the
+        // march takes it. Waypoint Y is 0 - TickMarches rides the
+        // terrain height itself.
+        private static List<Vector3> RoadPath(Vector3 from, Vector3 to)
+        {
+            var a = new Vector2(from.x, from.z);
+            var b = new Vector2(to.x, to.z);
+            int ja = NearestRoadJunction(a);
+            int jb = NearestRoadJunction(b);
+            var nodes = JunctionPath(ja, jb);
+            float roadLen = Vector2.Distance(a, RoadJunctions[ja]);
+            for (int i = 0; i + 1 < nodes.Count; i++)
+                roadLen += Vector2.Distance(RoadJunctions[nodes[i]], RoadJunctions[nodes[i + 1]]);
+            roadLen += Vector2.Distance(RoadJunctions[jb], b);
+            bool baseEnd = (ja == 0 && a == RoadJunctions[0]) || (jb == 0 && b == RoadJunctions[0]);
+            var result = new List<Vector3>();
+            if (baseEnd && roadLen > 1.45f * Vector2.Distance(a, b))
+            {
+                result.Add(to);
+                return result;
+            }
+            Vector2 last = a;
+            foreach (int node in nodes)
+            {
+                Vector2 p = RoadJunctions[node];
+                if (Vector2.Distance(last, p) < 0.5f) continue;
+                result.Add(new Vector3(p.x, 0f, p.y));
+                last = p;
+            }
+            result.Add(to);
+            return result;
+        }
+
         // Start the march marker for an army slot at `from`, walking
         // to `to`, then fire `onArrive`. The marker rides 1 unit above
         // the ground so it never clips the terrain. The caller
@@ -1669,8 +1977,11 @@ namespace LunarDominion.UI
             _markerWanted[slot] = true;
             marker.SetActive(_visible);
             _squadModes[slot] = SquadModeMarching;
-            BuildRouteDots(slot, from, to);
-            _marchTargets[slot] = to;
+            var path = RoadPath(from, to);
+            _marchPaths[slot] = path;
+            _marchPathIndex[slot] = 0;
+            BuildRouteDots(slot, from, path);
+            _marchTargets[slot] = path.Count > 0 ? path[0] : to;
             _marchCallbacks[slot] = onArrive;
             _marching[slot] = true;
         }
@@ -1685,6 +1996,7 @@ namespace LunarDominion.UI
             if (slot < 0 || slot >= _marchMarkers.Length) return;
             _marching[slot] = false;
             _marchCallbacks[slot] = null;
+            _marchPaths[slot] = null;
             _markerWanted[slot] = false;
             HideRouteDots(slot);
             if (_marchMarkers[slot] != null) _marchMarkers[slot].SetActive(false);
