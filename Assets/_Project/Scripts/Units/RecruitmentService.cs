@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using LunarDominion.Core;
 using LunarDominion.Economy;
@@ -9,18 +10,25 @@ namespace LunarDominion.Units
         CanRecruit,
         BarracksNotBuilt,
         TierLocked,
-        InsufficientResources
+        InsufficientResources,
+        ArmyFull
     }
 
     /// <summary>Recruitment rules only: barracks built, tier unlocked by
-    /// barracks level, affordability. UI displays the status/reason —
-    /// it never recomputes it. Recruitment is instant in this prototype
-    /// (GDD C1: time = 0, not free — costs and prerequisites still apply).
-    /// There is no total army cap in the prototype (GDD §5); the squad
-    /// cap of 8 applies to expeditions in Phase 4, not to recruitment.
-    /// Heroes (2026-11-10): named characters, one of each, max 3 total.
+    /// barracks level, affordability, troop limit. UI displays the
+    /// status/reason — it never recomputes it. Recruitment is instant
+    /// in this prototype (GDD C1: time = 0, not free — costs and
+    /// prerequisites still apply).
+    /// Troop limit (2026-11-16, Patrick): the total number of troops
+    /// is driven by BOTH the barracks and the Nexus. Every level of
+    /// the three military barracks (Marine Foundry, Nova Arsenal,
+    /// Aegis Motor Pool) raises the allowance by 6 over a base of
+    /// 44, and the Nexus sets the upper limit: 50 troops, rising to
+    /// 100 at Nexus 10, 250 at Nexus 20 and 500 at Nexus 30. The
+    /// standing-army slot cap of 8 per army is separate and unchanged.
+    /// Heroes (2026-11-10): named characters, one of each, max 4 total.
     /// They live in GameState.Heroes, not the Army, and fight bosses in
-    /// the lair view.</summary>
+    /// the lair view. Heroes do not count against the troop limit.</summary>
     public class RecruitmentService
     {
         // Max heroes: one of each named hero — 3 at launch
@@ -55,6 +63,42 @@ namespace LunarDominion.Units
         public int CountHeroes()
         {
             return _state.Heroes != null ? _state.Heroes.Count : 0;
+        }
+
+        /// <summary>The Nexus ceiling on total troops (Patrick
+        /// 2026-11-16): 50 from the start, 100 at Nexus 10, 250 at
+        /// Nexus 20, 500 at Nexus 30. The Nexus is the upper limit;
+        /// the barracks allowance below decides how much of the
+        /// ceiling is actually usable.</summary>
+        public static int NexusTroopCeiling(int nexusLevel)
+        {
+            if (nexusLevel >= 30) return 500;
+            if (nexusLevel >= 20) return 250;
+            if (nexusLevel >= 10) return 100;
+            return 50;
+        }
+
+        /// <summary>Troops the player currently owns (heroes not
+        /// counted).</summary>
+        public int TroopCount => _state.Army != null ? _state.Army.Count : 0;
+
+        /// <summary>How many troops the player may own right now:
+        /// 44 + 6 per combined level of the three military
+        /// barracks, capped by the Nexus ceiling. A fresh base
+        /// (one barracks at level 1) starts at the 50 ceiling; an
+        /// army already over the limit (a save from before the
+        /// limit existed) keeps its troops but cannot recruit
+        /// more until it is back under.</summary>
+        public int TroopLimit
+        {
+            get
+            {
+                int barracks = _state.GetLevel(BuildingId.MarineFoundry)
+                             + _state.GetLevel(BuildingId.NovaArsenal)
+                             + _state.GetLevel(BuildingId.AegisMotorPool);
+                int allowance = 44 + 6 * barracks;
+                return Math.Min(NexusTroopCeiling(_state.NexusLevel), allowance);
+            }
         }
 
         /// <summary>Barracks level required for a tier (GDD §3).
@@ -138,6 +182,13 @@ namespace LunarDominion.Units
                     reason = $"Hero limit reached ({MaxHeroes} max).";
                     return RecruitStatus.TierLocked;
                 }
+            }
+            // Troop limit (2026-11-16): barracks-driven, Nexus-
+            // capped. Heroes are exempt (their own cap above).
+            if (!def.IsHero && TroopCount >= TroopLimit)
+            {
+                reason = $"Army full ({TroopCount}/{TroopLimit} troops). Upgrade a military barracks or the Nexus to raise the limit.";
+                return RecruitStatus.ArmyFull;
             }
             if (!_economy.CanAfford(cost))
             {

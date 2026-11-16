@@ -288,6 +288,43 @@ namespace LunarDominion.Expeditions
         /// the victory reward. TryStart (army) and TryStartHeroes
         /// (heroes) both call this; each moves its own casualties after.
         /// Returns false without spending energy if energy is short.</summary>
+        /// <summary>Dry-run a camp fight (2026-11-16): builds the
+        /// same squad the real fight would use (troops, then
+        /// heroes) and resolves the exact combat — CombatService
+        /// is deterministic and state-free — without spending
+        /// energy or applying any result. Powers the map panel's
+        /// defeat warning, so what the warning predicts is what
+        /// the fight will do.</summary>
+        public bool PredictVictory(EncounterDefinition encounter, List<OwnedUnit> troops, List<OwnedUnit> heroes)
+        {
+            if (encounter == null) return false;
+            var squad = new List<SquadCombatant>();
+            int squadIndex = 0;
+            if (troops != null)
+            {
+                foreach (var owned in troops)
+                {
+                    if (owned == null) continue;
+                    var def = _units.Find(u => u.Id == owned.Id);
+                    if (def == null) continue;
+                    squad.Add(new SquadCombatant { Unit = owned, Definition = def, SquadIndex = squadIndex++ });
+                }
+            }
+            if (heroes != null)
+            {
+                foreach (var owned in heroes)
+                {
+                    if (owned == null) continue;
+                    var def = _units.Find(u => u.Id == owned.Id);
+                    if (def == null) continue;
+                    squad.Add(new SquadCombatant { Unit = owned, Definition = def, SquadIndex = squadIndex++ });
+                }
+            }
+            if (squad.Count == 0) return false;
+            var outcome = CombatService.Resolve(squad, encounter, _state.NexusLevel, _research);
+            return outcome != null && outcome.Victory;
+        }
+
         private bool ResolveFight(EncounterDefinition encounter, List<SquadCombatant> squad,
             out BattleResult result, out CombatOutcome outcome, out string reason)
         {

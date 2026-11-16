@@ -63,6 +63,20 @@ namespace LunarDominion.Expeditions
         {
             var list = new List<EncounterDefinition>();
 
+            // Camp encounters, retuned 2026-11-16 (Patrick's tier
+            // rule: a camp two tiers above an army beats it at any
+            // unit level; one tier above has the advantage; same
+            // tier is farmable once the army is levelled a little).
+            // Calibrated in the camp sim (a faithful CombatService
+            // replica) against full 8-unit mixed armies. Honest
+            // limit of the combat model: a fully maxed (Lv 20)
+            // under-tier army can still punch one tier up — unit
+            // levels multiply stats by up to x2.52 and the damage
+            // formula adds a level modifier, so a maxed army is
+            // effectively a tier higher. New-tier camps are a
+            // stretch when the tier debuts: farm the tier below,
+            // level into them. XP pools, rewards and energy costs
+            // are unchanged from the original tuning.
             var tier1 = ScriptableObject.CreateInstance<EncounterDefinition>();
             tier1.Tier = 1;
             tier1.DisplayName = "Spore Crawler Pack";
@@ -72,7 +86,7 @@ namespace LunarDominion.Expeditions
             tier1.XpPool = 40;
             tier1.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "Spore Crawler", Class = UnitClass.Infantry, Health = 80, Attack = 12, Defense = 5, Count = 4 }
+                new EnemySpawn { DisplayName = "Spore Crawler", Class = UnitClass.Infantry, Health = 85, Attack = 13, Defense = 5, Count = 5 }
             };
             list.Add(tier1);
 
@@ -85,7 +99,9 @@ namespace LunarDominion.Expeditions
             tier2.XpPool = 120;
             tier2.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "Void Stalker", Class = UnitClass.Ranged, Health = 120, Attack = 24, Defense = 8, Count = 5 }
+                new EnemySpawn { DisplayName = "Void Stalker", Class = UnitClass.Ranged, Health = 280, Attack = 48, Defense = 15, Count = 2 },
+                new EnemySpawn { DisplayName = "Spore Brute", Class = UnitClass.Infantry, Health = 240, Attack = 40, Defense = 18, Count = 3 },
+                new EnemySpawn { DisplayName = "Skitterer", Class = UnitClass.Ranged, Health = 190, Attack = 42, Defense = 10, Count = 2 }
             };
             list.Add(tier2);
 
@@ -98,17 +114,15 @@ namespace LunarDominion.Expeditions
             tier3.XpPool = 300;
             tier3.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "Brood Tyrant", Class = UnitClass.Mechanized, Health = 600, Attack = 40, Defense = 25, Count = 1 },
-                new EnemySpawn { DisplayName = "Brood", Class = UnitClass.Mechanized, Health = 150, Attack = 20, Defense = 10, Count = 3 }
+                new EnemySpawn { DisplayName = "Brood Tyrant", Class = UnitClass.Mechanized, Health = 1750, Attack = 100, Defense = 52, Count = 1 },
+                new EnemySpawn { DisplayName = "Brood", Class = UnitClass.Mechanized, Health = 430, Attack = 60, Defense = 25, Count = 4 },
+                new EnemySpawn { DisplayName = "Brood Guard", Class = UnitClass.Infantry, Health = 470, Attack = 62, Defense = 27, Count = 4 }
             };
             list.Add(tier3);
 
             // Camp tiers 4-6 (2026-11-16, Patrick: armies now run
-            // to Tier 6, so the camp field does too). Stats sit on
-            // the T1-T3 curve — calibrated in the camp sim against
-            // full same-tier armies: camps are farm content that a
-            // same-tier army beats with room to spare, exactly like
-            // T1-T3 today; the boss ladder is the wall.
+            // to Tier 6, so the camp field does too; retuned the
+            // same day to the tier rule above).
             // RequiredNexusLevel is the EnemyScale gate and drives
             // the "far stronger than your army" warning.
             var tier4 = ScriptableObject.CreateInstance<EncounterDefinition>();
@@ -120,8 +134,9 @@ namespace LunarDominion.Expeditions
             tier4.XpPool = 700;
             tier4.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "Ashen Ravager", Class = UnitClass.Infantry, Health = 950, Attack = 58, Defense = 36, Count = 1 },
-                new EnemySpawn { DisplayName = "Ash Skirmisher", Class = UnitClass.Ranged, Health = 260, Attack = 34, Defense = 14, Count = 3 }
+                new EnemySpawn { DisplayName = "Ashen Ravager", Class = UnitClass.Infantry, Health = 2560, Attack = 136, Defense = 94, Count = 1 },
+                new EnemySpawn { DisplayName = "Ash Skirmisher", Class = UnitClass.Ranged, Health = 560, Attack = 86, Defense = 38, Count = 5 },
+                new EnemySpawn { DisplayName = "Ash Hulk", Class = UnitClass.Mechanized, Health = 840, Attack = 80, Defense = 60, Count = 4 }
             };
             list.Add(tier4);
 
@@ -134,8 +149,9 @@ namespace LunarDominion.Expeditions
             tier5.XpPool = 1500;
             tier5.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "Dread Stalker", Class = UnitClass.Ranged, Health = 1400, Attack = 78, Defense = 48, Count = 1 },
-                new EnemySpawn { DisplayName = "Dread Mauler", Class = UnitClass.Mechanized, Health = 380, Attack = 40, Defense = 22, Count = 4 }
+                new EnemySpawn { DisplayName = "Dread Stalker", Class = UnitClass.Mechanized, Health = 7200, Attack = 250, Defense = 142, Count = 1 },
+                new EnemySpawn { DisplayName = "Dread Mauler", Class = UnitClass.Mechanized, Health = 1800, Attack = 162, Defense = 80, Count = 5 },
+                new EnemySpawn { DisplayName = "Dread Reaper", Class = UnitClass.Infantry, Health = 2200, Attack = 178, Defense = 92, Count = 4 }
             };
             list.Add(tier5);
 
@@ -148,8 +164,9 @@ namespace LunarDominion.Expeditions
             tier6.XpPool = 3000;
             tier6.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "Void Tyrant", Class = UnitClass.Mechanized, Health = 2100, Attack = 105, Defense = 65, Count = 1 },
-                new EnemySpawn { DisplayName = "Void Brood", Class = UnitClass.Mechanized, Health = 550, Attack = 55, Defense = 30, Count = 4 }
+                new EnemySpawn { DisplayName = "Void Tyrant", Class = UnitClass.Mechanized, Health = 17160, Attack = 546, Defense = 200, Count = 1 },
+                new EnemySpawn { DisplayName = "Void Brood", Class = UnitClass.Mechanized, Health = 4225, Attack = 357, Defense = 110, Count = 5 },
+                new EnemySpawn { DisplayName = "Void Lancer", Class = UnitClass.Ranged, Health = 3120, Attack = 429, Defense = 82, Count = 4 }
             };
             list.Add(tier6);
 

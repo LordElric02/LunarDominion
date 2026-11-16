@@ -371,7 +371,15 @@ namespace LunarDominion.Expeditions
         /// above the player's Nexus (2026-11-09): the fight is allowed,
         /// but the enemy is far stronger. Null when there is nothing to
         /// warn about (nodes, or a camp/boss at/below the player's
-        /// Nexus).</summary>
+        /// Nexus).
+        /// Defeat prediction (2026-11-16, Patrick): a camp at/below
+        /// the player's Nexus used to get no warning even when the
+        /// player's ARMIES were far too weak for it (camp tiers now
+        /// scale to T6 while an army can lag tiers behind its
+        /// Nexus). The camp branch now dry-runs the real fight for
+        /// every army that could be sent; if every one of them is
+        /// predicted to fall, the panel warns that defeat is
+        /// likely. The send itself stays allowed.</summary>
         public string WarningFor(MapPointData point)
         {
             if (point == null) return null;
@@ -385,8 +393,26 @@ namespace LunarDominion.Expeditions
             if (point.Kind != MapPointKind.Camp) return null;
             var encounter = EncounterForTier(point.Tier);
             if (encounter == null) return null;
-            if (_state.NexusLevel >= encounter.RequiredNexusLevel) return null;
-            return $"Warning: this enemy is far stronger than your army — Tier {point.Tier} unlocks at Nexus {encounter.RequiredNexusLevel} (you are Nexus {_state.NexusLevel}). Your squad is likely to be wiped out.";
+            if (_state.NexusLevel < encounter.RequiredNexusLevel)
+                return $"Warning: this enemy is far stronger than your army — Tier {point.Tier} unlocks at Nexus {encounter.RequiredNexusLevel} (you are Nexus {_state.NexusLevel}). Your squad is likely to be wiped out.";
+            if (IsCampSlotEmpty(point)) return null;
+            bool anyArmyChecked = false;
+            for (int army = 0; army < ArmySlotCount; army++)
+            {
+                if (!ArmyUnlocked(army) || _slots[army].Busy) continue;
+                var troops = new List<OwnedUnit>();
+                var heroes = new List<OwnedUnit>();
+                foreach (var unit in HealthyRoster(army))
+                {
+                    if (RecruitmentService.IsHeroUnit(unit.Id)) heroes.Add(unit);
+                    else troops.Add(unit);
+                }
+                if (troops.Count == 0 && heroes.Count == 0) continue;
+                anyArmyChecked = true;
+                if (_expeditions.PredictVictory(encounter, troops, heroes)) return null;
+            }
+            if (!anyArmyChecked) return null;
+            return $"Warning: defeat is likely — this Tier {point.Tier} camp outmatches every army you can send. Level up, or recruit higher-tier troops, before taking it on.";
         }
 
 
