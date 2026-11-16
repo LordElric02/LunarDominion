@@ -115,9 +115,18 @@ def _created(before):
 
 
 def _bake_scale(obj):
+    # Bake scale via an Identity matrix with assigned
+    # elements: building Matrix(((...))) from nested tuples
+    # raises TypeError at Mesh.transform in Blender 5.2
+    # (Patrick's GUI, hit 2026-11-16) though it works in
+    # 4.2 - the Identity form is valid in both.
     sx, sy, sz = obj.scale
     if (sx, sy, sz) != (1.0, 1.0, 1.0):
-        obj.data.transform(Matrix(((sx, 0, 0, 0), (0, sy, 0, 0), (0, 0, sz, 0), (0, 0, 0, 1))))
+        m = Matrix.Identity(4)
+        m[0][0] = sx
+        m[1][1] = sy
+        m[2][2] = sz
+        obj.data.transform(m)
         obj.scale = (1.0, 1.0, 1.0)
 
 
