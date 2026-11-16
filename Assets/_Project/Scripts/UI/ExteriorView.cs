@@ -179,11 +179,23 @@ namespace LunarDominion.UI
         // If a Play check ever shows troops marching backwards, this
         // constant is the one-line fix.
         private const float FigureFacingOffsetDeg = 180f;
-        private const float TroopFigureScale = 1.8f;
+        // Phase 3 troop figures (Round 3): hero-quality class models
+        // authored ~3.15 tall (mech ~4.5). Humanoids scale 1.15 so
+        // heroes (3.24 x 1.35) stay the tallest in the squad; the
+        // mech runs at its authored size. The minis remain as the
+        // fallback if a troop FBX is missing.
+        private const float TroopFigureScale = 1.15f;
+        private const float MechFigureScale = 1.0f;
+        private const float MiniFigureScale = 1.8f;
+        private GameObject _troopInfantryPrefab;
+        private GameObject _troopRangedPrefab;
+        private GameObject _troopMechPrefab;
         private GameObject _miniInfantryPrefab;
         private GameObject _miniRangedPrefab;
         private GameObject _miniMechPrefab;
         private Dictionary<UnitId, UnitClass> _classById;
+        private Dictionary<UnitId, int> _tierById;
+        private Material[] _tierTrimMats;
 
         // Map camera pan (Patrick 2026-11-09): the Map view is 5x the
         // base, so the camera can be panned across it — arrow keys on
@@ -912,11 +924,85 @@ namespace LunarDominion.UI
             if (_classById == null)
             {
                 _classById = new Dictionary<UnitId, UnitClass>();
+                _tierById = new Dictionary<UnitId, int>();
                 foreach (var def in UnitCatalog.CreateDefaultDefinitions())
-                    if (def != null) _classById[def.Id] = def.Class;
+                    if (def != null)
+                    {
+                        _classById[def.Id] = def.Class;
+                        _tierById[def.Id] = def.Tier;
+                    }
             }
             UnitClass cls;
             return _classById.TryGetValue(id, out cls) ? cls : UnitClass.Infantry;
+        }
+
+        private int TierOf(UnitId id)
+        {
+            if (_tierById == null) ClassOf(id);
+            int tier;
+            return _tierById.TryGetValue(id, out tier) ? tier : 1;
+        }
+
+        private static string TroopModelPath(UnitClass cls)
+        {
+            switch (cls)
+            {
+                case UnitClass.Ranged: return "Models/TroopRanged";
+                case UnitClass.Mechanized: return "Models/TroopMech";
+                case UnitClass.Support: return null;
+                default: return "Models/TroopInfantry";
+            }
+        }
+
+        // Tier trim colours (Phase 3): the troop models carry a
+        // "TroopTrim" material on their pauldron rims, chest stripes
+        // and knee plates; swapping it per tier makes a squad's tier
+        // read at a glance. T1 dim steel, then amber, cyan, ice,
+        // gold, violet.
+        private static Color TierTrimColor(int tier)
+        {
+            switch (tier)
+            {
+                case 2: return new Color(1.00f, 0.62f, 0.20f);
+                case 3: return new Color(0.30f, 0.85f, 1.00f);
+                case 4: return new Color(0.80f, 0.92f, 1.00f);
+                case 5: return new Color(1.00f, 0.78f, 0.25f);
+                case 6: return new Color(0.85f, 0.55f, 1.00f);
+                default: return new Color(0.45f, 0.55f, 0.70f);
+            }
+        }
+
+        private Material TierTrimMaterial(int tier)
+        {
+            if (_tierTrimMats == null)
+            {
+                _tierTrimMats = new Material[7];
+                for (int t = 1; t <= 6; t++)
+                    _tierTrimMats[t] = MakeLitMaterial(TierTrimColor(t), 1.1f);
+            }
+            if (tier < 1) tier = 1;
+            if (tier > 6) tier = 6;
+            return _tierTrimMats[tier];
+        }
+
+        private void ApplyTierTrim(GameObject model, int tier)
+        {
+            var trimMat = TierTrimMaterial(tier);
+            if (trimMat == null) return;
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = renderer.sharedMaterials;
+                bool changed = false;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    if (mats[i] != null && mats[i].name.StartsWith("TroopTrim"))
+                    {
+                        mats[i] = trimMat;
+                        changed = true;
+                    }
+                }
+                if (changed) renderer.sharedMaterials = mats;
+            }
         }
 
         private static Color ClassColor(UnitId id, UnitClass cls)
@@ -974,17 +1060,40 @@ namespace LunarDominion.UI
 
             GameObject prefab = null;
             float scale = TroopFigureScale;
+            bool troopModel = false;
             if (hero)
             {
                 var path = HeroModelPath(id);
                 if (path != null) prefab = Resources.Load<GameObject>(path);
                 scale = 1.35f; // heroes ~3.2 tall x 1.35 — still the tallest in the squad
             }
+            if (prefab == null && !hero)
+            {
+                // Phase 3 class models first; the minis stay as the
+                // fallback if an FBX has not been installed.
+                if (_troopInfantryPrefab == null) _troopInfantryPrefab = Resources.Load<GameObject>("Models/TroopInfantry");
+                if (_troopRangedPrefab == null) _troopRangedPrefab = Resources.Load<GameObject>("Models/TroopRanged");
+                if (_troopMechPrefab == null) _troopMechPrefab = Resources.Load<GameObject>("Models/TroopMech");
+                var cls = ClassOf(id);
+                switch (cls)
+                {
+                    case UnitClass.Ranged: prefab = _troopRangedPrefab; break;
+                    case UnitClass.Mechanized: prefab = _troopMechPrefab; break;
+                    case UnitClass.Support: prefab = null; break;
+                    default: prefab = _troopInfantryPrefab; break;
+                }
+                if (prefab != null)
+                {
+                    troopModel = true;
+                    scale = cls == UnitClass.Mechanized ? MechFigureScale : TroopFigureScale;
+                }
+            }
             if (prefab == null)
             {
                 if (_miniInfantryPrefab == null) _miniInfantryPrefab = Resources.Load<GameObject>("Models/MiniInfantry");
                 if (_miniRangedPrefab == null) _miniRangedPrefab = Resources.Load<GameObject>("Models/MiniRanged");
                 if (_miniMechPrefab == null) _miniMechPrefab = Resources.Load<GameObject>("Models/MiniMech");
+                scale = MiniFigureScale;
                 switch (ClassOf(id))
                 {
                     case UnitClass.Ranged: prefab = _miniRangedPrefab; break;
@@ -998,6 +1107,7 @@ namespace LunarDominion.UI
                 model.transform.SetParent(pivot.transform, false);
                 model.transform.localScale = Vector3.one * scale;
                 foreach (var col in model.GetComponentsInChildren<Collider>(true)) Destroy(col);
+                if (troopModel) ApplyTierTrim(model, TierOf(id));
             }
             else
             {
@@ -1037,8 +1147,8 @@ namespace LunarDominion.UI
             {
                 if (i == 0) return Vector3.zero;
                 int row = (i + 1) / 2;
-                float x = (i % 2 == 1) ? -2.3f : 2.3f;
-                return new Vector3(x, 0f, -3.1f * row);
+                float x = (i % 2 == 1) ? -2.6f : 2.6f;
+                return new Vector3(x, 0f, -3.4f * row);
             }
             float radius = mode == SquadModeFighting ? 8.0f : 6.5f;
             if (n <= 1) return new Vector3(0f, 0f, radius);
