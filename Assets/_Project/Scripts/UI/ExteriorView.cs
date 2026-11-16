@@ -839,16 +839,26 @@ namespace LunarDominion.UI
         // Excursion squad roots (2026-11-09 as capsule markers; Map
         // Phase 2 2026-11-12: empty roots carrying the troop figures,
         // banner and count chip). One per army slot — cyan Army 1,
-        // orange Army 2. Hidden until a march starts. Nothing in a
-        // squad keeps a collider: the tap raycast only checks map
-        // points, and a figure standing in front of a camp must never
-        // shadow its tap.
+        // orange Army 2, violet Army 3. Hidden until a march starts.
+        // Nothing in a squad keeps a collider: the tap raycast only
+        // checks map points, and a figure standing in front of a
+        // camp must never shadow its tap.
+        // BUG FIX 2026-11-16: only slots 0 and 1 were built — a
+        // leftover from the two-squad excursion era. When standing
+        // armies grew to three, slot 2's marker stayed null, so
+        // StartMarch(2) returned silently: Army 3 was marked out
+        // by the service but never marched, and its arrival
+        // callback never fired (Patrick: "Army 3 never actually
+        // leaves the base"). Army 3 only unlocks at Nexus 20,
+        // which is why it surfaced late.
         private void BuildSquads()
         {
             _marchMarkers[0] = MakeSquadRoot("ExcursionMarker");
             _marchMarkers[1] = MakeSquadRoot("ExcursionMarker2");
+            _marchMarkers[2] = MakeSquadRoot("ExcursionMarker3");
             BuildBanner(0, _marchMarkers[0]);
             BuildBanner(1, _marchMarkers[1]);
+            BuildBanner(2, _marchMarkers[2]);
         }
 
         private GameObject MakeSquadRoot(string rootName)
@@ -2093,7 +2103,15 @@ namespace LunarDominion.UI
         {
             if (slot < 0 || slot >= _marchMarkers.Length) return;
             var marker = _marchMarkers[slot];
-            if (marker == null) return;
+            if (marker == null)
+            {
+                // Never fail silently again (the Army 3 bug hid
+                // behind this quiet return): a missing marker
+                // means the march — and its arrival callback —
+                // would never run.
+                Debug.LogWarning($"StartMarch: no squad marker for army slot {slot}; march not started.");
+                return;
+            }
             // Sending an army out closes the search bar (Patrick
             // 2026-11-12): the find UI has done its job once the
             // squad is marching. Also clears the highlights.
