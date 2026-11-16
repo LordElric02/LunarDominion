@@ -53,6 +53,7 @@ namespace LunarDominion.UI
         private Text _injuredTitle;
         private GameObject _injuredContent;
         private readonly List<InjuredRow> _injuredRows = new List<InjuredRow>();
+        private GameObject _healAllRow;
         private string _healFeedback = "";
 
         // Barracks recruitment list (hidden unless a barracks building
@@ -427,9 +428,45 @@ namespace LunarDominion.UI
                 : _healFeedback;
 
             // Rebuild the rows to match the current injured list. The
-            // list is small (squad cap 8), so a full rebuild is cheap.
+            // list can be long now (80-man armies), but a full rebuild
+            // per refresh is still cheap.
             foreach (var row in _injuredRows) Object.Destroy(row.Root);
             _injuredRows.Clear();
+            // Mass heal (Patrick 2026-11-16): a Heal All row on top of
+            // the list — one tap heals everyone the current resources
+            // cover, in list order, skipping any it cannot afford.
+            if (_healAllRow != null) Object.Destroy(_healAllRow);
+            _healAllRow = new GameObject("HealAllRow");
+            _healAllRow.transform.SetParent(_injuredContent.transform, false);
+            var haRt = _healAllRow.AddComponent<RectTransform>();
+            haRt.anchorMin = Vector2.zero;
+            haRt.anchorMax = Vector2.one;
+            var haLe = _healAllRow.AddComponent<LayoutElement>();
+            haLe.preferredHeight = 64;
+            haLe.minHeight = 64;
+            var haBg = _healAllRow.AddComponent<Image>();
+            haBg.color = UIHelpers.Hex("#1A2436");
+            var totalCost = _controller.Hospital.TotalHealCost();
+            var healAllBtn = UIHelpers.Button(_healAllRow, "HealAllBtn",
+                $"HEAL ALL ({_controller.State.Injured.Count}) — {CostText(totalCost)}", 26,
+                UIHelpers.Hex("#2E7D32"), Color.white);
+            var habRt = healAllBtn.GetComponent<RectTransform>();
+            habRt.anchorMin = new Vector2(0.03f, 0.10f);
+            habRt.anchorMax = new Vector2(0.97f, 0.90f);
+            habRt.offsetMin = Vector2.zero;
+            habRt.offsetMax = Vector2.zero;
+            healAllBtn.onClick.AddListener(() => OnHealAllClicked());
+            bool anyAffordable = false;
+            foreach (var unit in _controller.State.Injured)
+            {
+                if (_controller.Economy.CanAfford(_controller.Hospital.HealCost(unit)))
+                {
+                    anyAffordable = true;
+                    break;
+                }
+            }
+            UIHelpers.SetButtonEnabled(healAllBtn,
+                anyAffordable && _controller.State.GetLevel(BuildingId.Hospital) > 0);
             foreach (var unit in _controller.State.Injured)
             {
                 var def = _controller.UnitDefinitions.Find(u => u.Id == unit.Id);
@@ -489,6 +526,16 @@ namespace LunarDominion.UI
             {
                 _healFeedback = reason;
             }
+            _controller.NotifyChanged();
+            Refresh();
+        }
+
+        private void OnHealAllClicked()
+        {
+            if (_controller.Hospital == null) return;
+            int healed = _controller.Hospital.HealAllAffordable(out var summary);
+            _healFeedback = summary;
+            if (healed > 0) _controller.SaveGame();
             _controller.NotifyChanged();
             Refresh();
         }

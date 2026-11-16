@@ -113,5 +113,52 @@ namespace LunarDominion.Progression
             }
             return true;
         }
+
+        /// <summary>Mass heal (Patrick 2026-11-16): walk the injured
+        /// list in order and heal every unit the player can currently
+        /// afford, skipping — not stopping at — any that are too
+        /// expensive right now: healing based on available resources.
+        /// Every heal goes through TryHeal, so the cost, the Hospital
+        /// discount and the destination list match the single-unit
+        /// path exactly. Returns how many were healed; summary is
+        /// panel-ready.</summary>
+        public int HealAllAffordable(out string summary)
+        {
+            summary = "";
+            if (HospitalLevel <= 0)
+            {
+                summary = "Build the Hospital first.";
+                return 0;
+            }
+            int healed = 0;
+            // Snapshot: TryHeal removes units from Injured as it goes.
+            foreach (var unit in new List<OwnedUnit>(_state.Injured))
+            {
+                if (TryHeal(unit, out _)) healed++;
+            }
+            int remaining = _state.Injured.Count;
+            if (healed == 0)
+                summary = "Not enough resources to heal anyone yet.";
+            else if (remaining == 0)
+                summary = $"Healed {healed} — everyone is back in the army.";
+            else
+                summary = $"Healed {healed}; {remaining} still injured — not enough resources for the rest.";
+            return healed;
+        }
+
+        /// <summary>Total cost of healing every injured unit — the
+        /// Heal All button's label.</summary>
+        public ResourceCost TotalHealCost()
+        {
+            int b = 0, a = 0, h = 0;
+            foreach (var unit in _state.Injured)
+            {
+                var c = HealCost(unit);
+                b += c.Biomass;
+                a += c.Alloy;
+                h += c.Helium3;
+            }
+            return new ResourceCost(b, a, h);
+        }
     }
 }
