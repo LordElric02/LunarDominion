@@ -2905,8 +2905,15 @@ namespace LunarDominion.UI
             // view azimuth (toward the NW corner, where the
             // ringed planet hangs) — and soft cloud bands drift
             // through the mid sky. No stars: it's daytime.
+            // SKY FIX (2026-11-16, Patrick's Phase 4 note): the
+            // glare band ran 0.44-0.64, so at close zoom the
+            // eye-level sky read pale hazy white instead of
+            // azure. The white is now a thin line at the horizon
+            // itself (full at 0.505, held to 0.52), azure is
+            // reached by 0.62, the haze is a touch bluer, and
+            // the sun glow falls off faster with height.
             var tex = new Texture2D(1024, 512, TextureFormat.RGBA32, false);
-            var haze = new Color(0.66f, 0.78f, 0.89f);
+            var haze = new Color(0.60f, 0.73f, 0.89f);
             var horizon = new Color(0.99f, 0.98f, 0.93f);
             var mid = new Color(0.36f, 0.63f, 0.95f);
             var zenith = new Color(0.14f, 0.42f, 0.86f);
@@ -2915,9 +2922,9 @@ namespace LunarDominion.UI
             {
                 float v = y / 511f;
                 Color c;
-                if (v < 0.44f) c = haze;
-                else if (v < 0.54f) c = Color.Lerp(haze, horizon, TerrainSmoothstep(0.44f, 0.50f, v));
-                else if (v < 0.72f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.54f, 0.64f, v));
+                if (v < 0.46f) c = haze;
+                else if (v < 0.52f) c = Color.Lerp(haze, horizon, TerrainSmoothstep(0.46f, 0.505f, v));
+                else if (v < 0.72f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.52f, 0.62f, v));
                 else c = Color.Lerp(mid, zenith, TerrainSmoothstep(0.72f, 0.95f, v));
                 for (int x = 0; x < 1024; x++)
                 {
@@ -2927,7 +2934,7 @@ namespace LunarDominion.UI
                     // the sun spot (u 0.625, v 0.50).
                     float du = Mathf.Abs(u - 0.625f);
                     if (du > 0.5f) du = 1f - du;
-                    float dv = (v - 0.50f) * 2f;
+                    float dv = (v - 0.50f) * 2.6f;
                     float sd = Mathf.Sqrt(du * du * 4f + dv * dv);
                     float glow = Mathf.Clamp01(1f - sd / 0.55f);
                     px = Color.Lerp(px, sunCore, glow * glow * 0.85f);
