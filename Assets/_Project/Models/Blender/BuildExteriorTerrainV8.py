@@ -385,11 +385,18 @@ def _road_draw_segments():
         if si == 0:
             continue
         j = _site_nearest_junction(sx, sz)
-        end = _clip_from((sx, sz), ROAD_JUNCTIONS[j], r_out + 3.0)
         if si in ROAD_DRIVEWAYS:
+            # The driveway runs straight base -> site, so its end
+            # clips along THAT line (toward the origin). Clipping
+            # toward the nearest junction instead veered the painted
+            # segment off the marched line (the Phase 2 tint bug
+            # found 2026-11-16: armies marched the true straight
+            # line across grass while the paint bent away).
             start = _clip_from((0.0, 0.0), (sx, sz), 50.0)
+            end = _clip_from((sx, sz), (0.0, 0.0), r_out + 3.0)
             segs.append((start, end))
         else:
+            end = _clip_from((sx, sz), ROAD_JUNCTIONS[j], r_out + 3.0)
             segs.append((ROAD_JUNCTIONS[j], end))
     return segs
 
