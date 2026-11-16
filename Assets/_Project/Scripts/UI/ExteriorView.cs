@@ -301,11 +301,11 @@ namespace LunarDominion.UI
             { 60f, 180f, 2.4f, 60f },
         };
         // (cx, cz, radius, depth, rim height, type) — types mirror
-        // BuildExteriorTerrainV4.py: 0 simple (legacy profile),
-        // 1 complex (flat floor, central peak, terraced walls),
-        // 2 degraded (shallow, soft, wide worn rim), 3 fresh
-        // (deeper, crisp rim; ejecta/rays are tint-only). The old
-        // (40,-40) crater is now a 5-pit secondary chain.
+        // BuildExteriorTerrainV7.py: 0 moss saucer (gentle dip),
+        // 1 geode basin (flat floor, smooth wall, soft lip),
+        // 2 rolling hollow (wide, very shallow), 3 geyser cone
+        // (raised mound, vent dip on top). The old (40,-40)
+        // crater is now a 5-pit secondary chain of saucers.
         private static readonly float[,] TerrainCraters =
         {
 { -120f, -240f, 27.5f, 5.0f, 3.2f, 1f },
@@ -364,62 +364,46 @@ namespace LunarDominion.UI
             return t * t * (3f - 2f * t);
         }
 
-        // One crater's height contribution at q = dist / radius.
-        // Mirrors crater_height in BuildExteriorTerrainV4.py —
+        // One landform's height contribution at q = dist / radius.
+        // Mirrors crater_height in BuildExteriorTerrainV7.py —
         // keep the math identical (types listed at TerrainCraters).
         private static float TerrainCraterHeight(float q, float depth, float rim, int ctype)
         {
-            if (ctype == 1) // complex: flat floor, central peak, terraces
+            if (ctype == 1) // geode basin: flat floor, smooth wall, soft lip
             {
+                if (q < 0.45f) return -0.80f * depth;
                 if (q < 1f)
                 {
-                    float peak = 0.38f * depth * Mathf.Exp(-((q / 0.16f) * (q / 0.16f)));
-                    if (q < 0.42f) return -0.92f * depth + peak;
-                    float t = (q - 0.42f) / 0.58f;
-                    return -0.92f * depth * Mathf.Pow(1f - t, 1.35f)
-                        + depth * 0.05f * Mathf.Sin(6f * Mathf.PI * t) * (4f * t * (1f - t))
-                        + peak;
+                    float t = (q - 0.45f) / 0.55f;
+                    return -0.80f * depth * Mathf.Pow(1f - t, 1.2f);
                 }
-                if (q < 1.7f)
-                {
-                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.7f);
-                    return 1.1f * rim * sn * sn;
-                }
-                return 0f;
-            }
-            if (ctype == 2) // degraded: shallow, softened, wide worn rim
-            {
-                if (q < 1f) return -0.45f * depth * Mathf.Pow(0.5f + 0.5f * Mathf.Cos(Mathf.PI * q), 1.3f);
-                if (q < 2.1f)
-                {
-                    float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 1.1f);
-                    return 0.4f * rim * sn * sn;
-                }
-                return 0f;
-            }
-            if (ctype == 3) // fresh: deeper bowl, crisp narrow rim
-            {
-                if (q < 1f) return -1.12f * depth * (0.5f + 0.5f * Mathf.Cos(Mathf.PI * q));
                 if (q < 1.5f)
                 {
                     float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.5f);
-                    return 1.25f * rim * sn * sn;
+                    return 0.30f * rim * sn * sn;
                 }
                 return 0f;
             }
-            // simple (0): the legacy profile, unchanged
-            if (q < 1f) return -depth * (0.5f + 0.5f * Mathf.Cos(Mathf.PI * q));
-            if (q < 1.7f)
+            if (ctype == 2) // rolling hollow: wide, very shallow, no rim
             {
-                float sn = Mathf.Sin(Mathf.PI * (q - 1f) / 0.7f);
-                return rim * sn * sn;
+                if (q < 1.6f) return -0.20f * depth * Mathf.Pow(0.5f + 0.5f * Mathf.Cos(Mathf.PI * q / 1.6f), 1.3f);
+                return 0f;
             }
+            if (ctype == 3) // geyser cone: raised mound, vent dip on top
+            {
+                if (q >= 2.2f) return 0f;
+                float cone = 1.40f * depth / Mathf.Pow(1f + (q / 0.40f) * (q / 0.40f), 1.5f);
+                if (q < 0.14f) cone -= 0.36f * depth * (1f - q / 0.14f);
+                return cone;
+            }
+            // moss saucer (0): a gentle dip, no rim
+            if (q < 1f) return -0.35f * depth * Mathf.Pow(0.5f + 0.5f * Mathf.Cos(Mathf.PI * q), 1.2f);
             return 0f;
         }
 
         /// <summary>The sculpted terrain's height at (x, z), in
         /// world units (before the mesh's -0.05 offset). Mirrors
-        /// BuildExteriorTerrainV4.py — change both together.</summary>
+        /// BuildExteriorTerrainV7.py — change both together.</summary>
         public static float TerrainHeight(float x, float z)
         {
             float d = 2.4f * Mathf.Sin(0.021f * x + 1.7f) * Mathf.Sin(0.017f * z - 0.6f)
