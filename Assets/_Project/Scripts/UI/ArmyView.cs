@@ -36,6 +36,10 @@ namespace LunarDominion.UI
         private readonly Button[] _armyTabs = new Button[GameState.MaxArmies];
         private readonly Text[] _armyTabLabels = new Text[GameState.MaxArmies];
         private int _selectedArmy;
+        // Which troop rows show their per-level breakdown (Patrick
+        // 2026-11-16): keys are "army:unitId". View state only —
+        // survives the fingerprint rebuilds, never saved.
+        private readonly HashSet<string> _expandedTroops = new HashSet<string>();
         private GameController _controller;
         private readonly Dictionary<UnitId, UnitDefinition> _defs = new Dictionary<UnitId, UnitDefinition>();
 
@@ -416,8 +420,23 @@ namespace LunarDominion.UI
             string line2 = assigned.Count == 0 ? "Not assigned yet"
                 : injured > 0 ? $"{injured} injured (sits out)" : "";
             var label = UIHelpers.LabelInRect(row, "Info", line1 + "\n" + line2, 24, Color.white,
-                new Rect(0.02f, 0.06f, 0.66f, 0.94f), TextAnchor.MiddleLeft);
+                new Rect(0.02f, 0.06f, 0.50f, 0.94f), TextAnchor.MiddleLeft);
             label.verticalOverflow = VerticalWrapMode.Overflow;
+
+            // Level breakdown toggle (Patrick 2026-11-16): expands a
+            // per-level list under this row — one row per level,
+            // highest first — and collapses it again on a second tap.
+            string expandKey = army + ":" + def.Id;
+            bool expanded = _expandedTroops.Contains(expandKey);
+            var toggle = AddRowButton(row, expanded ? "Hide" : "Levels", 0.52f, 0.665f);
+            bool hasUnits = assigned.Count + free.Count > 0;
+            UIHelpers.SetButtonEnabled(toggle, hasUnits);
+            if (hasUnits) toggle.onClick.AddListener(() =>
+            {
+                if (_expandedTroops.Contains(expandKey)) _expandedTroops.Remove(expandKey);
+                else _expandedTroops.Add(expandKey);
+                Refresh();
+            });
 
             var minus = AddRowButton(row, "−", 0.69f, 0.815f);
             bool canRemove = editable && assigned.Count > 0;
@@ -438,6 +457,35 @@ namespace LunarDominion.UI
                 if (pool.Count > 0) State.GetRoster(army).Add(pool[0]);
                 AfterEdit();
             });
+
+            // The breakdown itself: one slim row per level present,
+            // highest level first, counts split in-army vs free.
+            if (expanded)
+            {
+                var byLevel = new Dictionary<int, int[]>();
+                foreach (var unit in assigned)
+                {
+                    if (!byLevel.TryGetValue(unit.Level, out var counts)) byLevel[unit.Level] = counts = new int[2];
+                    counts[0]++;
+                }
+                foreach (var unit in free)
+                {
+                    if (!byLevel.TryGetValue(unit.Level, out var counts)) byLevel[unit.Level] = counts = new int[2];
+                    counts[1]++;
+                }
+                var ordered = new List<int>(byLevel.Keys);
+                ordered.Sort((a, b) => b.CompareTo(a));
+                foreach (int level in ordered)
+                {
+                    var counts = byLevel[level];
+                    var sub = MakeRow(48);
+                    string text = $"Lv {level} — {counts[0]} in army";
+                    if (counts[1] > 0) text += $" · {counts[1]} free";
+                    var subLabel = UIHelpers.LabelInRect(sub, "LevelInfo", text, 22, Color.white,
+                        new Rect(0.06f, 0.06f, 0.90f, 0.94f), TextAnchor.MiddleLeft);
+                    subLabel.verticalOverflow = VerticalWrapMode.Overflow;
+                }
+            }
         }
 
         private Button AddRowButton(GameObject row, string text, float x0, float x1)
