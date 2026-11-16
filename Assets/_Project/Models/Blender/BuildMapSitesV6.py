@@ -67,6 +67,12 @@ def make_materials():
     g["FLESH"] = mat("SiteFlesh", (0.40, 0.18, 0.48), roughness=0.5)
     g["FLESH_DK"] = mat("SiteFleshDark", (0.26, 0.10, 0.34), roughness=0.55)
     g["FLESH_LT"] = mat("SiteFleshLight", (0.56, 0.33, 0.63), roughness=0.5)
+    # T3-only bone/ash set (Patrick 2026-11-16: T1 and T3
+    # both read violet - T3 goes bleached bone instead;
+    # T1 keeps the violet flesh he likes).
+    g["ASH"] = mat("SiteAsh", (0.58, 0.50, 0.40), roughness=0.6)
+    g["ASH_DK"] = mat("SiteAshDark", (0.36, 0.30, 0.23), roughness=0.65)
+    g["ASH_LT"] = mat("SiteAshLight", (0.74, 0.67, 0.55), roughness=0.55)
     g["CHITIN"] = mat("SiteChitin", (0.22, 0.11, 0.28), roughness=0.65)
     g["BONE"] = mat("SiteBone", (0.78, 0.72, 0.60), roughness=0.6)
     g["MOSS"] = mat("SiteMossRock", (0.24, 0.31, 0.20), roughness=0.95)
@@ -374,41 +380,55 @@ def build_camp_t1(rng):
 
 
 def build_camp_t2(rng):
-    # STALKER SPIRES: chitin blades with teal tip orbs over
-    # a flesh-and-moss mound.
-    ico("Stalk_Mound", (0, 0, 0.45), (6.2, 6.2, 1.3), M["MOSS_DK"], subdiv=2)
+    # STALKER SPIRES, revised (Patrick 2026-11-16 Play
+    # check: T2 "could be improved" next to T1 - it read
+    # sparse and wiry on its disc). Same identity - tall
+    # chitin blades over a camp mound - but grown denser
+    # and fleshier like the T1 nest: a taller flesh mound
+    # with bulges, FIVE blades with chitin collars and
+    # teal tip orbs, five watcher sacs on stalks, and a
+    # wider ring of spikes and tendrils filling the disc.
+    ico("Stalk_Mound", (0, 0, 0.55), (6.2, 6.2, 1.9), M["FLESH_DK"], subdiv=2)
     for i in range(3):
         a = i * 2.1 + 0.7
-        ico("Stalk_Flesh%d" % i, (math.cos(a) * 3.4, math.sin(a) * 3.4, 0.85),
-            (1.9, 1.9, 0.75), M["FLESH"], subdiv=1)
-    for i, h in enumerate((12.0, 13.5, 14.5)):
-        a = math.radians(90 + i * 120)
-        cone("Stalk_Blade%d" % i, _lean_centre(a, 2.6, h, -0.14), 1.15, h, M["CHITIN"],
-             rot=_lean_rot(a, -0.14), vertices=8)
-        tip = _lean_tip(a, 2.6, h, -0.14)
-        sphere("Stalk_Tip%d" % i, tip, (0.34, 0.34, 0.34), M["TEAL"])
-        # Tendril roots at the blade's base.
-        for k in range(2):
-            ta = a + 0.5 + k * 1.1
-            cone("Stalk_Root%d_%d" % (i, k), _lean_centre(ta, 3.1, 3.0, -1.15), 0.34, 3.0,
-                 M["FLESH_DK"], rot=_lean_rot(ta, -1.15), vertices=6)
-    for i, a in enumerate((math.radians(150), math.radians(300))):
-        cyl("Stalk_Stalk%d" % i, (math.cos(a) * 4.6, math.sin(a) * 4.6, 1.1), 0.16, 2.2,
-            M["CHITIN"], vertices=8)
-        sphere("Stalk_Sac%d" % i, (math.cos(a) * 4.6, math.sin(a) * 4.6, 2.45),
-               (0.85, 0.85, 1.0), M["EMBER"])
-    a = math.radians(30)
-    cyl("Stalk_Stalk2", (math.cos(a) * 4.6, math.sin(a) * 4.6, 1.1), 0.16, 2.2,
-        M["CHITIN"], vertices=8)
-    sphere("Stalk_Sac2", (math.cos(a) * 4.6, math.sin(a) * 4.6, 2.45),
-           (0.80, 0.80, 0.95), M["TEAL"])
-    for i in range(6):
-        a = i * 1.05 + 0.7
-        ico("Stalk_Nodule%d" % i, (math.cos(a) * 2.3, math.sin(a) * 2.3, 1.05),
-            (0.32, 0.32, 0.38), M["TEAL"], subdiv=1)
+        ico("Stalk_Flesh%d" % i, (math.cos(a) * 3.6, math.sin(a) * 3.6, 0.95),
+            (2.2, 2.2, 0.95), M["FLESH"], subdiv=1)
     for i in range(5):
-        a = i * (2.0 * math.pi / 5.0) + 0.5
-        cone("Stalk_Spike%d" % i, (math.cos(a) * 5.2, math.sin(a) * 5.2, 1.55), 0.8, 3.5,
+        a = rng.uniform(0, 6.28)
+        r = rng.uniform(2.6, 4.6)
+        ico("Stalk_Bump%d" % i, (math.cos(a) * r, math.sin(a) * r, 1.95),
+            (0.55, 0.55, 0.42), M["FLESH_LT"], subdiv=1)
+    blades = ((90, 2.6, 14.0), (210, 2.6, 13.0), (330, 2.6, 11.5),
+              (150, 3.4, 9.5), (30, 3.4, 8.0))
+    for i, (deg, rr, h) in enumerate(blades):
+        a = math.radians(deg)
+        lean = -0.14 if h > 10.0 else -0.20
+        cone("Stalk_Collar%d" % i, _lean_centre(a, rr, 2.0, lean), 1.95, 2.0, M["CHITIN"],
+             rot=_lean_rot(a, lean), vertices=8)
+        cone("Stalk_Blade%d" % i, _lean_centre(a, rr, h, lean), 1.30, h, M["CHITIN"],
+             rot=_lean_rot(a, lean), vertices=8)
+        tip = _lean_tip(a, rr, h, lean)
+        sphere("Stalk_Tip%d" % i, tip, (0.34, 0.34, 0.34), M["TEAL"])
+        if h > 10.0:
+            for k in range(2):
+                ta = a + 0.5 + k * 1.1
+                cone("Stalk_Root%d_%d" % (i, k), _lean_centre(ta, 3.1, 3.0, -1.15), 0.34, 3.0,
+                     M["FLESH_DK"], rot=_lean_rot(ta, -1.15), vertices=6)
+    # Watcher sacs on stalks - the stalkers' eyes.
+    for i, deg in enumerate((150, 300, 30, 200, 340)):
+        a = math.radians(deg)
+        sh = 2.2 + (i % 2) * 0.8
+        cyl("Stalk_Stalk%d" % i, (math.cos(a) * 4.6, math.sin(a) * 4.6, sh * 0.5 + 0.4),
+            0.16, sh, M["CHITIN"], vertices=8)
+        sphere("Stalk_Sac%d" % i, (math.cos(a) * 4.6, math.sin(a) * 4.6, sh + 0.4 + 0.75),
+               (0.88, 0.88, 1.02), M["TEAL"] if i % 2 == 0 else M["EMBER"])
+    for i in range(8):
+        a = i * 0.79 + 0.7
+        ico("Stalk_Nodule%d" % i, (math.cos(a) * 2.3, math.sin(a) * 2.3, 1.55),
+            (0.32, 0.32, 0.38), M["TEAL"], subdiv=1)
+    for i in range(7):
+        a = i * (2.0 * math.pi / 7.0) + 0.5
+        cone("Stalk_Spike%d" % i, (math.cos(a) * 5.4, math.sin(a) * 5.4, 1.75), 0.85, 3.9,
              M["CHITIN"], vertices=6)
     for i in range(3):
         a = i * 2.3 + 1.1
@@ -419,17 +439,17 @@ def build_camp_t2(rng):
 def build_camp_t3(rng):
     # TYRANT MAW: bone fangs around the ember throat, flesh
     # bulges on the skirt, outer spires with amber tips.
-    ico("Maw_Skirt", (0, 0, 0.5), (10.5, 10.5, 2.0), M["FLESH_DK"], subdiv=2)
+    ico("Maw_Skirt", (0, 0, 0.5), (10.5, 10.5, 2.0), M["ASH_DK"], subdiv=2)
     for i in range(5):
         a = i * 1.35 + 0.5
         r = rng.uniform(2.1, 3.2)
         ico("Maw_Bulge%d" % i, (math.cos(a) * 7.6, math.sin(a) * 7.6, 1.15),
-            (r, r, r * 0.55), M["FLESH"], subdiv=1)
+            (r, r, r * 0.55), M["ASH"], subdiv=1)
     for i in range(6):
         a = rng.uniform(0, 6.28)
         r = rng.uniform(4.2, 6.4)
         ico("Maw_Bump%d" % i, (math.cos(a) * r, math.sin(a) * r, 2.15),
-            (0.65, 0.65, 0.5), M["FLESH_LT"], subdiv=1)
+            (0.65, 0.65, 0.5), M["ASH_LT"], subdiv=1)
     sphere("Maw_Throat", (0, 0, 2.05), (2.6, 2.6, 1.1), M["EMBER"])
     for i in range(6):
         a = i * (math.pi / 3.0) + 0.25
@@ -496,7 +516,7 @@ def main():
     results = {}
     for name, builder in BUILDERS:
         del OBJECTS[:]
-        rng = random.Random(hash(name) & 0xFFFF)
+        rng = random.Random(__import__("zlib").crc32(name.encode()) & 0xFFFF)  # stable seed (hash() varies per process)
         builder(rng)
         tris = sum(len(o.data.polygons) for o in OBJECTS)
         xs, ys, zs = [], [], []
