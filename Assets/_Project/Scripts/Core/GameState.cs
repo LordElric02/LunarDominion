@@ -113,10 +113,36 @@ namespace LunarDominion.Core
         // arrays; MaxArmies is the current cap.
         public const int MaxArmies = 3;
         public static readonly int[] ArmyNexusGates = { 1, 10, 20 };
+        // Army size by Nexus (2026-11-16, Patrick — the big-armies
+        // rebalance): how many units one standing army can field.
+        // 20 per army at Nexus 1-9, 40 at 10-19, 80 at 20-29, 160
+        // at Nexus 30. Camp encounters scale their spawn counts
+        // by the same band (ArmyBandFactor) so the tier balance
+        // holds at every size, and camp XP pools scale with it.
+        public static int ArmySlotCapForNexus(int nexusLevel)
+        {
+            if (nexusLevel >= 30) return 160;
+            if (nexusLevel >= 20) return 80;
+            if (nexusLevel >= 10) return 40;
+            return 20;
+        }
+
+        /// <summary>How many units each standing army can field
+        /// at the current Nexus level.</summary>
+        public int ArmySlotCap => ArmySlotCapForNexus(NexusLevel);
+
+        /// <summary>Camp scaling factor for the current army-size
+        /// band: 1 at Nexus 1-9, doubling per band to 8 at 30.</summary>
+        public static int ArmyBandFactor(int nexusLevel)
+        {
+            return ArmySlotCapForNexus(nexusLevel) / 20;
+        }
+
         // One roster per army: the actual OwnedUnit instances
         // (troops from Army, at most one hero from Heroes),
-        // capped at 8 including the hero. Saved as unit serials
-        // (see SaveService). Entries may be null until GetRoster.
+        // capped at ArmySlotCap including the hero. Saved as unit
+        // serials (see SaveService). Entries may be null until
+        // GetRoster.
         public List<OwnedUnit>[] ArmyRosters = new List<OwnedUnit>[MaxArmies];
         public int NextUnitSerial = 1;
 

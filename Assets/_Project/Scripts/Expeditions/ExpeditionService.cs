@@ -94,9 +94,12 @@ namespace LunarDominion.Expeditions
                 reason = "Select at least one unit for your squad.";
                 return ExpeditionStatus.EmptySquad;
             }
-            if (squadSize > _balance.MaxSquadSize)
+            // Squad cap (2026-11-16): the Nexus-driven army size
+            // (GameState.ArmySlotCap: 20/40/80/160), not the old
+            // fixed 8 — standing armies field their whole roster.
+            if (squadSize > _state.ArmySlotCap)
             {
-                reason = $"Squad is capped at {_balance.MaxSquadSize} units.";
+                reason = $"Squad is capped at {_state.ArmySlotCap} units.";
                 return ExpeditionStatus.SquadTooLarge;
             }
             if (_state.Energy < encounter.EnergyCost)
@@ -210,7 +213,8 @@ namespace LunarDominion.Expeditions
         /// the army when attacking enemy camps on the map, and gain XP
         /// from those fights. squadArmyIndices are positions in
         /// State.Army, squadHeroIndices positions in State.Heroes; the
-        /// COMBINED squad is capped at MaxSquadSize (8). Fallen army
+        /// COMBINED squad is capped at the Nexus-driven army size
+        /// (GameState.ArmySlotCap). Fallen army
         /// units move Army -> Injured; fallen heroes recover instantly
         /// and stay in Heroes (healing applies to troops only).
         /// Same combat, energy and reward as TryStart.</summary>
@@ -369,16 +373,23 @@ namespace LunarDominion.Expeditions
             // exactly as before.
             float xpMult = _research != null ? _research.XpMultiplier() : 1f;
             float flawlessBonus = _research != null ? _research.FlawlessBonus() : 0.25f;
+            // Big armies (2026-11-16): the camp XP pool scales
+            // with the army-size band, like the spawn counts —
+            // otherwise 80 survivors would split the old pool and
+            // levelling would crawl. The boss pool never scales.
+            int xpPool = encounter.IsBoss
+                ? encounter.XpPool
+                : encounter.XpPool * GameState.ArmyBandFactor(_state.NexusLevel);
             int pool = 0;
             if (outcome.Victory)
             {
                 pool = result.Flawless
-                    ? (int)Math.Round(encounter.XpPool * (1f + flawlessBonus) * xpMult)
-                    : (int)Math.Round(encounter.XpPool * xpMult);
+                    ? (int)Math.Round(xpPool * (1f + flawlessBonus) * xpMult)
+                    : (int)Math.Round(xpPool * xpMult);
             }
             else if (outcome.Timeout && outcome.SurvivingSquadIndices.Count > 0)
             {
-                pool = (int)Math.Round(encounter.XpPool / 2f * xpMult);
+                pool = (int)Math.Round(xpPool / 2f * xpMult);
             }
             result.XpPool = pool;
 

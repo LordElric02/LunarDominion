@@ -129,9 +129,15 @@ namespace LunarDominion.Expeditions
 
             var enemies = new List<Fighter>();
             float scale = EnemyScale(nexusLevel, encounter.RequiredNexusLevel);
+            // Big armies (2026-11-16): camp spawn counts scale
+            // with the player's army-size band (x1/x2/x4/x8 by
+            // Nexus) so a camp stays the same fight relative to a
+            // 20-, 40-, 80- or 160-unit army. The boss never
+            // scales — the lair is a fixed heroes-only ladder.
+            int countFactor = encounter.IsBoss ? 1 : GameState.ArmyBandFactor(nexusLevel);
             foreach (var spawn in encounter.Spawns)
             {
-                for (int i = 0; i < spawn.Count; i++)
+                for (int i = 0; i < spawn.Count * countFactor; i++)
                 {
                     enemies.Add(new Fighter
                     {

@@ -479,7 +479,10 @@ namespace LunarDominion.Expeditions
                 if (_state.OccupationTroops != null && slotIndex < _state.OccupationTroops.Length)
                     troops = _state.OccupationTroops[slotIndex];
             }
-            troops = Math.Max(1, Math.Min(8, troops));
+            // Rendered figures are capped (24, matching
+            // ExteriorView's march-figure cap) even though the
+            // occupation may hold far more troops.
+            troops = Math.Max(1, Math.Min(24, troops));
             for (int i = 0; i < troops; i++) members.Add(UnitId.ScoutMarine);
             return members;
         }
@@ -1236,7 +1239,7 @@ namespace LunarDominion.Expeditions
             // skipped and the next-strongest army units fill the squad.
             foreach (var s in scored)
             {
-                if (armyIndices.Count + heroIndices.Count >= _balance.MaxSquadSize) break;
+                if (armyIndices.Count + heroIndices.Count >= _state.ArmySlotCap) break;
                 if (s.isHero)
                 {
                     if (heroIndices.Count >= 1) continue;

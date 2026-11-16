@@ -1085,11 +1085,18 @@ namespace LunarDominion.UI
             foreach (var fig in _squadFigures[slot]) if (fig != null) Destroy(fig);
             _squadFigures[slot].Clear();
             if (root == null) return;
-            for (int i = 0; i < ordered.Count; i++)
+            // Big armies (2026-11-16): an army can field up to
+            // 160 units, but rendering every one as a hero-quality
+            // model would sink the phone. At most 24 figures march
+            // (heroes first — the list is already ordered that
+            // way); the chip above the banner carries the true
+            // count, and combat uses the full roster regardless.
+            int renderCount = Mathf.Min(ordered.Count, 24);
+            for (int i = 0; i < renderCount; i++)
             {
                 var fig = BuildFigure(ordered[i]);
                 fig.transform.SetParent(root.transform, false);
-                fig.transform.localPosition = FormationOffset(slot, i, ordered.Count);
+                fig.transform.localPosition = FormationOffset(slot, i, renderCount);
                 _squadFigures[slot].Add(fig);
             }
         }

@@ -10,7 +10,8 @@ namespace LunarDominion.UI
     /// <summary>Army screen (2026-11-12 redesign, Patrick): build
     /// the standing armies. Up to GameState.MaxArmies armies,
     /// unlocked by Nexus level (gates in GameState.ArmyNexusGates);
-    /// each army is a hero pick plus assigned troops, capped at 8
+    /// each army is a hero pick plus assigned troops, capped at
+    /// GameState.ArmySlotCap (20/40/80/160 by Nexus, 2026-11-16)
     /// including the hero. A unit or hero serves in only one army.
     /// Rosters are the actual OwnedUnit instances in
     /// GameState.ArmyRosters, saved by serial. While an army is
@@ -233,7 +234,7 @@ namespace LunarDominion.UI
                 var roster = state.GetRoster(i);
                 int count = roster != null ? roster.Count : 0;
                 _armyTabLabels[i].text = state.ArmyUnlocked(i)
-                    ? $"Army {i + 1} ({count}/8)"
+                    ? $"Army {i + 1} ({count}/{state.ArmySlotCap})"
                     : $"Army {i + 1} (Nexus {GameState.ArmyNexusGates[i]})";
                 var img = _armyTabs[i].GetComponent<Image>();
                 if (img != null) img.color = i == army ? UIHelpers.Hex("#2E5E8C") : UIHelpers.Hex("#1A2436");
@@ -247,11 +248,11 @@ namespace LunarDominion.UI
             }
             else if (ArmyOut(army))
             {
-                _summaryText.text = $"Army {army + 1} — {myCount}/8 — is out. Its roster is locked until it returns.";
+                _summaryText.text = $"Army {army + 1} — {myCount}/{state.ArmySlotCap} — is out. Its roster is locked until it returns.";
             }
             else
             {
-                _summaryText.text = $"Army {army + 1} — {myCount}/8 assigned. Tap + to assign, − to return a unit to the pool.";
+                _summaryText.text = $"Army {army + 1} — {myCount}/{state.ArmySlotCap} assigned. Tap + to assign, − to return a unit to the pool.";
             }
 
             string signature = StructureSignature();
@@ -391,7 +392,7 @@ namespace LunarDominion.UI
                 // 8 slots are taken, "Has hero" when this army
                 // already fields one.
                 bool hasHero = RosterHero(army) != null;
-                bool full = State.GetRoster(army).Count >= 8;
+                bool full = State.GetRoster(army).Count >= State.ArmySlotCap;
                 string caption = hasHero ? "Has hero" : full ? "Full" : "Assign";
                 var btn = AddRowButton(row, caption, 0.68f, 0.97f);
                 bool canAssign = editable && !hasHero && !full;
@@ -428,7 +429,7 @@ namespace LunarDominion.UI
             });
 
             var plus = AddRowButton(row, "+", 0.845f, 0.97f);
-            bool canAdd = editable && free.Count > 0 && State.GetRoster(army).Count < 8;
+            bool canAdd = editable && free.Count > 0 && State.GetRoster(army).Count < State.ArmySlotCap;
             UIHelpers.SetButtonEnabled(plus, canAdd);
             if (canAdd) plus.onClick.AddListener(() =>
             {

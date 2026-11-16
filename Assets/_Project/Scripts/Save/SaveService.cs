@@ -527,7 +527,7 @@ namespace LunarDominion.Save
                 int heroes = 0;
                 foreach (int serial in serials)
                 {
-                    if (roster.Count >= 8) break;
+                    if (roster.Count >= state.ArmySlotCap) break;
                     if (claimed.Contains(serial)) continue;
                     if (!bySerial.TryGetValue(serial, out var unit)) continue;
                     bool isHero = unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor
