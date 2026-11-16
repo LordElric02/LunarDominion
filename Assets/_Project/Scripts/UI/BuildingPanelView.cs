@@ -33,6 +33,7 @@ namespace LunarDominion.UI
             public UnitDefinition Def;
             public Text NameText;
             public Text StatsText;
+            public Text CostText;
             public Button RecruitButton;
         }
 
@@ -352,16 +353,18 @@ namespace LunarDominion.UI
                 rowRt.anchorMin = Vector2.zero;
                 rowRt.anchorMax = Vector2.one;
                 var le = row.Root.AddComponent<LayoutElement>();
-                le.preferredHeight = 96;
-                le.minHeight = 96;
+                le.preferredHeight = 118;
+                le.minHeight = 118;
                 var rowBg = row.Root.AddComponent<Image>();
                 rowBg.color = UIHelpers.Hex("#1A2436");
 
                 row.NameText = UIHelpers.LabelInRect(row.Root, "Name",
                     $"{def.DisplayName} — Tier {def.Tier}", 26, Color.white,
-                    new Rect(0.03f, 0.55f, 0.66f, 0.97f), TextAnchor.MiddleLeft);
+                    new Rect(0.03f, 0.66f, 0.66f, 0.98f), TextAnchor.MiddleLeft);
                 row.StatsText = UIHelpers.LabelInRect(row.Root, "Stats", "", 22, UIHelpers.Hex("#C0C8D0"),
-                    new Rect(0.03f, 0.05f, 0.66f, 0.55f), TextAnchor.MiddleLeft);
+                    new Rect(0.03f, 0.38f, 0.66f, 0.66f), TextAnchor.MiddleLeft);
+                row.CostText = UIHelpers.LabelInRect(row.Root, "Cost", "", 20, UIHelpers.Hex("#C0C8D0"),
+                    new Rect(0.03f, 0.03f, 0.66f, 0.38f), TextAnchor.MiddleLeft);
 
                 row.RecruitButton = UIHelpers.Button(row.Root, "RecruitBtn", "Recruit", 24,
                     UIHelpers.Hex("#2E7D32"), Color.white);
@@ -376,10 +379,19 @@ namespace LunarDominion.UI
                 int owned = _controller.Recruitment.CountOwned(def.Id);
                 row.StatsText.text = $"HP {def.BaseHealth}  ATK {def.BaseAttack}  DEF {def.BaseDefense}  •  Owned: {owned}";
                 var status = _controller.Recruitment.CheckRecruit(def, out var cost, out var reason);
-                string costText = CostText(cost);
-                row.NameText.text = status == RecruitStatus.CanRecruit
-                    ? $"{def.DisplayName} — Tier {def.Tier}  •  {costText}"
-                    : $"{def.DisplayName} — Tier {def.Tier}  •  {reason}";
+                // Cost on its own line (2026-11-16, Patrick): it
+                // used to be appended to the name line, where the
+                // label's width clipped it off — the name + tier +
+                // bullet filled the line and the price never
+                // showed. When the unit cannot be recruited, the
+                // line carries the reason instead (amber), like
+                // the Heroes rows do with their cost line.
+                row.CostText.text = status == RecruitStatus.CanRecruit
+                    ? $"Cost: {CostText(cost)}"
+                    : reason;
+                row.CostText.color = status == RecruitStatus.CanRecruit
+                    ? UIHelpers.Hex("#C0C8D0")
+                    : UIHelpers.Hex("#FFD166");
                 UIHelpers.SetButtonEnabled(row.RecruitButton, status == RecruitStatus.CanRecruit);
                 _recruitRows.Add(row);
             }
