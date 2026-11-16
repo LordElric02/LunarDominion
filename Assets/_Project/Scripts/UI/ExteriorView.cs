@@ -2909,11 +2909,15 @@ namespace LunarDominion.UI
             // glare band ran 0.44-0.64, so at close zoom the
             // eye-level sky read pale hazy white instead of
             // azure. The white is now a thin line at the horizon
-            // itself (full at 0.505, held to 0.52), azure is
-            // reached by 0.62, the haze is a touch bluer, and
-            // the sun glow falls off faster with height.
+            // itself (full at 0.505, held to 0.51) and the sun
+            // glow falls off faster with height. FOLLOW-UP the
+            // same day, from Patrick's check video: at close
+            // zoom the frame tops out around v 0.55, so azure
+            // arriving at 0.62 still left the framed band in
+            // the pale transition - azure is now reached by
+            // 0.56 and the haze is deeper blue.
             var tex = new Texture2D(1024, 512, TextureFormat.RGBA32, false);
-            var haze = new Color(0.60f, 0.73f, 0.89f);
+            var haze = new Color(0.55f, 0.70f, 0.88f);
             var horizon = new Color(0.99f, 0.98f, 0.93f);
             var mid = new Color(0.36f, 0.63f, 0.95f);
             var zenith = new Color(0.14f, 0.42f, 0.86f);
@@ -2923,8 +2927,8 @@ namespace LunarDominion.UI
                 float v = y / 511f;
                 Color c;
                 if (v < 0.46f) c = haze;
-                else if (v < 0.52f) c = Color.Lerp(haze, horizon, TerrainSmoothstep(0.46f, 0.505f, v));
-                else if (v < 0.72f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.52f, 0.62f, v));
+                else if (v < 0.51f) c = Color.Lerp(haze, horizon, TerrainSmoothstep(0.46f, 0.505f, v));
+                else if (v < 0.72f) c = Color.Lerp(horizon, mid, TerrainSmoothstep(0.51f, 0.56f, v));
                 else c = Color.Lerp(mid, zenith, TerrainSmoothstep(0.72f, 0.95f, v));
                 for (int x = 0; x < 1024; x++)
                 {
