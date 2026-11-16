@@ -256,10 +256,31 @@ namespace LunarDominion.UI
             int level = _controller.State.GetLevel(_current.Id);
             bool locked = level == 0;
             _nameText.text = _current.DisplayName;
-            _levelText.text = locked ? "Locked" : $"Level {level}  →  Level {level + 1}";
             _infoText.text = _current.Description;
 
             var status = _controller.Progression.CheckUpgrade(_current, out var cost, out var reason);
+            // Upgrade cost on the level line (2026-11-16, Patrick):
+            // the status text below also carries the cost, but it
+            // is hidden whenever the recruit or injured list is
+            // showing — which is exactly the barracks and the
+            // Hospital — so the cost was invisible for the
+            // buildings he upgrades most. The level line is always
+            // visible, for every building. The cost is read
+            // straight from Economy (not CheckUpgrade's out cost,
+            // which is unset on the Nexus-gate branch).
+            if (locked)
+            {
+                _levelText.text = "Locked";
+            }
+            else if (status == UpgradeStatus.MaxLevel)
+            {
+                _levelText.text = $"Level {level} — max level";
+            }
+            else
+            {
+                var nextCost = _controller.Economy.UpgradeCost(_current, level + 1);
+                _levelText.text = $"Level {level}  →  Level {level + 1}\nCost: {nextCost.Biomass} Biomass, {nextCost.Alloy} Alloy, {nextCost.Helium3} Helium-3";
+            }
             if (locked)
             {
                 _statusText.text = reason;
