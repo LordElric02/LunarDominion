@@ -129,6 +129,13 @@ namespace LunarDominion.Expeditions
 
             var enemies = new List<Fighter>();
             float scale = EnemyScale(nexusLevel, encounter.RequiredNexusLevel);
+            // Camps: the stat scale is capped at x1.10 (2026-11-16) —
+            // camp growth now comes from the band spawn counts below.
+            // Uncapped, the two multiplied (a T3 camp at Nexus 21 was
+            // x4 counts AND x1.24 stats, ~2.3x its tuning case, and
+            // old camps would out-muscle fresh higher tiers). The
+            // boss keeps the raw scale; its views cap their own.
+            if (!encounter.IsBoss) scale = Math.Min(scale, 1.10f);
             // Big armies (2026-11-16): camp spawn counts scale
             // with the player's army-size band (x1/x2/x4/x8 by
             // Nexus) so a camp stays the same fight relative to a

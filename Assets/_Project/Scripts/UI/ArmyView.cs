@@ -405,15 +405,16 @@ namespace LunarDominion.UI
         {
             var row = MakeRow(92);
             int injured = 0;
-            var levels = new List<string>();
             foreach (var unit in assigned)
             {
-                levels.Add(unit.Level.ToString());
                 if (State.Injured != null && State.Injured.Contains(unit)) injured++;
             }
             string line1 = $"{def.DisplayName} — {assigned.Count} in army · {free.Count} free";
-            string line2 = assigned.Count > 0 ? "Levels: " + string.Join(", ", levels) : "Not assigned yet";
-            if (injured > 0) line2 += $" · {injured} injured (sits out)";
+            // No per-unit level list (Patrick 2026-11-16): at 80-man
+            // armies it was a wall of numbers. The second line only
+            // carries state that changes what the army can do.
+            string line2 = assigned.Count == 0 ? "Not assigned yet"
+                : injured > 0 ? $"{injured} injured (sits out)" : "";
             var label = UIHelpers.LabelInRect(row, "Info", line1 + "\n" + line2, 24, Color.white,
                 new Rect(0.02f, 0.06f, 0.66f, 0.94f), TextAnchor.MiddleLeft);
             label.verticalOverflow = VerticalWrapMode.Overflow;
