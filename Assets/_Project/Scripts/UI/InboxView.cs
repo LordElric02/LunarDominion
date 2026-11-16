@@ -9,23 +9,33 @@ using UnityEngine.UI;
 namespace LunarDominion.UI
 {
     /// <summary>The Inbox panel (2026-11-15, Patrick): game statuses
-    /// delivered as messages instead of pop-ups. A scrollable list
-    /// (newest first, unread highlighted with a dot) over a detail
-    /// reader — tapping a message marks it read and shows its full
-    /// text below. Opened from the top bar's Inbox button; the badge
-    /// count lives in TopBarView.</summary>
+    /// delivered as messages instead of pop-ups. Two modes: a
+    /// scrollable list (newest first, unread highlighted with a dot)
+    /// filling the panel, and a reading mode — tapping a message
+    /// marks it read, hides the list, and gives the message the
+    /// whole content area, with a BACK TO LIST button to return.
+    /// Opened from the top bar's Inbox button; the badge count
+    /// lives in TopBarView.</summary>
     public class InboxView : MonoBehaviour
     {
         private GameObject _root;
         private Text _summaryText;
+        private GameObject _listScrollGo;
         private GameObject _rowsContent;
         private readonly List<GameObject> _rows = new List<GameObject>();
         private Text _detailTitle;
         private Text _detailText;
         private ScrollRect _detailScroll;
+        private GameObject _detailScrollGo;
         private RectTransform _detailContentRt;
+        private Button _markAllButton;
+        private Button _backButton;
         private InboxService _inbox;
         private long _selectedId = -1;
+        // Two modes (Patrick 2026-11-15): the list fills the panel;
+        // opening a message hides the list and the message takes
+        // over the whole content area, with a BACK button to return.
+        private bool _reading;
 
         public void Build(Canvas canvas, InboxService inbox)
         {
@@ -42,15 +52,27 @@ namespace LunarDominion.UI
 
             BuildRowsScroll();
             BuildDetail();
+            ApplyMode();
 
-            var markAll = UIHelpers.Button(_root, "MarkAllRead", "MARK ALL READ", 24,
+            _markAllButton = UIHelpers.Button(_root, "MarkAllRead", "MARK ALL READ", 24,
                 UIHelpers.Hex("#2A3B52"), Color.white);
-            var markRt = markAll.GetComponent<RectTransform>();
+            var markRt = _markAllButton.GetComponent<RectTransform>();
             markRt.anchorMin = new Vector2(0.04f, 0.012f);
             markRt.anchorMax = new Vector2(0.49f, 0.062f);
             markRt.offsetMin = Vector2.zero;
             markRt.offsetMax = Vector2.zero;
-            markAll.onClick.AddListener(() => _inbox?.MarkAllRead());
+            _markAllButton.onClick.AddListener(() => _inbox?.MarkAllRead());
+
+            // BACK shares the MARK ALL READ slot — only one of them
+            // is visible at a time (list mode vs reading mode).
+            _backButton = UIHelpers.Button(_root, "BackToList", "BACK TO LIST", 24,
+                UIHelpers.Hex("#2A3B52"), Color.white);
+            var backRt = _backButton.GetComponent<RectTransform>();
+            backRt.anchorMin = new Vector2(0.04f, 0.012f);
+            backRt.anchorMax = new Vector2(0.49f, 0.062f);
+            backRt.offsetMin = Vector2.zero;
+            backRt.offsetMax = Vector2.zero;
+            _backButton.onClick.AddListener(BackToList);
 
             var close = UIHelpers.Button(_root, "CloseInbox", "CLOSE", 24,
                 UIHelpers.Hex("#2A3B52"), Color.white);
@@ -61,6 +83,7 @@ namespace LunarDominion.UI
             closeRt.offsetMax = Vector2.zero;
             close.onClick.AddListener(Hide);
 
+            ApplyMode();
             _root.SetActive(false);
         }
 
@@ -70,9 +93,12 @@ namespace LunarDominion.UI
         private void BuildRowsScroll()
         {
             var scrollGo = new GameObject("RowsScroll");
+            _listScrollGo = scrollGo;
             scrollGo.transform.SetParent(_root.transform, false);
             var scrollRt = scrollGo.AddComponent<RectTransform>();
-            scrollRt.anchorMin = new Vector2(0.02f, 0.45f);
+            // The list owns the whole content area; reading a
+            // message hides it entirely (ApplyMode).
+            scrollRt.anchorMin = new Vector2(0.02f, 0.075f);
             scrollRt.anchorMax = new Vector2(0.98f, 0.82f);
             scrollRt.offsetMin = Vector2.zero;
             scrollRt.offsetMax = Vector2.zero;
@@ -123,14 +149,17 @@ namespace LunarDominion.UI
         // text's preferred height whenever the selection changes.
         private void BuildDetail()
         {
-            _detailTitle = UIHelpers.LabelInRect(_root, "DetailTitle", "Select a message", 28, Color.white,
-                new Rect(0.04f, 0.385f, 0.96f, 0.44f), TextAnchor.MiddleLeft);
+            // Reading mode: the message title sits under the summary
+            // and the body scroll owns the rest of the panel.
+            _detailTitle = UIHelpers.LabelInRect(_root, "DetailTitle", "Select a message", 30, Color.white,
+                new Rect(0.04f, 0.735f, 0.96f, 0.815f), TextAnchor.MiddleLeft);
 
             var scrollGo = new GameObject("DetailScroll");
+            _detailScrollGo = scrollGo;
             scrollGo.transform.SetParent(_root.transform, false);
             var scrollRt = scrollGo.AddComponent<RectTransform>();
             scrollRt.anchorMin = new Vector2(0.02f, 0.075f);
-            scrollRt.anchorMax = new Vector2(0.98f, 0.375f);
+            scrollRt.anchorMax = new Vector2(0.98f, 0.72f);
             scrollRt.offsetMin = Vector2.zero;
             scrollRt.offsetMax = Vector2.zero;
             var scrollBg = scrollGo.AddComponent<Image>();
@@ -197,8 +226,30 @@ namespace LunarDominion.UI
 
         public void Show()
         {
+            // Always open on the list.
+            _reading = false;
+            ApplyMode();
             _root.SetActive(true);
             Refresh();
+        }
+
+        private void BackToList()
+        {
+            _reading = false;
+            ApplyMode();
+            Refresh();
+        }
+
+        // Toggle the list vs the message reader. The list scroll
+        // keeps its full-area anchors either way — in reading mode
+        // it is simply inactive.
+        private void ApplyMode()
+        {
+            if (_listScrollGo != null) _listScrollGo.SetActive(!_reading);
+            if (_detailTitle != null) _detailTitle.gameObject.SetActive(_reading);
+            if (_detailScrollGo != null) _detailScrollGo.SetActive(_reading);
+            if (_markAllButton != null) _markAllButton.gameObject.SetActive(!_reading);
+            if (_backButton != null) _backButton.gameObject.SetActive(_reading);
         }
 
         public void Hide()
@@ -268,6 +319,10 @@ namespace LunarDominion.UI
         private void Select(long id)
         {
             _selectedId = id;
+            // Opening a message switches to reading mode: the list
+            // hides and the message takes over the panel.
+            _reading = true;
+            ApplyMode();
             // Marking read raises OnChanged, which refreshes this
             // view (and the top bar badge) through the Bootstrap.
             _inbox?.MarkRead(id);
