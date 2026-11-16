@@ -2213,7 +2213,7 @@ namespace LunarDominion.UI
                 domeRenderer.sharedMaterial = skyMat;
             }
             domeRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            domeRenderer.receiveShadow = false;
+            domeRenderer.receiveShadows = false;
 
             BuildRingedPlanet(_ambienceRoot.transform);
             BuildMotes(_ambienceRoot.transform);
@@ -2313,7 +2313,7 @@ namespace LunarDominion.UI
             discMat.SetColor("_BaseColor", Color.white);
             discRenderer.sharedMaterial = discMat;
             discRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            discRenderer.receiveShadow = false;
+            discRenderer.receiveShadows = false;
 
             // Ring: a flat translucent annulus in the same plane.
             var ring = new GameObject("PlanetRing");
@@ -2330,7 +2330,7 @@ namespace LunarDominion.UI
             ringMat.renderQueue = 3000;
             ringRenderer.sharedMaterial = ringMat;
             ringRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            ringRenderer.receiveShadow = false;
+            ringRenderer.receiveShadows = false;
         }
 
         private static Mesh BuildDiscMesh(float radius, int segments)
