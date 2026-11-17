@@ -2577,7 +2577,7 @@ namespace LunarDominion.UI
             // and re-sunk, rotations and lunge dirs follow.
             if (arena && campRoot != null && root != null && figures.Count > 0 && enemies.Count > 0)
             {
-                Vector3 leadWorld = root.TransformPoint(figBase[0]);
+                Vector3 leadWorld = root.transform.TransformPoint(figBase[0]);
                 Vector3 toLead = leadWorld - campRoot.position;
                 toLead.y = 0f;
                 if (toLead.sqrMagnitude > 0.01f)
