@@ -676,9 +676,12 @@ namespace LunarDominion.UI
                 _mechIdleState = ProbeAnimatorState(_mechAnimator,
                     "Idle_Single", "Idle", "idle", "legs_heavy_idle");
             if (_mechDeathState == null)
+                // Fall_Forward leads: Patrick's pick 2026-11-17
+                // after Fall_Back read as a rightward crumple.
+                // Fall_Back stays as the fallback.
                 _mechDeathState = ProbeAnimatorState(_mechAnimator,
-                    "Fall_Back", "Fall_Forward",
-                    "legs_heavy_fall_back", "legs_heavy_fall_forward",
+                    "Fall_Forward", "Fall_Back",
+                    "legs_heavy_fall_forward", "legs_heavy_fall_back",
                     "FallBack", "Death", "death");
         }
 
