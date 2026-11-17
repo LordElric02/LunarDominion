@@ -800,22 +800,27 @@ namespace LunarDominion.UI
             // offset below subtracts that placement a second time
             // and parks the visual ~20 units off the clone origin
             // (the 2026-11-17 invisible-adds bug — the boss build
-            // zeroes first for exactly this reason). Rotation is
-            // left as authored; the wrapper supplies the facing.
+            // zeroes first for exactly this reason). Facing is set
+            // on the instance exactly as the boss build does: the
+            // variant root is a plain prefab root, and whatever
+            // rotation the scratch scene left on it must not leak
+            // into the fight (first walker build put the yaw on
+            // the wrapper instead and the escorts stood side-on
+            // to the heroes, Patrick 2026-11-17).
             walker.transform.localPosition = Vector3.zero;
             walker.transform.localScale = Vector3.one;
+            walker.transform.localRotation = Quaternion.Euler(0f, MechBossYawDegrees, 0f);
             foreach (var collider in walker.GetComponentsInChildren<Collider>())
                 Destroy(collider);
 
             // Normalize to a fixed template height (see
             // WalkerDroneTargetHeight), feet on the template
             // origin and centred over it, so the fight's ground
-            // placement and offsets stay honest. The facing yaw
-            // is applied to the wrapper only AFTER this, so the
-            // bounds math below runs in unrotated space; the
-            // prefab instance's own rotation is never assigned
-            // (an imported model's root rotation is not ours to
-            // overwrite).
+            // placement and offsets stay honest. Bounds are read
+            // in wrapper space (the wrapper is identity at the
+            // origin here), which is the same frame the centring
+            // offset is applied in, so the instance's facing yaw
+            // does not disturb the math.
             var renderers = walker.GetComponentsInChildren<Renderer>();
             if (renderers.Length > 0)
             {
@@ -829,8 +834,6 @@ namespace LunarDominion.UI
                         -b.center.x * factor, -b.min.y * factor, -b.center.z * factor);
                 }
             }
-            wrapper.transform.localRotation = Quaternion.Euler(0f, MechBossYawDegrees, 0f);
-
             // Animation, same treatment as the boss: only the
             // legs Animator runs, root motion off (the fight owns
             // the position); any other Animator in the assembly
