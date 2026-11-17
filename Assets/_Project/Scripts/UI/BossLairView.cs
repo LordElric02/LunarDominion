@@ -88,6 +88,23 @@ namespace LunarDominion.UI
         private Material _coreMaterial;
         private Color _coreBaseEmission = Color.black;
 
+        // Mech boss visual (2026-11-17): when Patrick's assembled
+        // Mech Constructor Heavy Robot prefab is installed at
+        // Resources/Models/MechHeavyBoss (a paid pack — local-only,
+        // never in the repo), it takes over the arena boss visual
+        // and A.R.E.S.-09 is not built. Without it, nothing changes.
+        private GameObject _mechBossGo;
+        private Animator _mechAnimator;
+        private string _mechIdleState;
+        private string _mechDeathState;
+        private const float MechBossTargetHeight = 17.8f;
+        // Facing dial: the AresVisual wrapper already yaws -90 to
+        // face the FBX's +X forward onto the heroes. A +Z-forward
+        // model needs +90 here to end up facing the same way. If
+        // the mech ever stands sideways or backwards in the lair,
+        // this one constant is the fix (0 / 90 / 180 / 270).
+        private const float MechBossYawDegrees = 90f;
+
         // Cinematic C2: red edge vignette pulsed when a hero
         // takes a heavy hit (the fight raises OnHeroHeavyHit;
         // alpha decays per-frame in Update).
@@ -422,17 +439,30 @@ namespace LunarDominion.UI
             // towers over the ~3.2-unit heroes; the arena ceiling
             // was raised in LavaTube v3 to fit).
             _aresVisual.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
-            var aresModel = Instantiate(aresPrefab);
-            aresModel.name = "Ares09";
-            aresModel.transform.SetParent(_aresVisual.transform, false);
-            aresModel.transform.localScale = Vector3.one * 6f;
-            foreach (var collider in aresModel.GetComponentsInChildren<Collider>())
-                Destroy(collider);
+            // The mech visual, when installed, replaces A.R.E.S. as
+            // the arena boss model; A.R.E.S. is then not built at
+            // all, so the fight's rig search finds no A.R.E.S.
+            // empties and its pose system stands down on its own.
+            GameObject aresModel = null;
+            if (!BuildMechBossVisual())
+            {
+                aresModel = Instantiate(aresPrefab);
+                aresModel.name = "Ares09";
+                aresModel.transform.SetParent(_aresVisual.transform, false);
+                aresModel.transform.localScale = Vector3.one * 6f;
+                foreach (var collider in aresModel.GetComponentsInChildren<Collider>())
+                    Destroy(collider);
+            }
             _aresVisualOrigPos = _aresVisual.transform.localPosition;
             _aresVisualOrigRot = _aresVisual.transform.localRotation;
 
             // The chest core's material (instanced) so Phase 2 can
-            // pulse it without touching the shared FBX asset.
+            // pulse it without touching the shared FBX asset. Both
+            // A.R.E.S.-only captures below are skipped when the mech
+            // visual was built instead (aresModel stays null; the
+            // core pulse is null-guarded at every use site).
+            if (aresModel != null)
+            {
             foreach (var t in aresModel.GetComponentsInChildren<Transform>())
             {
                 if (t.name != "CoreChest") continue;
@@ -467,6 +497,7 @@ namespace LunarDominion.UI
                 var visorMaterial = new Material(visorShader);
                 visorMaterial.SetColor("_BaseColor", new Color(0.45f, 0.95f, 1.0f));
                 visorRenderer.sharedMaterial = visorMaterial;
+            }
             }
 
             // Boss key light (2026-11-14): the lair's own lights
@@ -534,6 +565,108 @@ namespace LunarDominion.UI
             _aresController.OnSquadDefeated += () => { if (_realtimeActive) StartCoroutine(RealtimeEndRoutine(false)); };
 
             _arenaAvailable = true;
+        }
+
+        // Builds the Mech Constructor Heavy Robot as the arena
+        // boss visual when its prefab is installed. Returns false
+        // (and builds nothing) when it is not, so the caller falls
+        // back to A.R.E.S.-09 exactly as before. The prefab is a
+        // paid asset: it lives only on Patrick's machine and is
+        // never pushed to the repo, so a fresh checkout takes the
+        // fallback path.
+        private bool BuildMechBossVisual()
+        {
+            GameObject mechPrefab = null;
+            try { mechPrefab = Resources.Load<GameObject>("Models/MechHeavyBoss"); }
+            catch (System.Exception e) { Debug.LogWarning("[BossLairView] MechHeavyBoss failed to load (Models/MechHeavyBoss): " + e.Message); }
+            if (mechPrefab == null) return false;
+
+            var mech = Instantiate(mechPrefab);
+            mech.name = "MechHeavyBoss";
+            mech.transform.SetParent(_aresVisual.transform, false);
+            // The prefab root carries whatever placement it had in
+            // the MechTest scene; the arena owns the transform, so
+            // all three are set explicitly here.
+            mech.transform.localPosition = Vector3.zero;
+            mech.transform.localRotation = Quaternion.Euler(0f, MechBossYawDegrees, 0f);
+            mech.transform.localScale = Vector3.one;
+            foreach (var collider in mech.GetComponentsInChildren<Collider>())
+                Destroy(collider);
+
+            // Scale to A.R.E.S.'s fighting height so the tuned
+            // fight camera and framing work unchanged, then centre
+            // the model on the boss spot with its feet on the floor.
+            // Every parent rotation is yaw-only, so the Y from the
+            // world bounds is exact in visual space.
+            var renderers = mech.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                if (b.size.y > 0.01f)
+                {
+                    float factor = Mathf.Clamp(MechBossTargetHeight / b.size.y, 0.1f, 60f);
+                    mech.transform.localScale = Vector3.one * factor;
+                    b = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                    var centerLocal = _aresVisual.transform.InverseTransformPoint(b.center);
+                    var floorLocal = _aresVisual.transform.InverseTransformPoint(
+                        new Vector3(b.center.x, b.min.y, b.center.z));
+                    mech.transform.localPosition = new Vector3(
+                        -centerLocal.x, -floorLocal.y, -centerLocal.z);
+                }
+            }
+
+            // Animation: only the root (legs) Animator runs, with
+            // root motion off — the fight code owns this model's
+            // position, and the pack's default state is a turning
+            // walk that would wander off the boss spot. Every other
+            // Animator in the assembly (cockpit, weapons) is
+            // disabled: their free-running clips animate part roots
+            // and tear the assembly apart — the MechTest lesson of
+            // 2026-11-17. The state names are probed, never assumed:
+            // a name the controller does not have is simply skipped.
+            _mechAnimator = mech.GetComponent<Animator>();
+            if (_mechAnimator == null) _mechAnimator = mech.GetComponentInChildren<Animator>();
+            foreach (var anim in mech.GetComponentsInChildren<Animator>(true))
+                if (anim != _mechAnimator) anim.enabled = false;
+            if (_mechAnimator != null)
+            {
+                _mechAnimator.applyRootMotion = false;
+                _mechIdleState = ProbeAnimatorState(_mechAnimator,
+                    "legs_heavy_idle", "Idle", "idle");
+                _mechDeathState = ProbeAnimatorState(_mechAnimator,
+                    "legs_heavy_fall_back", "legs_heavy_fall_forward",
+                    "FallBack", "Death", "death");
+                if (_mechIdleState != null) _mechAnimator.Play(_mechIdleState, 0, 0f);
+                else Debug.LogWarning("[BossLairView] MechHeavyBoss: no idle state found on the legs controller; the default state will play.");
+            }
+            _mechBossGo = mech;
+            Debug.Log("[BossLairView] MechHeavyBoss installed as the arena boss visual.");
+            return true;
+        }
+
+        private static string ProbeAnimatorState(Animator anim, params string[] candidates)
+        {
+            if (anim == null || anim.runtimeAnimatorController == null) return null;
+            foreach (var c in candidates)
+                if (!string.IsNullOrEmpty(c) && anim.HasState(0, Animator.StringToHash(c)))
+                    return c;
+            return null;
+        }
+
+        // Back to idle at every fight start, so a mech left fallen
+        // by a previous victory stands again for the next fight.
+        private void ResetMechBossPose()
+        {
+            if (_mechAnimator != null && _mechIdleState != null)
+                _mechAnimator.Play(_mechIdleState, 0, 0f);
+        }
+
+        private void PlayMechBossDeath()
+        {
+            if (_mechAnimator != null && _mechDeathState != null)
+                _mechAnimator.Play(_mechDeathState, 0, 0f);
         }
 
         private TelegraphRing MakeRing(Color color)
@@ -2056,6 +2189,7 @@ namespace LunarDominion.UI
             if (_surrenderLabel != null) _surrenderLabel.text = "Surrender";
             if (_turnHudRoutine != null) StopCoroutine(_turnHudRoutine);
             _turnHudRoutine = StartCoroutine(TurnHudRoutine());
+            ResetMechBossPose();
             _turnFight.Begin(heroes, bossHp, bossAtk, bossDef, _selectedBossLevel, scale,
                 _aresRoot.transform, _aresVisual.transform, _slamRing, _droneTemplate);
         }
@@ -2676,6 +2810,7 @@ namespace LunarDominion.UI
         private void OnTurnFightEnded(bool victory, bool timeout, List<int> fallen)
         {
             if (_turnEncounter == null || _turnSquad == null) return;
+            if (victory) PlayMechBossDeath();
             int rounds = _turnFight != null ? _turnFight.Round : 0;
             var result = _controller.Expeditions.CompleteHeroesTurnBased(
                 _turnEncounter, _turnSquad, fallen, victory, rounds, timeout);
