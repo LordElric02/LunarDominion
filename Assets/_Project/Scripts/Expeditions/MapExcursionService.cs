@@ -1132,12 +1132,13 @@ namespace LunarDominion.Expeditions
                     if (result.Victory) VanishCampSlot(SlotForPoint(point));
                     StartReturnMarch(slotIndex, point);
                 };
-                // On the Map, the fight animation plays first (~2s)
-                // and the bookkeeping runs when it ends. Off the Map
-                // (the march ran in the background, 2026-11-15) there
-                // is nothing to animate — resolve immediately; the
-                // result lands in the Inbox.
-                if (_view.IsVisible) _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, resolve);
+                // On the Map, the simulated fight plays first
+                // (~4-5s, 2026-11-16) and the bookkeeping runs when
+                // it ends. Off the Map (the march ran in the
+                // background, 2026-11-15) there is nothing to
+                // animate — resolve immediately; the result lands
+                // in the Inbox.
+                if (_view.IsVisible) _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, result.Rounds, CasualtyFrac(result), EnemyTypesOf(encounter), resolve);
                 else resolve();
             }
             else
@@ -1170,11 +1171,11 @@ namespace LunarDominion.Expeditions
             {
                 _saveGame?.Invoke();
                 _notifyChanged?.Invoke();
-                // Play the fight animation first (~2s on the map), then
+                // Play the fight animation first (on the map), then
                 // show the result, vanish the boss on victory, and march
                 // back. The combat itself already resolved above — the
                 // animation is purely visual.
-                _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, () =>
+                _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, result.Rounds, CasualtyFrac(result), EnemyTypesOf(encounter), () =>
                 {
                     OnExcursionResult?.Invoke(
                         result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
@@ -1187,6 +1188,33 @@ namespace LunarDominion.Expeditions
                 OnExcursionResult?.Invoke(point.Title, reason);
                 StartReturnMarch(slotIndex, point);
             }
+        }
+
+        /// <summary>Share of the squad that fell in a resolved
+        /// fight (0 = flawless, 1 = wiped out) — drives how many
+        /// figures fall in the simulated fight animation.</summary>
+        private static float CasualtyFrac(CombatOutcome result)
+        {
+            int dead = result != null && result.DeadSquadIndices != null ? result.DeadSquadIndices.Count : 0;
+            int alive = result != null && result.SurvivingSquadIndices != null ? result.SurvivingSquadIndices.Count : 0;
+            int total = dead + alive;
+            return total > 0 ? (float)dead / total : 0f;
+        }
+
+        /// <summary>The encounter's distinct enemy classes, in
+        /// spawn order — the simulated fight shows one enemy figure
+        /// per type.</summary>
+        private static List<UnitClass> EnemyTypesOf(EncounterDefinition encounter)
+        {
+            var types = new List<UnitClass>();
+            if (encounter != null && encounter.Spawns != null)
+            {
+                foreach (var spawn in encounter.Spawns)
+                {
+                    if (!types.Contains(spawn.Class)) types.Add(spawn.Class);
+                }
+            }
+            return types;
         }
 
         // Return march: back to the castle, then the excursion ends.

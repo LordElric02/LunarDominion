@@ -2262,82 +2262,240 @@ namespace LunarDominion.UI
             }
         }
 
-        // Fight animation (2026-11-09, last feature of the phase;
-        // Phase 2 2026-11-12: the squad figures do the fighting): a
-        // short (~2s) clash on the map when the army reaches a camp.
-        // Phase 1 (~0.9s) is the clash: the figures jitter in their
-        // ring and the creatures shake. Phase 2 (~1.1s) is the
-        // outcome: on victory the creatures tip over and sink away
-        // while the figures bounce; on defeat the figures shake and
-        // sink while the creatures hop. Transforms are restored at
-        // the end (so a respawned camp is upright), then onComplete
-        // fires — the service shows the result panel, vanishes the
-        // camp on victory, and starts the return march. The restore +
-        // hide happen in the same frame, so the player never sees
-        // the creatures pop back upright.
-        public void PlayFightAnimation(int slot, int campIndex, bool victory, Action onComplete)
+        // Simulated camp fight (2026-11-09; rebuilt 2026-11-16,
+        // Patrick: "more of a simulated fight"): the combat has
+        // already resolved in the service — this is presentation of
+        // the known outcome, in three beats over ~4-5s. Face-off:
+        // enemy figures (one per enemy type in the encounter,
+        // rust-red class models) rise inside the army's ring.
+        // Clash: both sides lunge at each other in pulses, the
+        // length scaled by the fight's real round count, and
+        // figures on the losing side tip over as it goes — the
+        // army's fall count follows the real casualty fraction.
+        // Outcome: on victory the last enemies sink away while the
+        // army bounces; on defeat the survivors shake while the
+        // enemies hop. Transforms are restored at the end, then
+        // onComplete fires — the service shows the result, vanishes
+        // the camp on victory, and starts the return march.
+        public void PlayFightAnimation(int slot, int campIndex, bool victory, int rounds, float playerCasualtyFrac, List<UnitClass> enemyTypes, Action onComplete)
         {
-            StartCoroutine(FightAnimationRoutine(slot, campIndex, victory, onComplete));
+            StartCoroutine(FightAnimationRoutine(slot, campIndex, victory, rounds, playerCasualtyFrac, enemyTypes, onComplete));
         }
 
-        private IEnumerator FightAnimationRoutine(int slot, int campIndex, bool victory, Action onComplete)
+        // One enemy figure for the camp fight: the class model in a
+        // hostile rust-red tint. The camp creatures have no minis of
+        // their own — stylized, matching the one-figure-per-type
+        // march. The tint instances each renderer's material, so
+        // the shared tier-trim materials stay untouched.
+        private GameObject BuildEnemyFigure(UnitClass cls)
         {
-            // The camp's creatures (not the camp marker itself — its
-            // name is the camp Title, creatures are "<Title> Creature").
-            // Boss lair (2026-11-09): the War Robot is a BossLair
-            // creature, and it animates the same way as a camp creature.
-            var creatures = new List<GameObject>();
-            var origPos = new List<Vector3>();
-            var origRot = new List<Quaternion>();
-            foreach (var point in _mapPoints)
+            UnitId rep;
+            switch (cls)
             {
-                if (point.Data == null || point.Data.Index != campIndex) continue;
-                if (point.Data.Kind != MapPointKind.Camp && point.Data.Kind != MapPointKind.BossLair) continue;
-                if (point.Go == null) continue;
-                if (!point.Go.name.EndsWith(" Creature")) continue;
-                creatures.Add(point.Go);
-                origPos.Add(point.Go.transform.position);
-                origRot.Add(point.Go.transform.rotation);
+                case UnitClass.Ranged: rep = UnitId.PulseTrooper; break;
+                case UnitClass.Mechanized: rep = UnitId.AssaultMech; break;
+                default: rep = UnitId.ScoutMarine; break;
             }
-            // The squad figures ring the camp and fight it (Phase 2).
-            // The per-frame squad tick hands them over for the length
-            // of the animation and gets them back at the end.
+            var fig = BuildFigure(rep);
+            var tint = new Color(0.60f, 0.20f, 0.16f, 1f);
+            foreach (var r in fig.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                var m = r.material;
+                if (m != null && m.HasProperty("_Color")) m.color = m.color * tint;
+            }
+            return fig;
+        }
+
+        private static List<int> ShuffledIndices(int count)
+        {
+            var list = new List<int>();
+            for (int i = 0; i < count; i++) list.Add(i);
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                int j = UnityEngine.Random.Range(0, i + 1);
+                int tmp = list[i];
+                list[i] = list[j];
+                list[j] = tmp;
+            }
+            return list;
+        }
+
+        private static float FallProgress(float fallStart, float t)
+        {
+            return fallStart < 0f ? 0f : Mathf.Clamp01((t - fallStart) / 0.35f);
+        }
+
+        private static int PickStanding(int count, float[] fallStarts, float t)
+        {
+            int standing = 0;
+            for (int i = 0; i < count; i++)
+                if (fallStarts[i] < 0f || fallStarts[i] > t) standing++;
+            if (standing == 0) return -1;
+            int pick = UnityEngine.Random.Range(0, standing);
+            for (int i = 0; i < count; i++)
+            {
+                if (fallStarts[i] >= 0f && fallStarts[i] <= t) continue;
+                if (pick-- == 0) return i;
+            }
+            return -1;
+        }
+
+        private IEnumerator FightAnimationRoutine(int slot, int campIndex, bool victory, int rounds, float playerCasualtyFrac, List<UnitClass> enemyTypes, Action onComplete)
+        {
             var figures = slot >= 0 && slot < _marchMarkers.Length ? _squadFigures[slot] : new List<GameObject>();
             var figOrig = new List<Vector3>();
-            foreach (var fig in figures) figOrig.Add(fig != null ? fig.transform.localPosition : Vector3.zero);
-            if (slot >= 0 && slot < _marchMarkers.Length)
+            var figOrigRot = new List<Quaternion>();
+            foreach (var fig in figures)
+            {
+                figOrig.Add(fig != null ? fig.transform.localPosition : Vector3.zero);
+                figOrigRot.Add(fig != null ? fig.transform.localRotation : Quaternion.identity);
+            }
+            var root = slot >= 0 && slot < _marchMarkers.Length ? _marchMarkers[slot] : null;
+            if (root != null)
             {
                 _squadModes[slot] = SquadModeFighting;
                 _squadAnimOwned[slot] = true;
             }
 
-            // Phase 1 — clash (~0.9s): marker pulses, creatures shake.
-            float clashTime = 0.9f;
-            float t = 0f;
-            while (t < clashTime)
+            // Enemy figures: ringed inside the army's ring (radius
+            // 4.2 vs the army's 8), facing outward to meet them.
+            var enemies = new List<GameObject>();
+            var enemyOrig = new List<Vector3>();
+            var enemyOrigRot = new List<Quaternion>();
+            float groundY = 0f;
+            if (figOrig.Count > 0)
             {
-                // Pause while the Map is hidden (the player left the tab
-                // mid-animation) — resume when they come back.
+                float sum = 0f;
+                foreach (var p in figOrig) sum += p.y;
+                groundY = sum / figOrig.Count;
+            }
+            if (root != null && enemyTypes != null)
+            {
+                int n = enemyTypes.Count;
+                for (int i = 0; i < n; i++)
+                {
+                    var fig = BuildEnemyFigure(enemyTypes[i]);
+                    fig.transform.SetParent(root.transform, false);
+                    float angle = i * (Mathf.PI * 2f / Mathf.Max(1, n)) + 0.6f;
+                    var pos = new Vector3(Mathf.Sin(angle) * 4.2f, groundY, Mathf.Cos(angle) * 4.2f);
+                    enemyOrig.Add(pos);
+                    enemyOrigRot.Add(Quaternion.Euler(0f, Mathf.Atan2(pos.x, pos.z) * Mathf.Rad2Deg, 0f));
+                    fig.transform.localPosition = pos + new Vector3(0f, -3f, 0f);
+                    fig.transform.localRotation = enemyOrigRot[i];
+                    enemies.Add(fig);
+                }
+            }
+
+            // Who falls, and when: falls spread across the clash.
+            // The army's count follows the real casualty fraction
+            // (a victory always leaves at least one figure standing,
+            // as the real fight leaves a survivor); on victory every
+            // enemy falls, on defeat none do.
+            float clashTime = Mathf.Clamp(0.45f * Mathf.Max(1, rounds), 1.6f, 3.2f);
+            int playerFalls = Mathf.RoundToInt(figures.Count * Mathf.Clamp01(playerCasualtyFrac));
+            if (victory && figures.Count > 0) playerFalls = Mathf.Min(playerFalls, figures.Count - 1);
+            int enemyFalls = victory ? enemies.Count : 0;
+            var pFallStart = new float[figures.Count];
+            for (int i = 0; i < pFallStart.Length; i++) pFallStart[i] = -1f;
+            var playerOrder = ShuffledIndices(figures.Count);
+            for (int k = 0; k < playerFalls && k < playerOrder.Count; k++)
+                pFallStart[playerOrder[k]] = clashTime * (k + 0.5f) / Mathf.Max(1, playerFalls);
+            var eFallStart = new float[enemies.Count];
+            for (int i = 0; i < eFallStart.Length; i++) eFallStart[i] = -1f;
+            var enemyOrder = ShuffledIndices(enemies.Count);
+            for (int k = 0; k < enemyFalls && k < enemyOrder.Count; k++)
+                eFallStart[enemyOrder[k]] = clashTime * (k + 0.5f) / Mathf.Max(1, enemyFalls);
+
+            // Phase 0 — face-off (~0.6s): the enemies rise.
+            float faceTime = 0.6f;
+            float t = 0f;
+            while (t < faceTime)
+            {
                 while (!_visible) yield return null;
                 t += Time.deltaTime;
-                float p = Mathf.Clamp01(t / clashTime);
+                float p = Mathf.Clamp01(t / faceTime);
+                float rise = p * p * (3f - 2f * p);
+                for (int i = 0; i < enemies.Count; i++)
+                {
+                    var fig = enemies[i];
+                    if (fig == null) continue;
+                    var pos = enemyOrig[i];
+                    pos.y = enemyOrig[i].y - 3f * (1f - rise);
+                    fig.transform.localPosition = pos;
+                }
+                yield return null;
+            }
+
+            // Phase 1 — clash: lunge pulses, hit flashes, falls.
+            t = 0f;
+            int pulse = -1;
+            float pulseStart = 0f;
+            int flashPlayer = -1;
+            int flashEnemy = -1;
+            while (t < clashTime)
+            {
+                while (!_visible) yield return null;
+                t += Time.deltaTime;
+                int curPulse = Mathf.FloorToInt(t / 0.45f);
+                if (curPulse != pulse)
+                {
+                    pulse = curPulse;
+                    pulseStart = t;
+                    flashPlayer = PickStanding(figures.Count, pFallStart, t);
+                    flashEnemy = PickStanding(enemies.Count, eFallStart, t);
+                }
+                float lunge = Mathf.Sin(Mathf.Clamp01((t % 0.45f) / 0.30f) * Mathf.PI);
+                float flashP = Mathf.Clamp01(1f - (t - pulseStart) / 0.18f);
                 for (int f = 0; f < figures.Count; f++)
                 {
                     var fig = figures[f];
                     if (fig == null) continue;
-                    Vector3 jitter = new Vector3(
-                        UnityEngine.Random.Range(-0.35f, 0.35f), 0f,
-                        UnityEngine.Random.Range(-0.35f, 0.35f));
-                    fig.transform.localPosition = figOrig[f] + jitter;
+                    float fp = FallProgress(pFallStart[f], t);
+                    var basePos = figOrig[f];
+                    Vector3 pos = basePos;
+                    Quaternion rot = figOrigRot[f];
+                    if (fp > 0f)
+                    {
+                        pos.y = basePos.y - 0.6f * fp;
+                        rot = figOrigRot[f] * Quaternion.Euler(80f * fp, 0f, 0f);
+                    }
+                    else
+                    {
+                        var dir = new Vector3(-basePos.x, 0f, -basePos.z);
+                        dir = dir.sqrMagnitude > 0.01f ? dir.normalized : new Vector3(0f, 0f, -1f);
+                        pos += dir * (0.85f * lunge);
+                        pos.x += UnityEngine.Random.Range(-0.12f, 0.12f);
+                        pos.z += UnityEngine.Random.Range(-0.12f, 0.12f);
+                    }
+                    fig.transform.localPosition = pos;
+                    fig.transform.localRotation = rot;
+                    fig.transform.localScale = Vector3.one * (f == flashPlayer ? 1f + 0.3f * flashP : 1f);
                 }
-                for (int i = 0; i < creatures.Count; i++)
+                for (int i = 0; i < enemies.Count; i++)
                 {
-                    var go = creatures[i];
-                    if (go == null) continue;
-                    Vector3 jitter = new Vector3(
-                        UnityEngine.Random.Range(-0.7f, 0.7f), 0f,
-                        UnityEngine.Random.Range(-0.7f, 0.7f));
-                    go.transform.position = origPos[i] + jitter;
+                    var fig = enemies[i];
+                    if (fig == null) continue;
+                    float fp = FallProgress(eFallStart[i], t);
+                    var basePos = enemyOrig[i];
+                    Vector3 pos = basePos;
+                    Quaternion rot = enemyOrigRot[i];
+                    if (fp > 0f)
+                    {
+                        pos.y = basePos.y - 0.6f * fp;
+                        rot = enemyOrigRot[i] * Quaternion.Euler(80f * fp, 0f, 0f);
+                    }
+                    else
+                    {
+                        var dir = new Vector3(basePos.x, 0f, basePos.z);
+                        dir = dir.sqrMagnitude > 0.01f ? dir.normalized : new Vector3(0f, 0f, 1f);
+                        pos += dir * (0.85f * lunge);
+                        pos.x += UnityEngine.Random.Range(-0.12f, 0.12f);
+                        pos.z += UnityEngine.Random.Range(-0.12f, 0.12f);
+                    }
+                    fig.transform.localPosition = pos;
+                    fig.transform.localRotation = rot;
+                    fig.transform.localScale = Vector3.one * (i == flashEnemy ? 1f + 0.3f * flashP : 1f);
                 }
                 yield return null;
             }
@@ -2350,71 +2508,65 @@ namespace LunarDominion.UI
                 while (!_visible) yield return null;
                 t += Time.deltaTime;
                 float p = Mathf.Clamp01(t / outcomeTime);
-                if (victory)
+                for (int f = 0; f < figures.Count; f++)
                 {
-                    // Creatures tip over and sink away.
-                    for (int i = 0; i < creatures.Count; i++)
+                    var fig = figures[f];
+                    if (fig == null) continue;
+                    float fp = FallProgress(pFallStart[f], clashTime);
+                    var pos = figOrig[f];
+                    if (fp > 0f)
                     {
-                        var go = creatures[i];
-                        if (go == null) continue;
-                        go.transform.rotation = origRot[i] * Quaternion.Euler(80f * p, 0f, 0f);
-                        Vector3 pos = origPos[i];
-                        pos.y = origPos[i].y - 2f * p;
-                        go.transform.position = pos;
+                        pos.y = figOrig[f].y - 0.6f * fp;
+                        fig.transform.localPosition = pos;
+                        fig.transform.localRotation = figOrigRot[f] * Quaternion.Euler(80f * fp, 0f, 0f);
                     }
-                    // Figures do a small victory bounce.
-                    for (int f = 0; f < figures.Count; f++)
+                    else if (victory)
                     {
-                        var fig = figures[f];
-                        if (fig == null) continue;
-                        Vector3 pos = figOrig[f];
                         pos.y = figOrig[f].y + Mathf.Sin(p * Mathf.PI) * 1.1f;
                         fig.transform.localPosition = pos;
                     }
-                }
-                else
-                {
-                    // Figures shake and sink (the army is broken);
-                    // creatures hop once (they won).
-                    for (int f = 0; f < figures.Count; f++)
+                    else
                     {
-                        var fig = figures[f];
-                        if (fig == null) continue;
-                        Vector3 jitter = new Vector3(
-                            UnityEngine.Random.Range(-0.8f, 0.8f), 0f,
-                            UnityEngine.Random.Range(-0.8f, 0.8f));
-                        Vector3 pos = figOrig[f] + jitter;
+                        pos.x += UnityEngine.Random.Range(-0.5f, 0.5f);
+                        pos.z += UnityEngine.Random.Range(-0.5f, 0.5f);
                         pos.y = figOrig[f].y - 0.6f * p;
                         fig.transform.localPosition = pos;
                     }
-                    for (int i = 0; i < creatures.Count; i++)
+                    fig.transform.localScale = Vector3.one;
+                }
+                for (int i = 0; i < enemies.Count; i++)
+                {
+                    var fig = enemies[i];
+                    if (fig == null) continue;
+                    var pos = enemyOrig[i];
+                    if (victory)
                     {
-                        var go = creatures[i];
-                        if (go == null) continue;
-                        Vector3 pos = origPos[i];
-                        pos.y = origPos[i].y + Mathf.Sin(p * Mathf.PI) * 1.2f;
-                        go.transform.position = pos;
-                        go.transform.rotation = origRot[i];
+                        float fp = Mathf.Max(FallProgress(eFallStart[i], clashTime), p);
+                        pos.y = enemyOrig[i].y - 0.6f * fp - 1.4f * p;
+                        fig.transform.localPosition = pos;
+                        fig.transform.localRotation = enemyOrigRot[i] * Quaternion.Euler(80f * fp, 0f, 0f);
                     }
+                    else
+                    {
+                        pos.y = enemyOrig[i].y + Mathf.Sin(p * Mathf.PI) * 1.2f;
+                        fig.transform.localPosition = pos;
+                        fig.transform.localRotation = enemyOrigRot[i];
+                    }
+                    fig.transform.localScale = Vector3.one;
                 }
                 yield return null;
             }
 
-            // Restore transforms (so a respawned camp is upright and the
-            // marker is full-size for the return march), then finish.
-            for (int i = 0; i < creatures.Count; i++)
-            {
-                var go = creatures[i];
-                if (go == null) continue;
-                go.transform.position = origPos[i];
-                go.transform.rotation = origRot[i];
-            }
+            // Restore the army figures, remove the enemies, finish.
             for (int f = 0; f < figures.Count; f++)
             {
                 var fig = figures[f];
                 if (fig == null) continue;
                 fig.transform.localPosition = figOrig[f];
+                fig.transform.localRotation = figOrigRot[f];
+                fig.transform.localScale = Vector3.one;
             }
+            foreach (var fig in enemies) if (fig != null) Destroy(fig);
             if (slot >= 0 && slot < _marchMarkers.Length) _squadAnimOwned[slot] = false;
             onComplete?.Invoke();
         }
