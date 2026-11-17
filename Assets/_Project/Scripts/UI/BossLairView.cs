@@ -619,13 +619,20 @@ namespace LunarDominion.UI
 
             // Animation: only the root (legs) Animator runs, with
             // root motion off — the fight code owns this model's
-            // position, and the pack's default state is a turning
-            // walk that would wander off the boss spot. Every other
-            // Animator in the assembly (cockpit, weapons) is
-            // disabled: their free-running clips animate part roots
-            // and tear the assembly apart — the MechTest lesson of
-            // 2026-11-17. The state names are probed, never assumed:
-            // a name the controller does not have is simply skipped.
+            // position. Every other Animator in the assembly
+            // (cockpit, weapons) is disabled: their free-running
+            // clips animate part roots and tear the assembly apart —
+            // the MechTest lesson of 2026-11-17. The state names
+            // are probed, never assumed: a name the controller does
+            // not have is simply skipped. Names verified against
+            // the Legs_Heavy_Ctrl graph (Patrick's screenshot,
+            // 2026-11-17): the controller's DEFAULT state is
+            // Run_Turn_L — a running left turn, which is why the
+            // mech circled in MechTest and danced in the lair —
+            // and its gameplay idle hub is Idle_Single (a plain
+            // "Idle" state also exists but is disconnected and
+            // unused by the graph). The fall states are Fall_Back
+            // and Fall_Forward.
             _mechAnimator = mech.GetComponent<Animator>();
             if (_mechAnimator == null) _mechAnimator = mech.GetComponentInChildren<Animator>();
             foreach (var anim in mech.GetComponentsInChildren<Animator>(true))
@@ -634,8 +641,9 @@ namespace LunarDominion.UI
             {
                 _mechAnimator.applyRootMotion = false;
                 _mechIdleState = ProbeAnimatorState(_mechAnimator,
-                    "legs_heavy_idle", "Idle", "idle");
+                    "Idle_Single", "Idle", "idle", "legs_heavy_idle");
                 _mechDeathState = ProbeAnimatorState(_mechAnimator,
+                    "Fall_Back", "Fall_Forward",
                     "legs_heavy_fall_back", "legs_heavy_fall_forward",
                     "FallBack", "Death", "death");
                 if (_mechIdleState != null) _mechAnimator.Play(_mechIdleState, 0, 0f);
