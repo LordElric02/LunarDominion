@@ -1138,7 +1138,7 @@ namespace LunarDominion.Expeditions
                 // background, 2026-11-15) there is nothing to
                 // animate — resolve immediately; the result lands
                 // in the Inbox.
-                if (_view.IsVisible) _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, result.Rounds, CasualtyFrac(result, squad.Count + heroSquad.Count), EnemyTypesOf(encounter), resolve);
+                if (_view.IsVisible) _view.PlayFightAnimation(slotIndex, point.Index, point.Tier, SlotForPoint(point), result.Victory, result.Rounds, CasualtyFrac(result, squad.Count + heroSquad.Count), EnemyTypesOf(encounter), resolve);
                 else resolve();
             }
             else
@@ -1175,7 +1175,7 @@ namespace LunarDominion.Expeditions
                 // show the result, vanish the boss on victory, and march
                 // back. The combat itself already resolved above — the
                 // animation is purely visual.
-                _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, result.Rounds, CasualtyFrac(result, squad.Count), EnemyTypesOf(encounter), () =>
+                _view.PlayFightAnimation(slotIndex, point.Index, 0, -1, result.Victory, result.Rounds, CasualtyFrac(result, squad.Count), EnemyTypesOf(encounter), () =>
                 {
                     OnExcursionResult?.Invoke(
                         result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),

@@ -364,6 +364,39 @@ namespace LunarDominion.UI
             { 0f, 1f, 1f, 1f, 1.45f, 1.4f, 1.45f };
         private readonly GameObject[] _campPrefabs = new GameObject[7];
 
+        // Arena swap (Patrick 2026-11-16: the simulated camp
+        // fight "needs more work" - he picked the full arena
+        // version): for the duration of a camp fight the camp
+        // structure sinks away and a dedicated creature model
+        // takes its place at full scale, the army's stylized
+        // figures grow to arena size, and the camera pushes in.
+        // On victory the creatures collapse and the camp then
+        // vanishes as usual; on defeat they burrow away and
+        // the structure rises back untouched. One signature
+        // creature per tier - a tier whose path is still null
+        // (or whose FBX is not installed) falls back to the
+        // simulated fight, so the feature lands tier by tier.
+        private static readonly string[] ArenaCreaturePaths =
+        {
+            null, // tier 0 = no camp
+            "Models/ArenaSporeCrawler",
+            null, // Tier 2 Void Stalker - model pending
+            null, // Tier 3 Brood Tyrant - model pending
+            null, // Tier 4 Ashen Ravager - model pending
+            null, // Tier 5 Dread Stalker - model pending
+            null, // Tier 6 Void Tyrant - model pending
+        };
+        private readonly GameObject[] _arenaPrefabs = new GameObject[7];
+        // While an arena fight owns the camera, Update leaves
+        // pan/zoom/tap input alone - the fight coroutine is
+        // the only writer of _panOffset/_camDist.
+        private bool _arenaCameraActive;
+        private const float ArenaCamDist = 50f;
+        private const float ArenaFigureScale = 2.3f;
+        private const float ArenaRingRadius = 13.5f;
+        private const float ArenaAnchorScale = 1.35f;
+        private const float ArenaKinScale = 0.8f;
+
         // Sculpted terrain height (2026-11-12, map revisit Phase 1):
         // the ExteriorTerrainV2 mesh is an analytic heightfield
         // (dunes + broad highland rises + craters), flattened to
@@ -1598,6 +1631,11 @@ namespace LunarDominion.UI
             if (_motes != null) _motes.position = new Vector3(_panOffset.x, 16f, _panOffset.z);
             TickSquads(Time.deltaTime);
             TickSearch(Time.deltaTime);
+            // Arena swap: while a camp fight's arena owns the
+            // camera, pan/zoom/tap input is suspended - the
+            // fight coroutine drives _panOffset/_camDist itself
+            // and restores them before it completes.
+            if (_arenaCameraActive) return;
             // Arrow keys pan the map camera (PC). Same pattern as the
             // tap input below: Keyboard when the Input System is
             // enabled, legacy Input otherwise.
@@ -2262,24 +2300,65 @@ namespace LunarDominion.UI
             }
         }
 
-        // Simulated camp fight (2026-11-09; rebuilt 2026-11-16,
-        // Patrick: "more of a simulated fight"): the combat has
-        // already resolved in the service — this is presentation of
-        // the known outcome, in three beats over ~4-5s. Face-off:
-        // enemy figures (one per enemy type in the encounter,
-        // rust-red class models) rise inside the army's ring.
-        // Clash: both sides lunge at each other in pulses, the
-        // length scaled by the fight's real round count, and
-        // figures on the losing side tip over as it goes — the
-        // army's fall count follows the real casualty fraction.
-        // Outcome: on victory the last enemies sink away while the
-        // army bounces; on defeat the survivors shake while the
-        // enemies hop. Transforms are restored at the end, then
-        // onComplete fires — the service shows the result, vanishes
-        // the camp on victory, and starts the return march.
-        public void PlayFightAnimation(int slot, int campIndex, bool victory, int rounds, float playerCasualtyFrac, List<UnitClass> enemyTypes, Action onComplete)
+        // Camp fight presentation (2026-11-09; simulated version
+        // rebuilt 2026-11-16; arena swap added the same day at
+        // Patrick's direction): the combat has already resolved
+        // in the service — this is presentation of the known
+        // outcome. When the camp's tier has an arena creature
+        // (see ArenaCreaturePaths), the fight plays as the ARENA
+        // SWAP: the camp structure sinks, the creature and its
+        // kin rise in its place, the army grows to arena size
+        // on a wider ring, and the camera pushes in; the clash
+        // and outcome beats run at that scale, then everything
+        // swaps back before onComplete fires. Tiers without a
+        // creature keep the SIMULATED fight: enemy figures (one
+        // per enemy type in the encounter, rust-red class
+        // models) rise inside the army's ring and clash there.
+        // Either way the clash length scales with the fight's
+        // real round count, figures on the losing side tip over
+        // as it goes, and the army's fall count follows the
+        // real casualty fraction. onComplete fires last — the
+        // service shows the result, vanishes the camp on
+        // victory, and starts the return march.
+        public void PlayFightAnimation(int slot, int campIndex, int campTier, int campSlot, bool victory, int rounds, float playerCasualtyFrac, List<UnitClass> enemyTypes, Action onComplete)
         {
-            StartCoroutine(FightAnimationRoutine(slot, campIndex, victory, rounds, playerCasualtyFrac, enemyTypes, onComplete));
+            StartCoroutine(FightAnimationRoutine(slot, campIndex, campTier, campSlot, victory, rounds, playerCasualtyFrac, enemyTypes, onComplete));
+        }
+
+        // One arena creature for the camp fight: the tier's
+        // dedicated Blender model inside a wrapper + facing
+        // pivot (the creatures are authored facing +X like the
+        // troops, so the same 180-degree pivot puts the front
+        // on the wrapper's +Z; the imported model's own
+        // transform is never touched). Null when the tier has
+        // no creature yet or its FBX is not installed — the
+        // caller then falls back to the simulated fight.
+        private GameObject BuildArenaCreature(int tier)
+        {
+            if (tier < 1 || tier > 6) return null;
+            var path = ArenaCreaturePaths[tier];
+            if (string.IsNullOrEmpty(path)) return null;
+            if (_arenaPrefabs[tier] == null)
+            {
+                try
+                {
+                    _arenaPrefabs[tier] = Resources.Load<GameObject>(path);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[ExteriorView] Arena creature failed to load (" + path + "): " + e.Message);
+                }
+            }
+            var prefab = _arenaPrefabs[tier];
+            if (prefab == null) return null;
+            var wrap = new GameObject("ArenaCreature");
+            var facing = new GameObject("Facing");
+            facing.transform.SetParent(wrap.transform, false);
+            facing.transform.localRotation = Quaternion.Euler(0f, FigureFacingOffsetDeg, 0f);
+            var model = Instantiate(prefab);
+            model.transform.SetParent(facing.transform, false);
+            foreach (var col in model.GetComponentsInChildren<Collider>(true)) Destroy(col);
+            return wrap;
         }
 
         // One enemy figure for the camp fight: the class model in a
@@ -2341,15 +2420,17 @@ namespace LunarDominion.UI
             return -1;
         }
 
-        private IEnumerator FightAnimationRoutine(int slot, int campIndex, bool victory, int rounds, float playerCasualtyFrac, List<UnitClass> enemyTypes, Action onComplete)
+        private IEnumerator FightAnimationRoutine(int slot, int campIndex, int campTier, int campSlot, bool victory, int rounds, float playerCasualtyFrac, List<UnitClass> enemyTypes, Action onComplete)
         {
             var figures = slot >= 0 && slot < _marchMarkers.Length ? _squadFigures[slot] : new List<GameObject>();
             var figOrig = new List<Vector3>();
             var figOrigRot = new List<Quaternion>();
+            var figOrigScale = new List<Vector3>();
             foreach (var fig in figures)
             {
                 figOrig.Add(fig != null ? fig.transform.localPosition : Vector3.zero);
                 figOrigRot.Add(fig != null ? fig.transform.localRotation : Quaternion.identity);
+                figOrigScale.Add(fig != null ? fig.transform.localScale : Vector3.one);
             }
             var root = slot >= 0 && slot < _marchMarkers.Length ? _marchMarkers[slot] : null;
             if (root != null)
@@ -2358,20 +2439,92 @@ namespace LunarDominion.UI
                 _squadAnimOwned[slot] = true;
             }
 
-            // Enemy figures: ringed inside the army's ring (radius
-            // 4.2 vs the army's 8), facing outward to meet them.
-            var enemies = new List<GameObject>();
-            var enemyOrig = new List<Vector3>();
-            var enemyOrigRot = new List<Quaternion>();
-            float groundY = 0f;
-            if (figOrig.Count > 0)
+            // ---- Arena swap setup --------------------------------
+            // The creatures stand on the camp slot's root (its y
+            // is the flattened terrain), so they plant on the
+            // ground instead of riding at the march markers'
+            // height. The structure's transform is captured so
+            // the swap can sink it and put it back exactly.
+            Transform campRoot = null;
+            GameObject structure = null;
+            Vector3 structOrigPos = Vector3.zero;
+            Vector3 structOrigScale = Vector3.one;
+            if (campSlot >= 0 && campSlot < CampSlotCount && _campSlotMarkers[campSlot] != null && _campSlotMarkers[campSlot].Go != null)
             {
-                float sum = 0f;
-                foreach (var p in figOrig) sum += p.y;
-                groundY = sum / figOrig.Count;
+                campRoot = _campSlotMarkers[campSlot].Go.transform;
+                structure = _campSlotStructures[campSlot];
+                if (structure != null)
+                {
+                    structOrigPos = structure.transform.localPosition;
+                    structOrigScale = structure.transform.localScale;
+                }
             }
-            if (root != null && enemyTypes != null)
+
+            var enemies = new List<GameObject>();
+            var enemyBase = new List<Vector3>();
+            var enemyBaseRot = new List<Quaternion>();
+            var enemyBaseScale = new List<Vector3>();
+            var enemyLungeDir = new List<Vector3>();
+            bool arena = false;
+            Vector3 arenaFocus = Vector3.zero;
+            if (campRoot != null)
             {
+                var anchor = BuildArenaCreature(campTier);
+                if (anchor != null)
+                {
+                    arena = true;
+                    // The pack faces the base - the direction
+                    // the army marched in from.
+                    Vector3 campPos = campRoot.position;
+                    var toBase = new Vector3(-campPos.x, 0f, -campPos.z);
+                    float faceYaw = toBase.sqrMagnitude > 0.01f
+                        ? Mathf.Atan2(toBase.x, toBase.z) * Mathf.Rad2Deg
+                        : 0f;
+                    var faceDir = new Vector3(Mathf.Sin(faceYaw * Mathf.Deg2Rad), 0f, Mathf.Cos(faceYaw * Mathf.Deg2Rad));
+                    var perp = new Vector3(faceDir.z, 0f, -faceDir.x);
+                    // Anchor at the centre; two kin behind it,
+                    // flanking, at a smaller scale.
+                    var spots = new[]
+                    {
+                        new KeyValuePair<Vector3, float>(Vector3.zero, ArenaAnchorScale),
+                        new KeyValuePair<Vector3, float>(-faceDir * 4.5f + perp * 3.8f, ArenaKinScale),
+                        new KeyValuePair<Vector3, float>(-faceDir * 4.5f - perp * 3.8f, ArenaKinScale),
+                    };
+                    for (int i = 0; i < spots.Length; i++)
+                    {
+                        var creature = i == 0 ? anchor : BuildArenaCreature(campTier);
+                        if (creature == null) continue;
+                        creature.transform.SetParent(campRoot, false);
+                        creature.transform.localPosition = spots[i].Key;
+                        creature.transform.localRotation = Quaternion.Euler(0f, faceYaw, 0f);
+                        creature.transform.localScale = Vector3.one * spots[i].Value;
+                        GroundSnap(creature);
+                        enemies.Add(creature);
+                        enemyBase.Add(creature.transform.localPosition);
+                        enemyBaseRot.Add(creature.transform.localRotation);
+                        enemyBaseScale.Add(creature.transform.localScale);
+                        enemyLungeDir.Add(faceDir);
+                        // Start sunk - the swap phase raises them.
+                        var sunk = creature.transform.localPosition;
+                        sunk.y -= 4.5f;
+                        creature.transform.localPosition = sunk;
+                    }
+                    arenaFocus = new Vector3(
+                        Mathf.Clamp(campPos.x, -PanLimitX, PanLimitX), 0f,
+                        Mathf.Clamp(campPos.z, -PanLimitZ, PanLimitZ));
+                }
+            }
+
+            // ---- Simulated-fight setup (the fallback) ------------
+            if (!arena && root != null && enemyTypes != null)
+            {
+                float groundY = 0f;
+                if (figOrig.Count > 0)
+                {
+                    float sum = 0f;
+                    foreach (var p in figOrig) sum += p.y;
+                    groundY = sum / figOrig.Count;
+                }
                 int n = enemyTypes.Count;
                 for (int i = 0; i < n; i++)
                 {
@@ -2379,11 +2532,36 @@ namespace LunarDominion.UI
                     fig.transform.SetParent(root.transform, false);
                     float angle = i * (Mathf.PI * 2f / Mathf.Max(1, n)) + 0.6f;
                     var pos = new Vector3(Mathf.Sin(angle) * 4.2f, groundY, Mathf.Cos(angle) * 4.2f);
-                    enemyOrig.Add(pos);
-                    enemyOrigRot.Add(Quaternion.Euler(0f, Mathf.Atan2(pos.x, pos.z) * Mathf.Rad2Deg, 0f));
+                    enemyBase.Add(pos);
+                    enemyBaseRot.Add(Quaternion.Euler(0f, Mathf.Atan2(pos.x, pos.z) * Mathf.Rad2Deg, 0f));
+                    enemyBaseScale.Add(Vector3.one);
+                    var dir = new Vector3(pos.x, 0f, pos.z);
+                    enemyLungeDir.Add(dir.sqrMagnitude > 0.01f ? dir.normalized : new Vector3(0f, 0f, 1f));
                     fig.transform.localPosition = pos + new Vector3(0f, -3f, 0f);
-                    fig.transform.localRotation = enemyOrigRot[i];
+                    fig.transform.localRotation = enemyBaseRot[enemyBaseRot.Count - 1];
                     enemies.Add(fig);
+                }
+            }
+
+            // Where the army stands for the clash: its current
+            // formation normally; on the wider arena ring, grown
+            // to arena scale and facing the centre, for the swap.
+            var figBase = new List<Vector3>(figOrig);
+            var figBaseRot = new List<Quaternion>(figOrigRot);
+            var figBaseScale = new List<Vector3>(figOrigScale);
+            if (arena)
+            {
+                for (int f = 0; f < figures.Count; f++)
+                {
+                    var o = figOrig[f];
+                    float r = Mathf.Sqrt(o.x * o.x + o.z * o.z);
+                    float angle = r > 0.5f
+                        ? Mathf.Atan2(o.x, o.z)
+                        : f * (Mathf.PI * 2f / Mathf.Max(1, figures.Count));
+                    var target = new Vector3(Mathf.Sin(angle) * ArenaRingRadius, o.y, Mathf.Cos(angle) * ArenaRingRadius);
+                    figBase[f] = target;
+                    figBaseRot[f] = Quaternion.Euler(0f, Mathf.Atan2(-target.x, -target.z) * Mathf.Rad2Deg, 0f);
+                    figBaseScale[f] = figOrigScale[f] * ArenaFigureScale;
                 }
             }
 
@@ -2407,58 +2585,114 @@ namespace LunarDominion.UI
             for (int k = 0; k < enemyFalls && k < enemyOrder.Count; k++)
                 eFallStart[enemyOrder[k]] = clashTime * (k + 0.5f) / Mathf.Max(1, enemyFalls);
 
-            // Phase 0 — face-off (~0.6s): the enemies rise.
-            float faceTime = 0.6f;
-            float t = 0f;
-            while (t < faceTime)
+            // Camera bookkeeping for the swap.
+            Vector3 savedPan = _panOffset;
+            float savedDist = _camDist;
+            float savedTarget = _camDistTarget;
+            if (arena)
             {
-                while (!_visible) yield return null;
-                t += Time.deltaTime;
-                float p = Mathf.Clamp01(t / faceTime);
-                float rise = p * p * (3f - 2f * p);
-                for (int i = 0; i < enemies.Count; i++)
-                {
-                    var fig = enemies[i];
-                    if (fig == null) continue;
-                    var pos = enemyOrig[i];
-                    pos.y = enemyOrig[i].y - 3f * (1f - rise);
-                    fig.transform.localPosition = pos;
-                }
-                yield return null;
+                _gliding = false;
+                _arenaCameraActive = true;
             }
 
-            // Phase 1 — clash: lunge pulses, hit flashes, falls.
-            t = 0f;
+            // Phase 0 - the swap (arena) or the face-off (simulated).
+            if (arena)
+            {
+                float swapTime = 0.85f;
+                float t = 0f;
+                Vector3 panFrom = _panOffset;
+                float distFrom = _camDist;
+                while (t < swapTime)
+                {
+                    while (!_visible) yield return null;
+                    t += Time.deltaTime;
+                    float p = Mathf.Clamp01(t / swapTime);
+                    float e = p * p * (3f - 2f * p);
+                    if (structure != null)
+                    {
+                        var sp = structOrigPos;
+                        sp.y -= 3.2f * e;
+                        structure.transform.localPosition = sp;
+                    }
+                    for (int i = 0; i < enemies.Count; i++)
+                    {
+                        var c = enemies[i];
+                        if (c == null) continue;
+                        var pos = enemyBase[i];
+                        pos.y -= 4.5f * (1f - e);
+                        c.transform.localPosition = pos;
+                    }
+                    for (int f = 0; f < figures.Count; f++)
+                    {
+                        var fig = figures[f];
+                        if (fig == null) continue;
+                        fig.transform.localPosition = Vector3.Lerp(figOrig[f], figBase[f], e);
+                        fig.transform.localRotation = Quaternion.Slerp(figOrigRot[f], figBaseRot[f], e);
+                        fig.transform.localScale = Vector3.Lerp(figOrigScale[f], figBaseScale[f], e);
+                    }
+                    _panOffset = Vector3.Lerp(panFrom, arenaFocus, e);
+                    _camDist = Mathf.Lerp(distFrom, ArenaCamDist, e);
+                    _camDistTarget = _camDist;
+                    ApplyCamera();
+                    yield return null;
+                }
+                if (structure != null) structure.SetActive(false);
+            }
+            else
+            {
+                // Face-off (~0.6s): the enemy figures rise.
+                float faceTime = 0.6f;
+                float t = 0f;
+                while (t < faceTime)
+                {
+                    while (!_visible) yield return null;
+                    t += Time.deltaTime;
+                    float p = Mathf.Clamp01(t / faceTime);
+                    float rise = p * p * (3f - 2f * p);
+                    for (int i = 0; i < enemies.Count; i++)
+                    {
+                        var fig = enemies[i];
+                        if (fig == null) continue;
+                        var pos = enemyBase[i];
+                        pos.y = enemyBase[i].y - 3f * (1f - rise);
+                        fig.transform.localPosition = pos;
+                    }
+                    yield return null;
+                }
+            }
+
+            // Phase 1 - clash: lunge pulses, hit flashes, falls.
+            float ct = 0f;
             int pulse = -1;
             float pulseStart = 0f;
             int flashPlayer = -1;
             int flashEnemy = -1;
-            while (t < clashTime)
+            while (ct < clashTime)
             {
                 while (!_visible) yield return null;
-                t += Time.deltaTime;
-                int curPulse = Mathf.FloorToInt(t / 0.45f);
+                ct += Time.deltaTime;
+                int curPulse = Mathf.FloorToInt(ct / 0.45f);
                 if (curPulse != pulse)
                 {
                     pulse = curPulse;
-                    pulseStart = t;
-                    flashPlayer = PickStanding(figures.Count, pFallStart, t);
-                    flashEnemy = PickStanding(enemies.Count, eFallStart, t);
+                    pulseStart = ct;
+                    flashPlayer = PickStanding(figures.Count, pFallStart, ct);
+                    flashEnemy = PickStanding(enemies.Count, eFallStart, ct);
                 }
-                float lunge = Mathf.Sin(Mathf.Clamp01((t % 0.45f) / 0.30f) * Mathf.PI);
-                float flashP = Mathf.Clamp01(1f - (t - pulseStart) / 0.18f);
+                float lunge = Mathf.Sin(Mathf.Clamp01((ct % 0.45f) / 0.30f) * Mathf.PI);
+                float flashP = Mathf.Clamp01(1f - (ct - pulseStart) / 0.18f);
                 for (int f = 0; f < figures.Count; f++)
                 {
                     var fig = figures[f];
                     if (fig == null) continue;
-                    float fp = FallProgress(pFallStart[f], t);
-                    var basePos = figOrig[f];
+                    float fp = FallProgress(pFallStart[f], ct);
+                    var basePos = figBase[f];
                     Vector3 pos = basePos;
-                    Quaternion rot = figOrigRot[f];
+                    Quaternion rot = figBaseRot[f];
                     if (fp > 0f)
                     {
                         pos.y = basePos.y - 0.6f * fp;
-                        rot = figOrigRot[f] * Quaternion.Euler(80f * fp, 0f, 0f);
+                        rot = figBaseRot[f] * Quaternion.Euler(80f * fp, 0f, 0f);
                     }
                     else
                     {
@@ -2470,91 +2704,161 @@ namespace LunarDominion.UI
                     }
                     fig.transform.localPosition = pos;
                     fig.transform.localRotation = rot;
-                    fig.transform.localScale = Vector3.one * (f == flashPlayer ? 1f + 0.3f * flashP : 1f);
+                    fig.transform.localScale = figBaseScale[f] * (f == flashPlayer ? 1f + 0.3f * flashP : 1f);
                 }
                 for (int i = 0; i < enemies.Count; i++)
                 {
                     var fig = enemies[i];
                     if (fig == null) continue;
-                    float fp = FallProgress(eFallStart[i], t);
-                    var basePos = enemyOrig[i];
+                    float fp = FallProgress(eFallStart[i], ct);
+                    var basePos = enemyBase[i];
                     Vector3 pos = basePos;
-                    Quaternion rot = enemyOrigRot[i];
+                    Quaternion rot = enemyBaseRot[i];
                     if (fp > 0f)
                     {
                         pos.y = basePos.y - 0.6f * fp;
-                        rot = enemyOrigRot[i] * Quaternion.Euler(80f * fp, 0f, 0f);
+                        rot = enemyBaseRot[i] * Quaternion.Euler(80f * fp, 0f, 0f);
                     }
                     else
                     {
-                        var dir = new Vector3(basePos.x, 0f, basePos.z);
-                        dir = dir.sqrMagnitude > 0.01f ? dir.normalized : new Vector3(0f, 0f, 1f);
-                        pos += dir * (0.85f * lunge);
+                        pos += enemyLungeDir[i] * (0.85f * lunge);
                         pos.x += UnityEngine.Random.Range(-0.12f, 0.12f);
                         pos.z += UnityEngine.Random.Range(-0.12f, 0.12f);
                     }
                     fig.transform.localPosition = pos;
                     fig.transform.localRotation = rot;
-                    fig.transform.localScale = Vector3.one * (i == flashEnemy ? 1f + 0.3f * flashP : 1f);
+                    fig.transform.localScale = enemyBaseScale[i] * (i == flashEnemy ? 1f + 0.3f * flashP : 1f);
                 }
                 yield return null;
             }
 
-            // Phase 2 — outcome (~1.1s).
+            // Phase 2 - outcome (~1.1s).
             float outcomeTime = 1.1f;
-            t = 0f;
-            while (t < outcomeTime)
+            float ot = 0f;
+            while (ot < outcomeTime)
             {
                 while (!_visible) yield return null;
-                t += Time.deltaTime;
-                float p = Mathf.Clamp01(t / outcomeTime);
+                ot += Time.deltaTime;
+                float p = Mathf.Clamp01(ot / outcomeTime);
                 for (int f = 0; f < figures.Count; f++)
                 {
                     var fig = figures[f];
                     if (fig == null) continue;
                     float fp = FallProgress(pFallStart[f], clashTime);
-                    var pos = figOrig[f];
+                    var pos = figBase[f];
                     if (fp > 0f)
                     {
-                        pos.y = figOrig[f].y - 0.6f * fp;
+                        pos.y = figBase[f].y - 0.6f * fp;
                         fig.transform.localPosition = pos;
-                        fig.transform.localRotation = figOrigRot[f] * Quaternion.Euler(80f * fp, 0f, 0f);
+                        fig.transform.localRotation = figBaseRot[f] * Quaternion.Euler(80f * fp, 0f, 0f);
                     }
                     else if (victory)
                     {
-                        pos.y = figOrig[f].y + Mathf.Sin(p * Mathf.PI) * 1.1f;
+                        pos.y = figBase[f].y + Mathf.Sin(p * Mathf.PI) * 1.1f;
                         fig.transform.localPosition = pos;
+                        fig.transform.localRotation = figBaseRot[f];
                     }
                     else
                     {
                         pos.x += UnityEngine.Random.Range(-0.5f, 0.5f);
                         pos.z += UnityEngine.Random.Range(-0.5f, 0.5f);
-                        pos.y = figOrig[f].y - 0.6f * p;
+                        pos.y = figBase[f].y - 0.6f * p;
                         fig.transform.localPosition = pos;
+                        fig.transform.localRotation = figBaseRot[f];
                     }
-                    fig.transform.localScale = Vector3.one;
+                    fig.transform.localScale = figBaseScale[f];
                 }
                 for (int i = 0; i < enemies.Count; i++)
                 {
                     var fig = enemies[i];
                     if (fig == null) continue;
-                    var pos = enemyOrig[i];
+                    var pos = enemyBase[i];
                     if (victory)
                     {
                         float fp = Mathf.Max(FallProgress(eFallStart[i], clashTime), p);
-                        pos.y = enemyOrig[i].y - 0.6f * fp - 1.4f * p;
+                        pos.y = enemyBase[i].y - 0.6f * fp - 1.4f * p;
                         fig.transform.localPosition = pos;
-                        fig.transform.localRotation = enemyOrigRot[i] * Quaternion.Euler(80f * fp, 0f, 0f);
+                        fig.transform.localRotation = enemyBaseRot[i] * Quaternion.Euler(80f * fp, 0f, 0f);
                     }
                     else
                     {
-                        pos.y = enemyOrig[i].y + Mathf.Sin(p * Mathf.PI) * 1.2f;
+                        pos.y = enemyBase[i].y + Mathf.Sin(p * Mathf.PI) * 1.2f;
                         fig.transform.localPosition = pos;
-                        fig.transform.localRotation = enemyOrigRot[i];
+                        fig.transform.localRotation = enemyBaseRot[i];
                     }
-                    fig.transform.localScale = Vector3.one;
+                    fig.transform.localScale = enemyBaseScale[i];
                 }
                 yield return null;
+            }
+
+            // Phase 3 - swap back (arena only): the army shrinks
+            // to its march formation, the camera pulls back, and
+            // on defeat the creatures burrow away while the camp
+            // structure rises back into place.
+            if (arena)
+            {
+                float backTime = 0.6f;
+                float t = 0f;
+                Vector3 panFrom = _panOffset;
+                float distFrom = _camDist;
+                if (!victory && structure != null)
+                {
+                    var sp = structOrigPos;
+                    sp.y -= 3.2f;
+                    structure.transform.localPosition = sp;
+                    structure.SetActive(true);
+                }
+                while (t < backTime)
+                {
+                    while (!_visible) yield return null;
+                    t += Time.deltaTime;
+                    float p = Mathf.Clamp01(t / backTime);
+                    float e = p * p * (3f - 2f * p);
+                    if (!victory)
+                    {
+                        if (structure != null)
+                        {
+                            var sp = structOrigPos;
+                            sp.y -= 3.2f * (1f - e);
+                            structure.transform.localPosition = sp;
+                        }
+                        for (int i = 0; i < enemies.Count; i++)
+                        {
+                            var c = enemies[i];
+                            if (c == null) continue;
+                            var pos = enemyBase[i];
+                            pos.y -= 3.5f * e;
+                            c.transform.localPosition = pos;
+                        }
+                    }
+                    for (int f = 0; f < figures.Count; f++)
+                    {
+                        var fig = figures[f];
+                        if (fig == null) continue;
+                        fig.transform.localPosition = Vector3.Lerp(figBase[f], figOrig[f], e);
+                        fig.transform.localRotation = Quaternion.Slerp(figBaseRot[f], figOrigRot[f], e);
+                        fig.transform.localScale = Vector3.Lerp(figBaseScale[f], figOrigScale[f], e);
+                    }
+                    _panOffset = Vector3.Lerp(panFrom, savedPan, e);
+                    _camDist = Mathf.Lerp(distFrom, savedDist, e);
+                    _camDistTarget = _camDist;
+                    ApplyCamera();
+                    yield return null;
+                }
+                _camDistTarget = savedTarget;
+                _arenaCameraActive = false;
+            }
+
+            // Put the camp structure back exactly as it was. On
+            // victory the service vanishes the slot inside
+            // onComplete - the same call stack, before the next
+            // frame renders - so the restored structure is never
+            // seen; on defeat it is simply the camp again.
+            if (structure != null)
+            {
+                structure.transform.localPosition = structOrigPos;
+                structure.transform.localScale = structOrigScale;
+                if (!structure.activeSelf) structure.SetActive(true);
             }
 
             // Restore the army figures, remove the enemies, finish.
@@ -2564,7 +2868,7 @@ namespace LunarDominion.UI
                 if (fig == null) continue;
                 fig.transform.localPosition = figOrig[f];
                 fig.transform.localRotation = figOrigRot[f];
-                fig.transform.localScale = Vector3.one;
+                fig.transform.localScale = figOrigScale[f];
             }
             foreach (var fig in enemies) if (fig != null) Destroy(fig);
             if (slot >= 0 && slot < _marchMarkers.Length) _squadAnimOwned[slot] = false;
