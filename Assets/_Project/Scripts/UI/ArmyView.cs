@@ -289,6 +289,16 @@ namespace LunarDominion.UI
             sb.Append('|');
             if (state.Injured != null) foreach (var u in state.Injured) if (u != null) sb.Append(u.Serial).Append(',');
             sb.Append('|').Append(ArmyOut(_selectedArmy) ? '1' : '0');
+            // The level-breakdown expansion is view state, but it
+            // changes what the rows show, so it belongs in the
+            // signature — without it, tapping the arrow changed the
+            // set but Refresh saw the same signature and never
+            // rebuilt (the breakdown only appeared later, when an
+            // unrelated state change forced a rebuild).
+            sb.Append('|');
+            var expandedKeys = new List<string>(_expandedTroops);
+            expandedKeys.Sort(StringComparer.Ordinal);
+            foreach (var key in expandedKeys) sb.Append(key).Append(',');
             return sb.ToString();
         }
 
@@ -423,20 +433,23 @@ namespace LunarDominion.UI
                 new Rect(0.02f, 0.06f, 0.50f, 0.94f), TextAnchor.MiddleLeft);
             label.verticalOverflow = VerticalWrapMode.Overflow;
 
-            // Level breakdown toggle (Patrick 2026-11-16): expands a
-            // per-level list under this row — one row per level,
-            // highest first — and collapses it again on a second tap.
+            // Level breakdown toggle (Patrick 2026-11-16): a down
+            // arrow that expands a per-level list under this row —
+            // one row per level, highest first — flipping to an up
+            // arrow to collapse it. Only shown when the type actually
+            // has units in this army (Patrick: no arrow on empty rows).
             string expandKey = army + ":" + def.Id;
-            bool expanded = _expandedTroops.Contains(expandKey);
-            var toggle = AddRowButton(row, expanded ? "Hide" : "Levels", 0.52f, 0.665f);
-            bool hasUnits = assigned.Count + free.Count > 0;
-            UIHelpers.SetButtonEnabled(toggle, hasUnits);
-            if (hasUnits) toggle.onClick.AddListener(() =>
+            bool expanded = assigned.Count > 0 && _expandedTroops.Contains(expandKey);
+            if (assigned.Count > 0)
             {
-                if (_expandedTroops.Contains(expandKey)) _expandedTroops.Remove(expandKey);
-                else _expandedTroops.Add(expandKey);
-                Refresh();
-            });
+                var toggle = AddRowButton(row, expanded ? "▲" : "▼", 0.52f, 0.665f);
+                toggle.onClick.AddListener(() =>
+                {
+                    if (_expandedTroops.Contains(expandKey)) _expandedTroops.Remove(expandKey);
+                    else _expandedTroops.Add(expandKey);
+                    Refresh();
+                });
+            }
 
             var minus = AddRowButton(row, "−", 0.69f, 0.815f);
             bool canRemove = editable && assigned.Count > 0;
