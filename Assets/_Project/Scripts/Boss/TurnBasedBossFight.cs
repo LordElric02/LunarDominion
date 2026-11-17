@@ -215,6 +215,12 @@ namespace LunarDominion.Boss
         private GameObject _droneTemplate;
         private float _enemyScale = 1f;
 
+        // Set by the view before Begin: the drone template is
+        // the mini-walker visual (grounded escorts) rather than
+        // the primitive hover drones. Placement and bar height
+        // follow the visual; the drone stats never change.
+        public bool DroneVisualIsWalker { get; set; }
+
         private int _bossTurn;
         private bool _slamCharged;
         private bool _phase2;
@@ -1107,7 +1113,11 @@ namespace LunarDominion.Boss
         {
             var root = new GameObject("DroneBar");
             root.transform.SetParent(drone.Figure.transform, false);
-            root.transform.localPosition = new Vector3(0f, 0.85f, 0f);
+            // 0.85 local rides 1.7 world over the hover drone;
+            // the walker stands 4.8 world tall, so its bar rides
+            // at 2.65 local (5.3 world) to clear the cockpit.
+            root.transform.localPosition = new Vector3(0f,
+                DroneVisualIsWalker ? 2.65f : 0.85f, 0f);
             // The figure is scaled (DroneFigureScale); counter-
             // scale the bar so it keeps its original world size
             // instead of doubling with the drone. Its height
@@ -1414,7 +1424,10 @@ namespace LunarDominion.Boss
                 // at double size the drone's radius is ~1.1, and
                 // 6.8 left almost no clearance from the boss's
                 // 5.6 half-width.
-                Vector3 home = bossPos + new Vector3(i == 0 ? -7.6f : 7.6f, 4.2f, -2.6f);
+                // Walkers stand on the arena floor; the
+                // primitive drones hover at 4.2.
+                Vector3 home = bossPos + new Vector3(i == 0 ? -7.6f : 7.6f,
+                    DroneVisualIsWalker ? 0f : 4.2f, -2.6f);
                 fig.transform.position = home + Vector3.up * 5f;
                 var drone = new TurnDroneState
                 {
@@ -1428,11 +1441,38 @@ namespace LunarDominion.Boss
                 drone.Hp = drone.MaxHp;
                 Drones.Add(drone);
                 BuildDroneBar(drone);
+                if (DroneVisualIsWalker) StartCoroutine(WalkerIdleRoutine(fig));
                 StartCoroutine(MoveRoutine(fig.transform, fig.transform.position, home, 0.55f));
             }
             yield return new WaitForSeconds(0.6f);
             SetPose(0f, 0f, 0f);
             OnChanged?.Invoke();
+        }
+
+        // The walker's legs Animator shares the boss's
+        // Legs_Heavy_Ctrl, whose default state is a running
+        // turn — so each clone is put into the idle hub, one
+        // frame after it exists: a HasState probe issued in the
+        // same breath as Instantiate can come back empty (the
+        // boss's 2026-11-17 dance lesson). The first ENABLED
+        // Animator is the legs one — the view disabled every
+        // other Animator in the template.
+        private IEnumerator WalkerIdleRoutine(GameObject fig)
+        {
+            yield return null;
+            if (fig == null) yield break;
+            Animator anim = null;
+            foreach (var a in fig.GetComponentsInChildren<Animator>())
+                if (a.enabled) { anim = a; break; }
+            if (anim == null) yield break;
+            foreach (var candidate in new[] { "Idle_Single", "Idle" })
+            {
+                if (anim.HasState(0, Animator.StringToHash(candidate)))
+                {
+                    anim.Play(candidate, 0, 0f);
+                    yield break;
+                }
+            }
         }
 
         private IEnumerator DroneShootRoutine(TurnDroneState drone)

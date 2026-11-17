@@ -84,6 +84,7 @@ namespace LunarDominion.UI
         private TelegraphRing _slamRing;
         private TelegraphRing _ventRing;
         private GameObject _droneTemplate;
+        private GameObject _walkerDroneTemplate;
         private LavaTubeAmbience _ambience;
         private Material _coreMaterial;
         private Color _coreBaseEmission = Color.black;
@@ -104,6 +105,13 @@ namespace LunarDominion.UI
         // the mech ever stands sideways or backwards in the lair,
         // this one constant is the fix (0 / 90 / 180 / 270).
         private const float MechBossYawDegrees = 90f;
+
+        // Mini-walker drone visual (2026-11-17): template-space
+        // height for the MechMiniWalker escort; the turn fight
+        // scales the template by DroneFigureScale (2), so the
+        // escorts stand 4.8 world units — above the heroes,
+        // well under the boss's 17.8.
+        private const float WalkerDroneTargetHeight = 2.4f;
 
         // Cinematic C2: red edge vignette pulsed when a hero
         // takes a heavy hit (the fight raises OnHeroHeavyHit;
@@ -535,6 +543,13 @@ namespace LunarDominion.UI
             _droneTemplate.transform.SetParent(_arenaRoot.transform, false);
             _droneTemplate.SetActive(false);
 
+            _walkerDroneTemplate = BuildWalkerDroneTemplate();
+            if (_walkerDroneTemplate != null)
+            {
+                _walkerDroneTemplate.transform.SetParent(_arenaRoot.transform, false);
+                _walkerDroneTemplate.SetActive(false);
+            }
+
             var ambienceGo = new GameObject("LavaTubeAmbience");
             ambienceGo.transform.SetParent(_arenaRoot.transform, false);
             _ambience = ambienceGo.AddComponent<LavaTubeAmbience>();
@@ -752,6 +767,78 @@ namespace LunarDominion.UI
             }
             var collider = root.AddComponent<SphereCollider>();
             collider.radius = 0.9f;
+            return root;
+        }
+
+        // Mini-walker escort visual (Patrick's pick, 2026-11-17):
+        // when his assembled MechMiniWalker prefab (Legs_Heavy
+        // lvl1 + Cockpit_Heavy, nothing else) is installed at
+        // Resources/Models/MechMiniWalker — a paid pack, local-
+        // only like MechHeavyBoss — the turn-based fight's sub-
+        // drones wear it instead of the primitive template: the
+        // same swap pattern as the boss. The realtime mode keeps
+        // the primitive template (its drones orbit the boss at
+        // height; walkers must stay grounded). Returns null
+        // without the prefab, and the fight then uses the
+        // primitive template exactly as before.
+        private GameObject BuildWalkerDroneTemplate()
+        {
+            GameObject walkerPrefab = null;
+            try { walkerPrefab = Resources.Load<GameObject>("Models/MechMiniWalker"); }
+            catch (System.Exception e) { Debug.LogWarning("[BossLairView] MechMiniWalker failed to load (Models/MechMiniWalker): " + e.Message); }
+            if (walkerPrefab == null) return null;
+
+            var root = new GameObject("SubDroneTemplateWalker");
+            var wrapper = new GameObject("WalkerFacing");
+            wrapper.transform.SetParent(root.transform, false);
+            var walker = Instantiate(walkerPrefab);
+            walker.name = "MechMiniWalker";
+            walker.transform.SetParent(wrapper.transform, false);
+            foreach (var collider in walker.GetComponentsInChildren<Collider>())
+                Destroy(collider);
+
+            // Normalize to a fixed template height (see
+            // WalkerDroneTargetHeight), feet on the template
+            // origin and centred over it, so the fight's ground
+            // placement and offsets stay honest. The facing yaw
+            // is applied to the wrapper only AFTER this, so the
+            // bounds math below runs in unrotated space; the
+            // prefab instance's own rotation is never assigned
+            // (an imported model's root rotation is not ours to
+            // overwrite).
+            var renderers = walker.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                if (b.size.y > 0.01f)
+                {
+                    float factor = Mathf.Clamp(WalkerDroneTargetHeight / b.size.y, 0.05f, 20f);
+                    walker.transform.localScale = Vector3.one * factor;
+                    walker.transform.localPosition = new Vector3(
+                        -b.center.x * factor, -b.min.y * factor, -b.center.z * factor);
+                }
+            }
+            wrapper.transform.localRotation = Quaternion.Euler(0f, MechBossYawDegrees, 0f);
+
+            // Animation, same treatment as the boss: only the
+            // legs Animator runs, root motion off (the fight owns
+            // the position); any other Animator in the assembly
+            // is disabled before its clips can move a part root.
+            // The idle itself is played per-clone by the fight,
+            // lazily — a probe in the same breath as Instantiate
+            // can come back empty (the 2026-11-17 boss lesson).
+            var legsAnimator = walker.GetComponent<Animator>();
+            if (legsAnimator == null) legsAnimator = walker.GetComponentInChildren<Animator>();
+            foreach (var anim in walker.GetComponentsInChildren<Animator>(true))
+                if (anim != legsAnimator) anim.enabled = false;
+            if (legsAnimator != null) legsAnimator.applyRootMotion = false;
+
+            // Parity with the primitive template's root collider.
+            var rootCollider = root.AddComponent<SphereCollider>();
+            rootCollider.radius = 1.2f;
+            rootCollider.center = new Vector3(0f, 1.2f, 0f);
+            Debug.Log("[BossLairView] MechMiniWalker installed as the turn-fight drone visual.");
             return root;
         }
 
@@ -2224,8 +2311,10 @@ namespace LunarDominion.UI
             if (_turnHudRoutine != null) StopCoroutine(_turnHudRoutine);
             _turnHudRoutine = StartCoroutine(TurnHudRoutine());
             ResetMechBossPose();
+            _turnFight.DroneVisualIsWalker = _walkerDroneTemplate != null;
             _turnFight.Begin(heroes, bossHp, bossAtk, bossDef, _selectedBossLevel, scale,
-                _aresRoot.transform, _aresVisual.transform, _slamRing, _droneTemplate);
+                _aresRoot.transform, _aresVisual.transform, _slamRing,
+                _walkerDroneTemplate != null ? _walkerDroneTemplate : _droneTemplate);
         }
 
         // The turn-based combatants: the same figures as the
