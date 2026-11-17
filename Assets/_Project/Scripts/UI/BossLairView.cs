@@ -109,9 +109,10 @@ namespace LunarDominion.UI
         // Mini-walker drone visual (2026-11-17): template-space
         // height for the MechMiniWalker escort; the turn fight
         // scales the template by DroneFigureScale (2), so the
-        // escorts stand 4.8 world units — above the heroes,
-        // well under the boss's 17.8.
-        private const float WalkerDroneTargetHeight = 2.4f;
+        // escorts stand 7.2 world units — about 40% of the
+        // boss's 17.8 (Patrick's pick; at 4.8 they read as set
+        // dressing next to him).
+        private const float WalkerDroneTargetHeight = 3.6f;
 
         // Cinematic C2: red edge vignette pulsed when a hero
         // takes a heavy hit (the fight raises OnHeroHeavyHit;
@@ -843,10 +844,11 @@ namespace LunarDominion.UI
                 if (anim != legsAnimator) anim.enabled = false;
             if (legsAnimator != null) legsAnimator.applyRootMotion = false;
 
-            // Parity with the primitive template's root collider.
+            // Root collider, sized for the taller walker (the
+            // primitive template's was r 0.9 at its centre).
             var rootCollider = root.AddComponent<SphereCollider>();
-            rootCollider.radius = 1.2f;
-            rootCollider.center = new Vector3(0f, 1.2f, 0f);
+            rootCollider.radius = 1.6f;
+            rootCollider.center = new Vector3(0f, 1.8f, 0f);
             Debug.Log("[BossLairView] MechMiniWalker installed as the turn-fight drone visual.");
             return root;
         }

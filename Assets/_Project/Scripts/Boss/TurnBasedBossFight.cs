@@ -221,6 +221,11 @@ namespace LunarDominion.Boss
         // follow the visual; the drone stats never change.
         public bool DroneVisualIsWalker { get; set; }
 
+        // World-space height at which hits, sparks and damage
+        // numbers land on a drone figure: mid-body on the tall
+        // walker, centre of the little hovering drone otherwise.
+        private float DroneBodyHeight => DroneVisualIsWalker ? 4.0f : 2.2f;
+
         private int _bossTurn;
         private bool _slamCharged;
         private bool _phase2;
@@ -794,7 +799,7 @@ namespace LunarDominion.Boss
             OnChanged?.Invoke();
             if (Director != null) Director.PlayShot(BossShot.HeroStrike, hero.Figure.transform);
             Vector3 targetPos = drone != null ? drone.Figure.transform.position : _bossRoot.position;
-            Vector3 impact = targetPos + Vector3.up * (drone != null ? 2.2f : 8.5f);
+            Vector3 impact = targetPos + Vector3.up * (drone != null ? DroneBodyHeight : 8.5f);
             if (FightsAtRange(hero)) SfxDirector.Play(SfxClip.HeroShoot);
             if (FightsAtRange(hero))
             {
@@ -889,10 +894,10 @@ namespace LunarDominion.Boss
                     HitStop(0.06f);
                     SfxDirector.Play(drone != null ? SfxClip.SkillHit : SfxClip.Crit);
                     StartCoroutine(ContactFlashRoutine(
-                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
+                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? DroneBodyHeight : 8.5f),
                         ImpactTint()));
                     if (drone != null)
-                        SpawnSparks(drone.Figure.transform.position + Vector3.up * 2.2f,
+                        SpawnSparks(drone.Figure.transform.position + Vector3.up * DroneBodyHeight,
                             new Color(1f, 0.85f, 0.55f), 16, 4f);
                     else
                         SpawnSparks(SurfacePoint(hero, bossPos + Vector3.up * 8.5f),
@@ -910,15 +915,15 @@ namespace LunarDominion.Boss
                 case HeroSkillId.PiercingShot:
                 {
                     yield return BoltRoutine(FigureChest(hero.Figure.transform),
-                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
+                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? DroneBodyHeight : 8.5f),
                         new Color(1f, 0.75f, 0.35f));
                     HitStop(0.05f);
                     SfxDirector.Play(drone != null ? SfxClip.SkillHit : SfxClip.Crit);
                     StartCoroutine(ContactFlashRoutine(
-                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
+                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? DroneBodyHeight : 8.5f),
                         new Color(0.45f, 0.9f, 1f)));
                     if (drone != null)
-                        SpawnSparks(drone.Figure.transform.position + Vector3.up * 2.2f,
+                        SpawnSparks(drone.Figure.transform.position + Vector3.up * DroneBodyHeight,
                             new Color(0.65f, 0.9f, 1f), 16, 4f);
                     else
                         SpawnSparks(SurfacePoint(hero, bossPos + Vector3.up * 8.5f),
@@ -971,10 +976,10 @@ namespace LunarDominion.Boss
                         drone != null ? 2.6f : 5.2f);
                     SfxDirector.Play(SfxClip.SkillHit);
                     StartCoroutine(ContactFlashRoutine(
-                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? 2.2f : 8.5f),
+                        (drone != null ? drone.Figure.transform.position : bossPos) + Vector3.up * (drone != null ? DroneBodyHeight : 8.5f),
                         ImpactTint()));
                     if (drone != null)
-                        SpawnSparks(drone.Figure.transform.position + Vector3.up * 2.2f,
+                        SpawnSparks(drone.Figure.transform.position + Vector3.up * DroneBodyHeight,
                             new Color(1f, 0.85f, 0.55f), 16, 4f);
                     else
                     {
@@ -1086,7 +1091,7 @@ namespace LunarDominion.Boss
             drone.Hp = Mathf.Max(0, drone.Hp - dmg);
             RefreshDroneBar(drone);
             if (dmg > 0 && drone.Figure != null)
-                SpawnDamageNumber(drone.Figure.transform.position + Vector3.up * 2.2f, dmg,
+                SpawnDamageNumber(drone.Figure.transform.position + Vector3.up * DroneBodyHeight, dmg,
                     new Color(1f, 0.8f, 0.4f), 0.28f);
             AddLog($"{hero.Name} — {label} {drone.Name}: {dmg} dmg.");
             if (drone.Hp <= 0 && drone.Alive)
@@ -1117,7 +1122,7 @@ namespace LunarDominion.Boss
             // the walker stands 4.8 world tall, so its bar rides
             // at 2.65 local (5.3 world) to clear the cockpit.
             root.transform.localPosition = new Vector3(0f,
-                DroneVisualIsWalker ? 2.65f : 0.85f, 0f);
+                DroneVisualIsWalker ? 3.95f : 0.85f, 0f);
             // The figure is scaled (DroneFigureScale); counter-
             // scale the bar so it keeps its original world size
             // instead of doubling with the drone. Its height
