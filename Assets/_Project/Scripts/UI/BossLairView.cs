@@ -640,14 +640,8 @@ namespace LunarDominion.UI
             if (_mechAnimator != null)
             {
                 _mechAnimator.applyRootMotion = false;
-                _mechIdleState = ProbeAnimatorState(_mechAnimator,
-                    "Idle_Single", "Idle", "idle", "legs_heavy_idle");
-                _mechDeathState = ProbeAnimatorState(_mechAnimator,
-                    "Fall_Back", "Fall_Forward",
-                    "legs_heavy_fall_back", "legs_heavy_fall_forward",
-                    "FallBack", "Death", "death");
+                EnsureMechStatesProbed();
                 if (_mechIdleState != null) _mechAnimator.Play(_mechIdleState, 0, 0f);
-                else Debug.LogWarning("[BossLairView] MechHeavyBoss: no idle state found on the legs controller; the default state will play.");
             }
             _mechBossGo = mech;
             Debug.Log("[BossLairView] MechHeavyBoss installed as the arena boss visual.");
@@ -663,16 +657,45 @@ namespace LunarDominion.UI
             return null;
         }
 
+        // The state names are probed LAZILY, not only at build.
+        // HasState queries issued in the same breath as Instantiate
+        // — before the Animator's state machine has evaluated its
+        // first frame — can return false for states that plainly
+        // exist; on 2026-11-17 the mech sat in its default
+        // Run_Turn_L through whole fights while the probe had run
+        // only at build (Patrick's live Animator screenshot showed
+        // Run_Turn_L active mid-fight, with applyRootMotion already
+        // false, proving this method ran but the probe came back
+        // empty). By fight start the Animator is warm, so the
+        // probe re-runs there until it lands; the build-time
+        // attempt stays as a head start.
+        private void EnsureMechStatesProbed()
+        {
+            if (_mechAnimator == null) return;
+            if (_mechIdleState == null)
+                _mechIdleState = ProbeAnimatorState(_mechAnimator,
+                    "Idle_Single", "Idle", "idle", "legs_heavy_idle");
+            if (_mechDeathState == null)
+                _mechDeathState = ProbeAnimatorState(_mechAnimator,
+                    "Fall_Back", "Fall_Forward",
+                    "legs_heavy_fall_back", "legs_heavy_fall_forward",
+                    "FallBack", "Death", "death");
+        }
+
         // Back to idle at every fight start, so a mech left fallen
         // by a previous victory stands again for the next fight.
         private void ResetMechBossPose()
         {
+            EnsureMechStatesProbed();
             if (_mechAnimator != null && _mechIdleState != null)
                 _mechAnimator.Play(_mechIdleState, 0, 0f);
+            else if (_mechAnimator != null)
+                Debug.LogWarning("[BossLairView] MechHeavyBoss: still no idle state at fight start; the default state will play.");
         }
 
         private void PlayMechBossDeath()
         {
+            EnsureMechStatesProbed();
             if (_mechAnimator != null && _mechDeathState != null)
                 _mechAnimator.Play(_mechDeathState, 0, 0f);
         }
