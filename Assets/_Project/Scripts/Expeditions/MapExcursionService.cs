@@ -1138,7 +1138,7 @@ namespace LunarDominion.Expeditions
                 // background, 2026-11-15) there is nothing to
                 // animate — resolve immediately; the result lands
                 // in the Inbox.
-                if (_view.IsVisible) _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, result.Rounds, CasualtyFrac(result), EnemyTypesOf(encounter), resolve);
+                if (_view.IsVisible) _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, result.Rounds, CasualtyFrac(result, squad.Count + heroSquad.Count), EnemyTypesOf(encounter), resolve);
                 else resolve();
             }
             else
@@ -1175,7 +1175,7 @@ namespace LunarDominion.Expeditions
                 // show the result, vanish the boss on victory, and march
                 // back. The combat itself already resolved above — the
                 // animation is purely visual.
-                _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, result.Rounds, CasualtyFrac(result), EnemyTypesOf(encounter), () =>
+                _view.PlayFightAnimation(slotIndex, point.Index, result.Victory, result.Rounds, CasualtyFrac(result, squad.Count), EnemyTypesOf(encounter), () =>
                 {
                     OnExcursionResult?.Invoke(
                         result.Victory ? "VICTORY!" : (result.Timeout ? "DEFEAT — TIMEOUT" : "DEFEAT"),
@@ -1192,13 +1192,16 @@ namespace LunarDominion.Expeditions
 
         /// <summary>Share of the squad that fell in a resolved
         /// fight (0 = flawless, 1 = wiped out) — drives how many
-        /// figures fall in the simulated fight animation.</summary>
-        private static float CasualtyFrac(CombatOutcome result)
+        /// figures fall in the simulated fight animation. The
+        /// expedition layer reports casualties as names (troops and
+        /// heroes separately), so the caller supplies the squad
+        /// size it sent.</summary>
+        private static float CasualtyFrac(BattleResult result, int squadTotal)
         {
-            int dead = result != null && result.DeadSquadIndices != null ? result.DeadSquadIndices.Count : 0;
-            int alive = result != null && result.SurvivingSquadIndices != null ? result.SurvivingSquadIndices.Count : 0;
-            int total = dead + alive;
-            return total > 0 ? (float)dead / total : 0f;
+            if (result == null || squadTotal <= 0) return 0f;
+            int dead = (result.CasualtyNames != null ? result.CasualtyNames.Count : 0)
+                     + (result.HeroCasualtyNames != null ? result.HeroCasualtyNames.Count : 0);
+            return Mathf.Clamp01((float)dead / squadTotal);
         }
 
         /// <summary>The encounter's distinct enemy classes, in
