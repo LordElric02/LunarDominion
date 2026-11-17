@@ -140,16 +140,20 @@ namespace LunarDominion.UI
         // takes ~24s, which suits an army on the move. Raised to
         // 18 u/s with the road network (Round 3 Phase 2, Patrick
         // 2026-11-15): road routes run ~1.1x the straight line on
-        // average, so trip times land about where they were.
-        private static readonly float MarchSpeed = 18f; // units/second
+        // average, so trip times land about where they were. Halved
+        // to 9 u/s (Patrick 2026-11-16): the march still read too
+        // fast — a far-corner trip now takes ~1.5-2 minutes.
+        private static readonly float MarchSpeed = 9f; // units/second
 
         // Map Phase 2 (2026-11-12, Patrick's pick: real Blender mini
         // troops over code-built figures): each slot's marker root
-        // carries a formation of mini troop figures — one per squad
-        // member, heroes leading on their full models — plus an army
-        // banner with a floating count chip and a dotted route line
-        // while marching. The root marches exactly as the old capsule
-        // did; everything here is presentation. Figure modes:
+        // carries a formation of mini troop figures — one per unit
+        // TYPE in the squad since the stylized-march change
+        // (2026-11-16), heroes leading on their full models — plus
+        // an army banner with a floating count chip and a dotted
+        // route line while marching. The root marches exactly as
+        // the old capsule did; everything here is presentation.
+        // Figure modes:
         // 0 marching (two columns), 1 parked (ring around the node,
         // farming), 2 fighting (ring around the camp).
         private const int SquadModeMarching = 0;
@@ -1078,23 +1082,27 @@ namespace LunarDominion.UI
             foreach (var id in members) if (!IsHeroId(id)) ordered.Add(id);
             _squadMembers[slot] = ordered;
             if (_squadChips[slot] != null) _squadChips[slot].text = ordered.Count.ToString();
-            string key = string.Join(",", ordered);
+            // Stylized march (Patrick 2026-11-16): ONE figure per
+            // unit TYPE in the army, not one per soldier — at
+            // 80-160-man armies a per-soldier column is unreadable
+            // (and heavy). Each hero is its own type, so heroes
+            // still lead as themselves. The chip above the banner
+            // carries the true headcount; combat uses the full
+            // roster regardless. (Supersedes the 24-figure cap from
+            // the big-armies push earlier the same day.)
+            var distinct = new List<UnitId>();
+            foreach (var id in ordered) if (!distinct.Contains(id)) distinct.Add(id);
+            string key = string.Join(",", distinct);
             if (key == _squadKeys[slot]) return;
             _squadKeys[slot] = key;
             var root = _marchMarkers[slot];
             foreach (var fig in _squadFigures[slot]) if (fig != null) Destroy(fig);
             _squadFigures[slot].Clear();
             if (root == null) return;
-            // Big armies (2026-11-16): an army can field up to
-            // 160 units, but rendering every one as a hero-quality
-            // model would sink the phone. At most 24 figures march
-            // (heroes first — the list is already ordered that
-            // way); the chip above the banner carries the true
-            // count, and combat uses the full roster regardless.
-            int renderCount = Mathf.Min(ordered.Count, 24);
+            int renderCount = distinct.Count;
             for (int i = 0; i < renderCount; i++)
             {
-                var fig = BuildFigure(ordered[i]);
+                var fig = BuildFigure(distinct[i]);
                 fig.transform.SetParent(root.transform, false);
                 fig.transform.localPosition = FormationOffset(slot, i, renderCount);
                 _squadFigures[slot].Add(fig);

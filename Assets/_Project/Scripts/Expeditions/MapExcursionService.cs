@@ -479,9 +479,10 @@ namespace LunarDominion.Expeditions
                 if (_state.OccupationTroops != null && slotIndex < _state.OccupationTroops.Length)
                     troops = _state.OccupationTroops[slotIndex];
             }
-            // Rendered figures are capped (24, matching
-            // ExteriorView's march-figure cap) even though the
-            // occupation may hold far more troops.
+            // The view renders one figure per unit type (stylized
+            // march, 2026-11-16), so this list's length now only
+            // feeds the banner chip — still capped at 24 even
+            // though the occupation may hold far more troops.
             troops = Math.Max(1, Math.Min(24, troops));
             for (int i = 0; i < troops; i++) members.Add(UnitId.ScoutMarine);
             return members;
