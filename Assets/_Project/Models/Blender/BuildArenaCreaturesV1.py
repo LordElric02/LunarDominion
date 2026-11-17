@@ -8,6 +8,8 @@
 # V1 is the Tier 1 vertical slice: the Spore Crawler at
 # arena scale. The other five tiers join this same script
 # as their own builders once the slice is Play-checked.
+# V2 (2026-11-16, after Patrick closed the T1 slice): the
+# Tier 2 Void Stalker joins as the second builder.
 #
 # Authoring rules (same as the site/terrain scripts):
 #   * Head toward +X (the troops' convention - after the
@@ -62,6 +64,13 @@ def make_materials():
     g["MOSS"] = mat("CrawlerMoss", (0.16, 0.22, 0.14), roughness=0.95)
     g["TEAL"] = mat("CrawlerTealGlow", (0.30, 0.95, 0.85), emission=(0.25, 0.95, 0.82), strength=2.4, roughness=0.35)
     g["AMBER"] = mat("CrawlerAmberGlow", (0.55, 0.32, 0.08), emission=(1.0, 0.62, 0.15), strength=2.2, roughness=0.5)
+    # Void Stalker: deep-violet hide, obsidian chitin (the
+    # Stalker Spires, walking), violet void-glow accents.
+    g["ST_HIDE"] = mat("StalkerHide", (0.16, 0.10, 0.24), roughness=0.5)
+    g["ST_HIDE_LT"] = mat("StalkerHideLight", (0.28, 0.18, 0.40), roughness=0.45)
+    g["ST_CHITIN"] = mat("StalkerChitin", (0.08, 0.05, 0.14), roughness=0.35, metallic=0.25)
+    g["ST_FANG"] = mat("StalkerFang", (0.72, 0.68, 0.60), roughness=0.6)
+    g["ST_VIOLET"] = mat("StalkerVioletGlow", (0.45, 0.20, 0.75), emission=(0.62, 0.25, 1.0), strength=2.6, roughness=0.35)
     return g
 
 
@@ -186,8 +195,81 @@ def build_spore_crawler(rng):
     sphere("Cr_TailPod", (-3.1, 0, 2.6), (0.55, 0.55, 0.62), M["POD_LT"])
 
 
+# ----------------------------------------------------------------
+# TIER 2 - VOID STALKER (arena scale: ~10.5 long, ~6.7 high)
+# The T2 camp's spires, walking: a tall, lean quadruped on
+# stilt legs - narrow torso held high, long neck and a sleek
+# wedge head, blade forelimbs, dorsal spire fins and a whip
+# tail with an obsidian stinger. The deliberate opposite of
+# the squat crawler: where T1 is low and round, T2 is tall
+# and sharp. Head toward +X, same as every creature here.
+# ----------------------------------------------------------------
+
+def build_void_stalker(rng):
+    # Torso group: narrow body held high on the legs.
+    ico("St_Torso", (0.2, 0, 4.35), (2.6, 1.05, 1.25), M["ST_HIDE"], subdiv=2)
+    ico("St_Chest", (1.6, 0, 4.2), (1.5, 0.9, 1.0), M["ST_HIDE_LT"], subdiv=2)
+    ico("St_Pelvis", (-1.5, 0, 4.45), (1.3, 0.85, 0.95), M["ST_HIDE"], subdiv=2)
+    # Void sac glowing under the torso, belly glow dots.
+    ico("St_VoidSac", (0.3, 0, 3.55), (0.55, 0.5, 0.5), M["ST_VIOLET"], subdiv=2)
+    for i, bx in enumerate([1.2, -0.8]):
+        ico("St_BellyGlow%d" % i, (bx, 0, 3.5), (0.10, 0.10, 0.10), M["ST_VIOLET"], subdiv=1)
+    # Neck leaning up-forward, sleek wedge head (+X).
+    box("St_Neck", (2.6, 0, 4.9), (1.1, 0.42, 0.5), M["ST_HIDE"], rot=(0.0, 0.45, 0.0))
+    ico("St_Head", (3.6, 0, 5.35), (1.15, 0.55, 0.5), M["ST_HIDE_LT"], subdiv=2)
+    cone("St_Snout", (4.6, 0, 5.25), 0.34, 1.3, M["ST_HIDE"], rot=(0.0, math.pi / 2, 0.0), vertices=7)
+    box("St_Jaw", (4.0, 0, 4.95), (0.55, 0.4, 0.14), M["ST_HIDE"], rot=(0.0, 0.25, 0.0))
+    # Eyes: violet pair, one teal seer-eye high (the family
+    # resemblance to the crawler is deliberate).
+    ico("St_EyeL", (4.15, 0.34, 5.5), (0.11, 0.11, 0.11), M["ST_VIOLET"], subdiv=1)
+    ico("St_EyeR", (4.15, -0.34, 5.5), (0.11, 0.11, 0.11), M["ST_VIOLET"], subdiv=1)
+    ico("St_EyeTop", (3.7, 0, 5.78), (0.13, 0.13, 0.13), M["TEAL"], subdiv=1)
+    # Fangs hanging from the snout, crest fins swept back.
+    cone("St_FangL", (4.5, 0.18, 4.9), 0.09, 0.5, M["ST_FANG"], rot=(math.pi, 0.0, 0.0), vertices=6)
+    cone("St_FangR", (4.5, -0.18, 4.9), 0.09, 0.5, M["ST_FANG"], rot=(math.pi, 0.0, 0.0), vertices=6)
+    for side in (1, -1):
+        cone("St_Crest%d" % side, (3.1, side * 0.3, 5.95), 0.16, 1.1, M["ST_CHITIN"],
+             rot=(0.35, 0.0, -side * 0.3), vertices=6)
+    # Stilt legs: upper + bent lower + planted foot, four of
+    # them, splayed a little for a predatory stance.
+    for side in (1, -1):
+        for i, lx in enumerate([1.7, -1.7]):
+            fwd = 1 if i == 0 else -1
+            box("St_LegU%d_%d" % (side, i), (lx, side * 0.95, 3.35),
+                (0.30, 0.30, 1.55), M["ST_HIDE"], rot=(side * 0.15, 0.0, 0.0))
+            box("St_LegL%d_%d" % (side, i), (lx + fwd * 0.25, side * 1.25, 1.5),
+                (0.20, 0.20, 1.45), M["ST_HIDE_LT"], rot=(side * 0.22, -fwd * 0.12, 0.0))
+            box("St_Foot%d_%d" % (side, i), (lx + fwd * 0.45, side * 1.45, 0.10),
+                (0.55, 0.30, 0.12), M["ST_CHITIN"])
+    # Blade forelimbs under the shoulders, angled down-forward.
+    for side in (1, -1):
+        box("St_Blade%d" % side, (2.45, side * 1.0, 3.15),
+            (1.05, 0.09, 0.30), M["ST_CHITIN"], rot=(0.0, 0.55, side * 0.2))
+    # Shoulder and hip spikes, tilted outward.
+    for side in (1, -1):
+        cone("St_SpikeS%d" % side, (1.9, side * 0.95, 4.95), 0.14, 0.8, M["ST_CHITIN"],
+             rot=(-side * 0.5, 0.0, 0.0), vertices=6)
+        cone("St_SpikeH%d" % side, (-1.9, side * 0.95, 5.05), 0.14, 0.8, M["ST_CHITIN"],
+             rot=(-side * 0.5, 0.0, 0.0), vertices=6)
+    # Dorsal spire fins with violet glow tips - the camp's
+    # spires, grown along the spine.
+    for i, (fx, fz, fd) in enumerate([(1.2, 5.6, 1.5), (0.0, 5.75, 1.9), (-1.2, 5.6, 1.5)]):
+        cone("St_Fin%d" % i, (fx, 0, fz), 0.30, fd, M["ST_CHITIN"], rot=(0.0, -0.18, 0.0), vertices=6)
+        ico("St_FinTip%d" % i, (fx - 0.17 * fd, 0, fz + fd * 0.48), (0.10, 0.10, 0.10),
+            M["ST_VIOLET"], subdiv=1)
+    # Whip tail: rising segment, glow orb, obsidian stinger
+    # laid onto -X.
+    box("St_Tail", (-3.0, 0, 4.6), (1.3, 0.22, 0.22), M["ST_HIDE"], rot=(0.0, -0.25, 0.0))
+    ico("St_TailOrb", (-3.9, 0, 4.95), (0.16, 0.16, 0.16), M["ST_VIOLET"], subdiv=1)
+    cone("St_Stinger", (-4.6, 0, 5.1), 0.30, 1.6, M["ST_CHITIN"], rot=(0.0, -math.pi / 2, 0.0), vertices=7)
+
+
+# Per-model arena checks: (min parts, max polys, length
+# range, width range, height range). Ground contact
+# (zmin near 0) is checked for every model in main().
 BUILDERS = [
-    ("ArenaSporeCrawler", build_spore_crawler),
+    ("ArenaSporeCrawler", build_spore_crawler, (28, 20000, (8.0, 11.5), (5.0, 8.5), (3.2, 5.2))),
+    ("ArenaVoidStalker", build_void_stalker, (34, 20000, (9.0, 12.0), (3.0, 5.0), (5.2, 7.6))),
 ]
 
 
@@ -217,7 +299,9 @@ def main():
     M = make_materials()
 
     results = {}
-    for name, builder in BUILDERS:
+    checks = {}
+    for name, builder, chk in BUILDERS:
+        checks[name] = chk
         del OBJECTS[:]
         rng = random.Random(__import__("zlib").crc32(name.encode()) & 0xFFFF)
         builder(rng)
@@ -237,11 +321,11 @@ def main():
             bpy.data.objects.remove(o, do_unlink=True)
     ok = True
     for name, (count, tris, w, d, h, zmin) in results.items():
-        # Arena scale checks: the crawler is authored along
-        # +X (length), ~9-11 long, ~6-8 wide with legs,
-        # ~3.5-5 high, resting on z=0.
-        good = count >= 28 and tris <= 20000 and 8.0 <= w <= 11.5 \
-            and 5.0 <= d <= 8.5 and 3.2 <= h <= 5.2 and -0.30 <= zmin <= 0.40
+        # Arena scale checks (per model, from BUILDERS):
+        # authored along +X (length), resting on z=0.
+        min_parts, max_tris, (w0, w1), (d0, d1), (h0, h1) = checks[name]
+        good = count >= min_parts and tris <= max_tris and w0 <= w <= w1 \
+            and d0 <= d <= d1 and h0 <= h <= h1 and -0.30 <= zmin <= 0.40
         print("  %s %s: objects=%d tris=%d len=%.1f wid=%.1f h=%.1f zmin=%.2f"
               % ("PASS" if good else "FAIL", name, count, tris, w, d, h, zmin))
         ok = ok and good

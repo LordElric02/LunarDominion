@@ -380,7 +380,7 @@ namespace LunarDominion.UI
         {
             null, // tier 0 = no camp
             "Models/ArenaSporeCrawler",
-            null, // Tier 2 Void Stalker - model pending
+            "Models/ArenaVoidStalker", // Tier 2 (added 2026-11-16, after the T1 slice closed)
             null, // Tier 3 Brood Tyrant - model pending
             null, // Tier 4 Ashen Ravager - model pending
             null, // Tier 5 Dread Stalker - model pending
