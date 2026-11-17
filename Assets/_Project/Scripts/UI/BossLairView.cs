@@ -794,6 +794,15 @@ namespace LunarDominion.UI
             var walker = Instantiate(walkerPrefab);
             walker.name = "MechMiniWalker";
             walker.transform.SetParent(wrapper.transform, false);
+            // The saved prefab carries its scratch-scene placement;
+            // zero it BEFORE measuring bounds, or the centring
+            // offset below subtracts that placement a second time
+            // and parks the visual ~20 units off the clone origin
+            // (the 2026-11-17 invisible-adds bug — the boss build
+            // zeroes first for exactly this reason). Rotation is
+            // left as authored; the wrapper supplies the facing.
+            walker.transform.localPosition = Vector3.zero;
+            walker.transform.localScale = Vector3.one;
             foreach (var collider in walker.GetComponentsInChildren<Collider>())
                 Destroy(collider);
 
