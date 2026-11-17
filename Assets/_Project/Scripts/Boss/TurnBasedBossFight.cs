@@ -1428,10 +1428,15 @@ namespace LunarDominion.Boss
                 // Spawn a touch wider than the original +-6.8:
                 // at double size the drone's radius is ~1.1, and
                 // 6.8 left almost no clearance from the boss's
-                // 5.6 half-width.
+                // 5.6 half-width. The walkers stand wider still
+                // (+-11.5): at 7.2 tall, +-7.6 tucked them into
+                // the boss's silhouette and his arms hid them
+                // (Patrick, 2026-11-17) — out at the arena pads
+                // they read as a separate escort line.
                 // Walkers stand on the arena floor; the
                 // primitive drones hover at 4.2.
-                Vector3 home = bossPos + new Vector3(i == 0 ? -7.6f : 7.6f,
+                float sideOffset = DroneVisualIsWalker ? 11.5f : 7.6f;
+                Vector3 home = bossPos + new Vector3(i == 0 ? -sideOffset : sideOffset,
                     DroneVisualIsWalker ? 0f : 4.2f, -2.6f);
                 fig.transform.position = home + Vector3.up * 5f;
                 var drone = new TurnDroneState
