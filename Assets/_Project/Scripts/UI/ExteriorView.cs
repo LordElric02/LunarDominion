@@ -2565,6 +2565,48 @@ namespace LunarDominion.UI
                 }
             }
 
+            // Face the pack at the army's lead figure, not at the
+            // base: the ring keeps each figure's march angle, so
+            // the fixed base-facing above can leave the creatures
+            // side-on to the soldier they are actually fighting
+            // (Patrick, T1 Play check 2026-11-16: "the model was
+            // turned to the side during the fight"). The camp
+            // slot root carries no rotation, so a local yaw here
+            // is a world yaw. Runs before the swap phase, while
+            // the creatures are still sunk: positions are restaged
+            // and re-sunk, rotations and lunge dirs follow.
+            if (arena && campRoot != null && root != null && figures.Count > 0 && enemies.Count > 0)
+            {
+                Vector3 leadWorld = root.TransformPoint(figBase[0]);
+                Vector3 toLead = leadWorld - campRoot.position;
+                toLead.y = 0f;
+                if (toLead.sqrMagnitude > 0.01f)
+                {
+                    float leadYaw = Mathf.Atan2(toLead.x, toLead.z) * Mathf.Rad2Deg;
+                    var leadDir = new Vector3(Mathf.Sin(leadYaw * Mathf.Deg2Rad), 0f, Mathf.Cos(leadYaw * Mathf.Deg2Rad));
+                    var leadPerp = new Vector3(leadDir.z, 0f, -leadDir.x);
+                    var faceSpots = new[]
+                    {
+                        new KeyValuePair<Vector3, float>(Vector3.zero, ArenaAnchorScale),
+                        new KeyValuePair<Vector3, float>(-leadDir * 4.5f + leadPerp * 3.8f, ArenaKinScale),
+                        new KeyValuePair<Vector3, float>(-leadDir * 4.5f - leadPerp * 3.8f, ArenaKinScale),
+                    };
+                    for (int i = 0; i < enemies.Count && i < faceSpots.Length; i++)
+                    {
+                        var creature = enemies[i];
+                        if (creature == null) continue;
+                        var spotPos = faceSpots[i].Key;
+                        spotPos.y = enemyBase[i].y;
+                        enemyBase[i] = spotPos;
+                        enemyBaseRot[i] = Quaternion.Euler(0f, leadYaw, 0f);
+                        enemyLungeDir[i] = leadDir;
+                        creature.transform.localRotation = enemyBaseRot[i];
+                        spotPos.y -= 4.5f;
+                        creature.transform.localPosition = spotPos;
+                    }
+                }
+            }
+
             // Who falls, and when: falls spread across the clash.
             // The army's count follows the real casualty fraction
             // (a victory always leaves at least one figure standing,
