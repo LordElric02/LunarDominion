@@ -3026,7 +3026,7 @@ namespace LunarDominion.UI
         private GameObject _findRoot;
         private GameObject _baseBtnRoot;
         private GameObject _topBarGo;
-        private GameObject _bottomNavGo;
+        private BottomNavView _bottomNav;
         private GameObject _findBar;
         private Text _findStatus;
         private readonly Button[] _findChips = new Button[ChipCategories.Length];
@@ -3881,9 +3881,17 @@ namespace LunarDominion.UI
             // all pass through here — so the bars always match
             // the screen on top.
             if (_topBarGo == null) _topBarGo = GameObject.Find("TopBar");
-            if (_bottomNavGo == null) _bottomNavGo = GameObject.Find("BottomNav");
             if (_topBarGo != null) _topBarGo.SetActive(!visible);
-            if (_bottomNavGo != null) _bottomNavGo.SetActive(!visible);
+            // The BottomNav routes through its own view (2026-11-18):
+            // the bar is player-toggled now, so the Map only
+            // SUPPRESSES it (and its MENU button) while up — the
+            // player's open/closed choice survives the round trip.
+            if (_bottomNav == null)
+            {
+                var navHost = GameObject.Find("BottomNavView");
+                if (navHost != null) _bottomNav = navHost.GetComponent<BottomNavView>();
+            }
+            if (_bottomNav != null) _bottomNav.SetSuppressed(visible);
             if (visible)
             {
                 // Opening the Map always recentres on the base — the

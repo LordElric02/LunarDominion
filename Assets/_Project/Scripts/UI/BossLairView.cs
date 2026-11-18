@@ -2258,7 +2258,7 @@ namespace LunarDominion.UI
         }
 
         private GameObject _topBarGo;
-        private GameObject _bottomNavGo;
+        private BottomNavView _bottomNav;
 
         // Fight chrome (Patrick 2026-11-11): during a turn fight
         // the TopBar and BottomNav hide — the tabs can't be used
@@ -2276,9 +2276,17 @@ namespace LunarDominion.UI
             // The first version of this method hid the hosts and
             // changed nothing on screen (Patrick, 2026-11-11).
             if (_topBarGo == null) _topBarGo = GameObject.Find("TopBar");
-            if (_bottomNavGo == null) _bottomNavGo = GameObject.Find("BottomNav");
             if (_topBarGo != null) _topBarGo.SetActive(!fight);
-            if (_bottomNavGo != null) _bottomNavGo.SetActive(!fight);
+            // The BottomNav routes through its own view (2026-11-18):
+            // the bar is player-toggled now, so a fight only
+            // SUPPRESSES it (and its MENU button) — the player's
+            // open/closed choice survives the fight.
+            if (_bottomNav == null)
+            {
+                var navHost = GameObject.Find("BottomNavView");
+                if (navHost != null) _bottomNav = navHost.GetComponent<BottomNavView>();
+            }
+            if (_bottomNav != null) _bottomNav.SetSuppressed(fight);
             if (_bossHpText != null && _bossHpText.transform.parent is RectTransform barRt)
             {
                 // Fight height: level with the DEV button (Patrick
