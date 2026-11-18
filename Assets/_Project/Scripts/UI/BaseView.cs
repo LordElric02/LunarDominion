@@ -1061,10 +1061,13 @@ namespace LunarDominion.UI
             // base still builds when the model file is missing.
             if (!TryAddModelNovaArsenal())
                 AddBuilding(BuildingId.NovaArsenal, new Vector3(21f, 0f, -14f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
-            // Aegis Motor Pool (Blender model, 2026-11-05): use the FBX model if
-            // it loads, otherwise fall back to the old grey cube so the base
+            // Aegis Motor Pool: prefer the Scifi-Kit prefab (2026-11-18,
+            // Patrick re-picked the kit's Room_Large_02 complex for
+            // Aegis over Nova — its open sprawl suits a motor pool)
+            // when installed, then the Blender model (2026-11-05),
+            // otherwise fall back to the old grey cube so the base
             // still builds when the model file is missing.
-            if (!TryAddModelAegisMotorPool())
+            if (!TryAddKitAegisMotorPool() && !TryAddModelAegisMotorPool())
                 AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -16f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
             // Research Lab (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old purple cylinder so
@@ -1120,6 +1123,10 @@ namespace LunarDominion.UI
         // 0.375 so the kit's module proportions stay consistent
         // across buildings. One-line tuning knob.
         private const float KitMarineScale = 0.375f;
+
+        // Kit Aegis instance scale: same shared 0.375 as the other
+        // kit buildings. One-line tuning knob.
+        private const float KitAegisScale = 0.375f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -1410,6 +1417,146 @@ namespace LunarDominion.UI
             catch (System.Exception e)
             {
                 Debug.LogWarning("[BaseView] Marine kit prefab failed to load, using model/primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Instantiate the Scifi-Kit Aegis Motor Pool
+        /// (Resources/Models/AegisKit — a local-only prefab Patrick
+        /// saved in KitTest from the Creepy Cat Room_Large_02
+        /// assembly, 2026-11-18) at the Aegis plot (0, -16) if it
+        /// can be loaded. Returns false (caller falls back to the
+        /// FBX model, then the primitive) when the prefab is missing
+        /// or has no meshes. Patrick re-picked this assembly for
+        /// Aegis over Nova: it is a sprawling, mostly open-topped
+        /// complex — a big hall joined to a wing of small chambers —
+        /// whose open yards suit a motor pool. Same treatment as
+        /// the other kit buildings: demo lights (data component
+        /// first, then the Light) and per-piece colliders stripped,
+        /// recentred on the plot and grounded from mesh bounds
+        /// measured in prefab space, one bounds-fitted tap
+        /// collider, white marker, kit paint kept as-is. Scale is
+        /// the shared kit 0.375.</summary>
+        private bool TryAddKitAegisMotorPool()
+        {
+            var prefab = Resources.Load<GameObject>("Models/AegisKit");
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "AegisBuilding";
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = Vector3.zero;
+                go.transform.localScale = Vector3.one * KitAegisScale;
+
+                // Strip the demo lighting and per-piece colliders:
+                // the UniversalAdditionalLightData goes before its
+                // Light, the order the Nexus strip proved necessary.
+                foreach (var light in go.GetComponentsInChildren<Light>(true))
+                {
+                    var extra = light.GetComponent<UniversalAdditionalLightData>();
+                    if (extra != null) Destroy(extra);
+                    Destroy(light);
+                }
+                foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                    Destroy(col);
+
+                // Captured BEFORE the marker is added, so Highlight()
+                // recolours the building parts but not the marker.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Measure the assembly in its own (prefab) space: the
+                // matrix product cancels the world frame, so the result
+                // is independent of the layout root's 45-degree yaw.
+                var meshFilters = go.GetComponentsInChildren<MeshFilter>(true);
+                if (meshFilters.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                Bounds bounds = new Bounds();
+                bool hasBounds = false;
+                var toLocal = go.transform.worldToLocalMatrix;
+                foreach (var mf in meshFilters)
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var m = toLocal * mf.transform.localToWorldMatrix;
+                    var mb = mf.sharedMesh.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var corner = new Vector3(
+                            (i & 1) == 0 ? mb.min.x : mb.max.x,
+                            (i & 2) == 0 ? mb.min.y : mb.max.y,
+                            (i & 4) == 0 ? mb.min.z : mb.max.z);
+                        var p = m.MultiplyPoint3x4(corner);
+                        if (!hasBounds)
+                        {
+                            bounds = new Bounds(p, Vector3.zero);
+                            hasBounds = true;
+                        }
+                        else bounds.Encapsulate(p);
+                    }
+                }
+                if (!hasBounds)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Recentring: the measured bounds are in unscaled
+                // prefab space, so the offset that centres the
+                // footprint on the Aegis plot and grounds the float
+                // is the plot position plus the bounds offset
+                // multiplied by the instance scale.
+                go.transform.localPosition = new Vector3(0f, 0f, -16f)
+                    + new Vector3(
+                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitAegisScale;
+
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared kit materials.
+                    // The kit paint is captured as-is (no treatment).
+                    partColors[rend] = rend.material.color;
+                }
+
+                // One tap collider wrapping the whole assembly, in the
+                // root's own space (the bounds were measured there).
+                var box = go.AddComponent<BoxCollider>();
+                box.center = bounds.center;
+                box.size = bounds.size;
+
+                // Same white marker as the other buildings, just above
+                // the roofline, over the footprint centre.
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "AegisMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(
+                    bounds.center.x, bounds.max.y + 0.45f, bounds.center.z);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.AegisMotorPool] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.AegisMotorPool] = go;
+                _baseColors[BuildingId.AegisMotorPool] = new Color(0.55f, 0.55f, 0.60f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Aegis kit prefab failed to load, using model/primitive: " + e.Message);
                 if (go != null) Destroy(go);
                 return false;
             }
