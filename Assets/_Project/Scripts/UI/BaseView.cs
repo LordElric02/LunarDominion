@@ -1124,9 +1124,12 @@ namespace LunarDominion.UI
         // across buildings. One-line tuning knob.
         private const float KitMarineScale = 0.375f;
 
-        // Kit Aegis instance scale: same shared 0.375 as the other
-        // kit buildings. One-line tuning knob.
-        private const float KitAegisScale = 0.375f;
+        // Kit Aegis instance scale: Room_Large_02 is natively ~30
+        // units long, so at the shared 0.375 it sprawled across
+        // the roads at the 2026-11-18 Play check; Patrick shrank
+        // it to 0.25 ahead of the end-of-conversion layout pass,
+        // which settles final sizes. One-line tuning knob.
+        private const float KitAegisScale = 0.25f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -1437,7 +1440,8 @@ namespace LunarDominion.UI
         /// recentred on the plot and grounded from mesh bounds
         /// measured in prefab space, one bounds-fitted tap
         /// collider, white marker, kit paint kept as-is. Scale is
-        /// the shared kit 0.375.</summary>
+        /// 0.25 (the assembly is natively ~30 units long; the
+        /// shared 0.375 sprawled it across the roads).</summary>
         private bool TryAddKitAegisMotorPool()
         {
             var prefab = Resources.Load<GameObject>("Models/AegisKit");
