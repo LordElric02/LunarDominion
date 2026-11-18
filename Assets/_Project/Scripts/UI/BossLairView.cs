@@ -1081,7 +1081,7 @@ namespace LunarDominion.UI
             // unlocked boss level (1 to the highest unlocked).
             _headerGo = UIHelpers.Panel(_root, "Header", UIHelpers.Hex("#0D1420"),
                 new Vector2(0, 0.80f), new Vector2(1, 1f), Vector2.zero, Vector2.zero);
-            _titleText = UIHelpers.LabelInRect(_headerGo, "Title", "WAR ROBOT LAIR", 36, Color.white,
+            _titleText = UIHelpers.LabelInRect(_headerGo, "Title", "MORBIUS 3 LAIR", 36, Color.white,
                 new Rect(0.12f, 0.62f, 0.88f, 0.98f), TextAnchor.MiddleCenter);
             _prevLevelButton = UIHelpers.Button(_headerGo, "PrevLevelBtn", "<", 30,
                 UIHelpers.Hex("#1A2436"), Color.white);
@@ -1284,7 +1284,7 @@ namespace LunarDominion.UI
             bool turnBased = UseTurnBased();
             _titleText.text = turnBased
                 ? $"{EncounterCatalog.BossName} — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}"
-                : $"WAR ROBOT — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}";
+                : $"{EncounterCatalog.BossName} — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}";
             if (turnBased && boss.Spawns.Count > 0)
             {
                 // The numbers the turn fight actually uses:
