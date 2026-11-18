@@ -800,16 +800,21 @@ namespace LunarDominion.UI
             // offset below subtracts that placement a second time
             // and parks the visual ~20 units off the clone origin
             // (the 2026-11-17 invisible-adds bug — the boss build
-            // zeroes first for exactly this reason). Facing is set
-            // on the instance exactly as the boss build does: the
-            // variant root is a plain prefab root, and whatever
-            // rotation the scratch scene left on it must not leak
-            // into the fight (first walker build put the yaw on
-            // the wrapper instead and the escorts stood side-on
-            // to the heroes, Patrick 2026-11-17).
+            // zeroes first for exactly this reason). Facing: the
+            // instance carries NO yaw. The boss's chain is root
+            // 180 x AresVisual wrapper -90 x mech instance +90 =
+            // 180 net; the walker clone's root already carries
+            // the 180 (the fight summons it in the boss root's
+            // frame), so the instance must add nothing — copying
+            // the boss instance's +90 without its wrapper's -90
+            // left the escorts exactly 90 degrees side-on
+            // (Patrick's checks, 2026-11-17; the -90 wrapper term
+            // was the missing piece, found in BuildArenaScene).
+            // Zeroing the rotation also keeps any scratch-scene
+            // posing on the variant out of the fight.
             walker.transform.localPosition = Vector3.zero;
             walker.transform.localScale = Vector3.one;
-            walker.transform.localRotation = Quaternion.Euler(0f, MechBossYawDegrees, 0f);
+            walker.transform.localRotation = Quaternion.identity;
             foreach (var collider in walker.GetComponentsInChildren<Collider>())
                 Destroy(collider);
 
