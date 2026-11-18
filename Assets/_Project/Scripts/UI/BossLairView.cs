@@ -114,6 +114,13 @@ namespace LunarDominion.UI
         // dressing next to him).
         private const float WalkerDroneTargetHeight = 3.6f;
 
+        // Crimson escort livery (Patrick's pick, 2026-11-17):
+        // multipliers over the pack materials' own colours — a
+        // red-oxide body shift and a hard red glow, so the
+        // escorts stop blending into the boss's gunmetal/orange.
+        private static readonly Color WalkerTintBase = new Color(1.25f, 0.72f, 0.66f, 1f);
+        private static readonly Color WalkerTintEmission = new Color(1.6f, 0.22f, 0.16f, 1f);
+
         // Cinematic C2: red edge vignette pulsed when a hero
         // takes a heavy hit (the fight raises OnHeroHeavyHit;
         // alpha decays per-frame in Update).
@@ -851,6 +858,32 @@ namespace LunarDominion.UI
             foreach (var anim in walker.GetComponentsInChildren<Animator>(true))
                 if (anim != legsAnimator) anim.enabled = false;
             if (legsAnimator != null) legsAnimator.applyRootMotion = false;
+
+            // Crimson livery: instance every material on the
+            // template (renderer.materials instances them — the
+            // shared pack assets, and so the boss's own colours,
+            // are never touched) and multiply in the tint. The
+            // fight's clones share these instanced materials, so
+            // the treatment is applied once, here.
+            foreach (var tintRenderer in walker.GetComponentsInChildren<Renderer>())
+            {
+                var mats = tintRenderer.materials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var mat = mats[i];
+                    if (mat == null) continue;
+                    if (mat.HasProperty("_BaseColor"))
+                        mat.SetColor("_BaseColor", mat.GetColor("_BaseColor") * WalkerTintBase);
+                    else if (mat.HasProperty("_Color"))
+                        mat.SetColor("_Color", mat.GetColor("_Color") * WalkerTintBase);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        mat.SetColor("_EmissionColor", mat.GetColor("_EmissionColor") * WalkerTintEmission);
+                        mat.EnableKeyword("_EMISSION");
+                    }
+                }
+                tintRenderer.materials = mats;
+            }
 
             // Root collider, sized for the taller walker (the
             // primitive template's was r 0.9 at its centre).
