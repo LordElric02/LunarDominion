@@ -1138,10 +1138,11 @@ namespace LunarDominion.UI
         // is a compact assembly). One-line tuning knob.
         private const float KitNovaScale = 0.375f;
 
-        // Kit Hospital instance scale: the shared 0.375 (the
-        // hand-built flat-stack is 6x12 native). One-line tuning
-        // knob.
-        private const float KitHospitalScale = 0.375f;
+        // Kit Hospital instance scale: 0.75, double the shared
+        // 0.375 — at 0.375 the hand-built 6x12 flat-stack read
+        // dwarfed next to the kit room assemblies (Patrick,
+        // 2026-11-18). One-line tuning knob.
+        private const float KitHospitalScale = 0.75f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -1734,7 +1735,10 @@ namespace LunarDominion.UI
         /// per-piece colliders stripped, recentred on the plot and
         /// grounded from mesh bounds measured in prefab space, one
         /// bounds-fitted tap collider, white marker, kit paint
-        /// kept as-is, shared kit scale 0.375. The door carries an
+        /// kept as-is, kit scale 0.75 (doubled at Patrick's
+        /// direction — it read dwarfed at the shared 0.375) and a
+        /// 180-degree yaw so the door fronts the camera side. The
+        /// door carries an
         /// Audio Source (Play On Awake off) and whatever door
         /// controller the kit ships; with its colliders stripped
         /// it has no trigger and stays shut.</summary>
@@ -1751,6 +1755,11 @@ namespace LunarDominion.UI
                 go.transform.SetParent(_layoutRoot.transform, false);
                 go.transform.localPosition = Vector3.zero;
                 go.transform.localScale = Vector3.one * KitHospitalScale;
+                // The door fronts the prefab's far long side, away
+                // from the base camera; a half-turn puts the
+                // entrance on the visible side. The recentring
+                // offset below is rotated by the same yaw.
+                go.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
 
                 // Strip the demo lighting and per-piece colliders:
                 // the UniversalAdditionalLightData goes before its
@@ -1817,8 +1826,8 @@ namespace LunarDominion.UI
                 // assembly is the plot position plus the bounds
                 // offset multiplied by the instance scale.
                 go.transform.localPosition = new Vector3(30f, 0f, 0f)
-                    + new Vector3(
-                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitHospitalScale;
+                    + go.transform.localRotation * (new Vector3(
+                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitHospitalScale);
 
                 var list = new List<Renderer>();
                 var partColors = new Dictionary<Renderer, Color>();
