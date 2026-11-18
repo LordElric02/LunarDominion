@@ -1049,10 +1049,12 @@ namespace LunarDominion.UI
             // base still builds when the model file is missing.
             if (!TryAddModelHeliumHarvester())
                 AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 16f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
-            // Marine Foundry (Blender model, 2026-11-05): use the FBX model if
-            // it loads, otherwise fall back to the old green-grey cube so the
-            // base still builds when the model file is missing.
-            if (!TryAddModelMarineFoundry())
+            // Marine Foundry: prefer the Scifi-Kit prefab (2026-11-18,
+            // Patrick's pick as the second kit conversion) when installed,
+            // then the Blender model (2026-11-05), otherwise fall back to
+            // the old green-grey cube so the base still builds when the
+            // files are missing.
+            if (!TryAddKitMarineFoundry() && !TryAddModelMarineFoundry())
                 AddBuilding(BuildingId.MarineFoundry, new Vector3(-21f, 0f, -14f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             // Nova Arsenal (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old red cube so the
@@ -1113,6 +1115,11 @@ namespace LunarDominion.UI
         // the instanced kit materials at load.
         private const float KitNexusMetallic = 0.65f;
         private const float KitNexusSmoothness = 0.65f;
+
+        // Kit Marine instance scale: starts at the Nexus's settled
+        // 0.375 so the kit's module proportions stay consistent
+        // across buildings. One-line tuning knob.
+        private const float KitMarineScale = 0.375f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -1263,6 +1270,146 @@ namespace LunarDominion.UI
             catch (System.Exception e)
             {
                 Debug.LogWarning("[BaseView] Nexus kit prefab failed to load, using model/primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Instantiate the Scifi-Kit Marine Foundry (Resources/
+        /// Models/MarineKit — a local-only prefab Patrick saved in
+        /// KitTest from the Creepy Cat Room_Large_01 assembly,
+        /// 2026-11-18) at the Marine plot (-21, -14) if it can be
+        /// loaded. Returns false (caller falls back to the FBX model,
+        /// then the primitive) when the prefab is missing or has no
+        /// meshes. Same treatment as the kit Nexus: the demo lights
+        /// (data component first, then the Light) and per-piece
+        /// colliders are stripped, the assembly is recentred on the
+        /// plot and grounded from its measured mesh bounds, and one
+        /// bounds-fitted box collider serves taps. Unlike the Nexus
+        /// the kit paint is kept as-is (no silver treatment — that
+        /// was the Nexus's own colour call); the room is open-topped
+        /// with a furnished interior, which reads as detail from the
+        /// base camera. Scale starts at the Nexus's settled 0.375 so
+        /// the kit's module proportions stay consistent.</summary>
+        private bool TryAddKitMarineFoundry()
+        {
+            var prefab = Resources.Load<GameObject>("Models/MarineKit");
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "MarineBuilding";
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = Vector3.zero;
+                go.transform.localScale = Vector3.one * KitMarineScale;
+
+                // Strip the demo lighting and per-piece colliders:
+                // the UniversalAdditionalLightData goes before its
+                // Light, the order the Nexus strip proved necessary.
+                foreach (var light in go.GetComponentsInChildren<Light>(true))
+                {
+                    var extra = light.GetComponent<UniversalAdditionalLightData>();
+                    if (extra != null) Destroy(extra);
+                    Destroy(light);
+                }
+                foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                    Destroy(col);
+
+                // Captured BEFORE the marker is added, so Highlight()
+                // recolours the building parts but not the marker.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Measure the assembly in its own (prefab) space: the
+                // matrix product cancels the world frame, so the result
+                // is independent of the layout root's 45-degree yaw.
+                var meshFilters = go.GetComponentsInChildren<MeshFilter>(true);
+                if (meshFilters.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                Bounds bounds = new Bounds();
+                bool hasBounds = false;
+                var toLocal = go.transform.worldToLocalMatrix;
+                foreach (var mf in meshFilters)
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var m = toLocal * mf.transform.localToWorldMatrix;
+                    var mb = mf.sharedMesh.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var corner = new Vector3(
+                            (i & 1) == 0 ? mb.min.x : mb.max.x,
+                            (i & 2) == 0 ? mb.min.y : mb.max.y,
+                            (i & 4) == 0 ? mb.min.z : mb.max.z);
+                        var p = m.MultiplyPoint3x4(corner);
+                        if (!hasBounds)
+                        {
+                            bounds = new Bounds(p, Vector3.zero);
+                            hasBounds = true;
+                        }
+                        else bounds.Encapsulate(p);
+                    }
+                }
+                if (!hasBounds)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Recentring: the measured bounds are in unscaled
+                // prefab space, so the offset that centres the
+                // footprint on the Marine plot and grounds the float
+                // is the plot position plus the bounds offset
+                // multiplied by the instance scale.
+                go.transform.localPosition = new Vector3(-21f, 0f, -14f)
+                    + new Vector3(
+                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitMarineScale;
+
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared kit materials.
+                    // The kit paint is captured as-is (no treatment).
+                    partColors[rend] = rend.material.color;
+                }
+
+                // One tap collider wrapping the whole assembly, in the
+                // root's own space (the bounds were measured there).
+                var box = go.AddComponent<BoxCollider>();
+                box.center = bounds.center;
+                box.size = bounds.size;
+
+                // Same white marker as the other buildings, just above
+                // the roofline, over the footprint centre.
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "MarineMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(
+                    bounds.center.x, bounds.max.y + 0.45f, bounds.center.z);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.MarineFoundry] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.MarineFoundry] = go;
+                _baseColors[BuildingId.MarineFoundry] = new Color(0.35f, 0.65f, 0.25f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Marine kit prefab failed to load, using model/primitive: " + e.Message);
                 if (go != null) Destroy(go);
                 return false;
             }
