@@ -302,7 +302,7 @@ namespace LunarDominion.UI
             // Boss lair: the War Robot lives here, far southwest
             // corner of the map. Index 21. The lair does not move
             // on respawn (unlike camps) - it is a fixed place.
-            new NodeDef { ResourcePath = "Models/BossLair", Kind = MapPointKind.BossLair, Title = "War Robot Lair", Info = "BOSS \u2014 War Robot\nGiant Mechanized enemy\nUnlocks at Nexus 10", Position = new Vector3(-480f, 0f, -400f) },
+            new NodeDef { ResourcePath = "Models/BossLair", Kind = MapPointKind.BossLair, Title = "Morbius 3 Lair", Info = "BOSS \u2014 Morbius 3\nGiant Mechanized enemy\nUnlocks at Nexus 10", Position = new Vector3(-480f, 0f, -400f) },
         };
 
         // Enemy camp field (2026-11-10, replaces the 3 fixed camps and

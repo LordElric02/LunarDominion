@@ -59,7 +59,7 @@ namespace LunarDominion.UI
                 new Rect(0.04f, 0.83f, 0.96f, 0.90f), TextAnchor.MiddleCenter);
 
             _footerText = UIHelpers.LabelInRect(_root, "Footer",
-                "Heroes fight the War Robot in the lair. One of each — each hero can only be recruited once. Heroes level up from boss-fight XP.",
+                $"Heroes fight {LunarDominion.Expeditions.EncounterCatalog.BossName} in the lair. One of each — each hero can only be recruited once. Heroes level up from boss-fight XP.",
                 22, UIHelpers.Hex("#C0C8D0"),
                 new Rect(0.04f, 0.01f, 0.96f, 0.06f), TextAnchor.MiddleCenter);
 

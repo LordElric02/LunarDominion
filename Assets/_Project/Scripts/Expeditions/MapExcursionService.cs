@@ -388,7 +388,7 @@ namespace LunarDominion.Expeditions
                 var boss = EncounterForBoss();
                 if (boss == null) return null;
                 if (_state.NexusLevel >= boss.RequiredNexusLevel) return null;
-                return $"Warning: the War Robot is far stronger than your army — it unlocks at Nexus {boss.RequiredNexusLevel} (you are Nexus {_state.NexusLevel}). Your squad is likely to be wiped out.";
+                return $"Warning: {EncounterCatalog.BossName} is far stronger than your army — it unlocks at Nexus {boss.RequiredNexusLevel} (you are Nexus {_state.NexusLevel}). Your squad is likely to be wiped out.";
             }
             if (point.Kind != MapPointKind.Camp) return null;
             var encounter = EncounterForTier(point.Tier);

@@ -355,7 +355,7 @@ namespace LunarDominion.Boss
             if (Director == null) Director = gameObject.AddComponent<BossFightCamera>();
             if (_cam != null) Director.CaptureHome(_cam, bossRoot);
             SetupRig();
-            AddLog("A.R.E.S.-09 awakens. Choose each hero's action.");
+            AddLog($"{EncounterCatalog.BossName} awakens. Choose each hero's action.");
             StartRound();
         }
 
@@ -554,7 +554,7 @@ namespace LunarDominion.Boss
             {
                 var actor = _order[i];
                 string label = actor.Kind == ActorKind.Hero ? Heroes[actor.Index].Name
-                    : actor.Kind == ActorKind.Boss ? "A.R.E.S."
+                    : actor.Kind == ActorKind.Boss ? EncounterCatalog.BossShortName
                     : Drones[actor.Index].Name;
                 list.Add(new TurnOrderEntry
                 {
@@ -840,7 +840,7 @@ namespace LunarDominion.Boss
             }
             else
             {
-                ApplyBossDamage(hero, dmg, "attacks A.R.E.S.");
+                ApplyBossDamage(hero, dmg, $"attacks {EncounterCatalog.BossShortName}.");
                 StartCoroutine(FlashRoutine(_bossVisual, 1.04f));
             }
             hero.Acted = true;
@@ -1000,7 +1000,7 @@ namespace LunarDominion.Boss
                     {
                         ApplyBossDamage(hero, dmg, "ARMOR BREAK");
                         _bossDefDebuffRounds = ArmorBreakRounds;
-                        AddLog($"A.R.E.S.'s armor is cracked — DEF down for {ArmorBreakRounds} rounds.");
+                        AddLog($"{EncounterCatalog.BossShortName}'s armor is cracked — DEF down for {ArmorBreakRounds} rounds.");
                     }
                     break;
                 }
@@ -1073,7 +1073,7 @@ namespace LunarDominion.Boss
                 _phase2 = true;
                 AddShake(0.2f);
                 if (!_dronesSummoned) _pendingSummon = true;
-                AddLog("A.R.E.S. core exposed — PHASE 2. Drones incoming!");
+                AddLog($"{EncounterCatalog.BossShortName} core exposed — PHASE 2. Drones incoming!");
                 OnPhase2?.Invoke();
                 SfxDirector.Play(SfxClip.Phase2);
                 if (Director != null) Director.PlayShot(BossShot.Phase2Push);
@@ -1262,7 +1262,7 @@ namespace LunarDominion.Boss
             {
                 _slamCharged = true;
                 SfxDirector.Play(SfxClip.SlamCharge);
-                AddLog("A.R.E.S. is charging SEISMIC SLAM — it lands next turn!");
+                AddLog($"{EncounterCatalog.BossShortName} is charging SEISMIC SLAM — it lands next turn!");
                 OnChanged?.Invoke();
                 if (Director != null) Director.PlayShot(BossShot.BossCharge);
             }
@@ -1316,14 +1316,14 @@ namespace LunarDominion.Boss
                 new Color(1f, 0.45f, 0.2f)));
             int dmg = CombatService.Damage(BossEffAtk, target.EffDef,
                 UnitClass.Mechanized, target.Class, BossLevel, target.Level);
-            ApplyHeroDamage(target, dmg, "A.R.E.S.");
+            ApplyHeroDamage(target, dmg, EncounterCatalog.BossShortName);
             SetPose(0f, 0f, 0f);
             yield return MoveRoutine(_bossRoot, stop, home, 0.18f);
         }
 
         private IEnumerator SweepRoutine()
         {
-            AddLog("A.R.E.S. fires THERMAL SWEEP!");
+            AddLog($"{EncounterCatalog.BossShortName} fires THERMAL SWEEP!");
             SfxDirector.Play(SfxClip.Sweep);
             OnChanged?.Invoke();
             if (Director != null) Director.PlayShot(BossShot.BossCharge);
@@ -1411,7 +1411,7 @@ namespace LunarDominion.Boss
 
         private IEnumerator SummonDronesRoutine()
         {
-            AddLog("A.R.E.S. launches sub-drones!");
+            AddLog($"{EncounterCatalog.BossShortName} launches sub-drones!");
             SfxDirector.Play(SfxClip.DroneLaunch);
             OnChanged?.Invoke();
             if (Director != null) Director.PlayShot(BossShot.BossCharge);
@@ -1515,7 +1515,7 @@ namespace LunarDominion.Boss
             {
                 _ventActive = true;
                 SfxDirector.Play(SfxClip.Vent);
-                AddLog("The core VENTS — searing heat! A.R.E.S. takes +25% damage until it acts.");
+                AddLog($"The core VENTS — searing heat! {EncounterCatalog.BossShortName} takes +25% damage until it acts.");
                 OnChanged?.Invoke();
                 yield return new WaitForSeconds(0.35f);
                 int atk = Mathf.RoundToInt(BossEffAtk * VentBurnMult);
@@ -1575,7 +1575,7 @@ namespace LunarDominion.Boss
             Busy = true;
             AwaitingTarget = false;
             if (_slamRing != null) _slamRing.Hide();
-            AddLog(victory ? "A.R.E.S.-09 DESTROYED!" : (timeout ? "Out of time — the boss still stands." : (_surrendered ? "Squad retreats — surrendered." : "Squad down.")));
+            AddLog(victory ? $"{EncounterCatalog.BossName} DESTROYED!" : (timeout ? "Out of time — the boss still stands." : (_surrendered ? "Squad retreats — surrendered." : "Squad down.")));
             OnChanged?.Invoke();
             if (victory && _bossVisual != null)
             {

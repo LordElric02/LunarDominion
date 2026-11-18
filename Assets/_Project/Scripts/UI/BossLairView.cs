@@ -121,6 +121,16 @@ namespace LunarDominion.UI
         private static readonly Color WalkerTintBase = new Color(1.25f, 0.72f, 0.66f, 1f);
         private static readonly Color WalkerTintEmission = new Color(1.6f, 0.22f, 0.16f, 1f);
 
+        // Lair enter-screen display mech (2026-11-17): when the
+        // MechHeavyBoss prefab is installed it replaces the War
+        // Robot as the menu display model. Sized to roughly the
+        // old robot's framing; the yaw faces it at the heroes
+        // (-X), the same treatment the War Robot display got.
+        private const float DisplayMechTargetHeight = 7.4f;
+        private const float DisplayMechYawDegrees = 180f;
+        private Animator _displayMechAnimator;
+        private bool _displayIdlePlayed;
+
         // Cinematic C2: red edge vignette pulsed when a hero
         // takes a heavy hit (the fight raises OnHeroHeavyHit;
         // alpha decays per-frame in Update).
@@ -311,39 +321,46 @@ namespace LunarDominion.UI
             AddRock(new Vector3(9f, 0.5f, 6f), new Vector3(4f, 2.5f, 3f));
             AddRock(new Vector3(0f, 0.5f, -8f), new Vector3(6f, 2.5f, 3f));
 
-            // The War Robot, large: the FBX at 2.5x, centre-right,
-            // facing the heroes (-X). Falls back to a big dark primitive
-            // if the FBX is not installed yet, so the view still works.
-            _robotGo = null;
-            GameObject prefab = null;
-            try
+            // The display boss, large, centre-right, facing the
+            // heroes (-X). With the MechHeavyBoss prefab installed
+            // the display is the mech (Patrick, 2026-11-17 — the
+            // enter screen still showed the old War Robot); the
+            // War Robot FBX at 2.5x is the fallback, and a big
+            // dark primitive the last resort, so the view always
+            // works.
+            _robotGo = BuildMechDisplay();
+            if (_robotGo == null)
             {
-                prefab = Resources.Load<GameObject>("Models/WarRobot");
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning("[BossLairView] War Robot failed to load (Models/WarRobot): " + e.Message);
-            }
-            if (prefab != null)
-            {
-                _robotGo = Instantiate(prefab);
-                _robotGo.name = "WarRobot";
-                _robotGo.transform.SetParent(_caveRoot.transform, false);
-                _robotGo.transform.localPosition = new Vector3(4f, 0f, 0f);
-                _robotGo.transform.localScale = Vector3.one * 2.5f;
-                // Face the heroes (-X): the FBX faces +X by default.
-                _robotGo.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-            }
-            else
-            {
-                Debug.LogWarning("[BossLairView] WarRobot.fbx is missing — the boss will be a dark placeholder. Copy WarRobot.fbx + its PNGs into Assets/_Project/Resources/Models/.");
-                _robotGo = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                _robotGo.name = "WarRobotPlaceholder";
-                _robotGo.transform.SetParent(_caveRoot.transform, false);
-                _robotGo.transform.localPosition = new Vector3(4f, 2.5f, 0f);
-                _robotGo.transform.localScale = new Vector3(2f, 5f, 2f);
-                SetColor(_robotGo.GetComponent<Renderer>(), new Color(0.25f, 0.25f, 0.30f));
-                Destroy(_robotGo.GetComponent<Collider>());
+                GameObject prefab = null;
+                try
+                {
+                    prefab = Resources.Load<GameObject>("Models/WarRobot");
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[BossLairView] War Robot failed to load (Models/WarRobot): " + e.Message);
+                }
+                if (prefab != null)
+                {
+                    _robotGo = Instantiate(prefab);
+                    _robotGo.name = "WarRobot";
+                    _robotGo.transform.SetParent(_caveRoot.transform, false);
+                    _robotGo.transform.localPosition = new Vector3(4f, 0f, 0f);
+                    _robotGo.transform.localScale = Vector3.one * 2.5f;
+                    // Face the heroes (-X): the FBX faces +X by default.
+                    _robotGo.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                }
+                else
+                {
+                    Debug.LogWarning("[BossLairView] WarRobot.fbx is missing — the boss will be a dark placeholder. Copy WarRobot.fbx + its PNGs into Assets/_Project/Resources/Models/.");
+                    _robotGo = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                    _robotGo.name = "WarRobotPlaceholder";
+                    _robotGo.transform.SetParent(_caveRoot.transform, false);
+                    _robotGo.transform.localPosition = new Vector3(4f, 2.5f, 0f);
+                    _robotGo.transform.localScale = new Vector3(2f, 5f, 2f);
+                    SetColor(_robotGo.GetComponent<Renderer>(), new Color(0.25f, 0.25f, 0.30f));
+                    Destroy(_robotGo.GetComponent<Collider>());
+                }
             }
             _robotOrigPos = _robotGo.transform.localPosition;
             _robotOrigRot = _robotGo.transform.localRotation;
@@ -567,7 +584,7 @@ namespace LunarDominion.UI
             _aresController.OnHealthChanged += (current, max) =>
             {
                 SetBossBarFraction(max > 0f ? current / max : 0f);
-                if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {(int)current} / {(int)max}";
+                if (_bossHpText != null) _bossHpText.text = $"{EncounterCatalog.BossName}  {(int)current} / {(int)max}";
             };
             _aresController.OnTelegraph += (attackName) =>
             {
@@ -588,6 +605,60 @@ namespace LunarDominion.UI
             _aresController.OnSquadDefeated += () => { if (_realtimeActive) StartCoroutine(RealtimeEndRoutine(false)); };
 
             _arenaAvailable = true;
+        }
+
+        // Builds the MechHeavyBoss prefab as the lair ENTER
+        // SCREEN's display model (the cave set's centre-right
+        // figure the menu camera frames, drag-rotate and all).
+        // Returns null when the prefab is not installed, so
+        // BuildScene falls back to the War Robot. Mirrors the
+        // arena build's discipline: placement zeroed before
+        // bounds are measured, bounds converted into the parent
+        // frame, only the legs Animator kept (root motion off);
+        // the idle itself is requested later, in Show, when the
+        // Animator is warm.
+        private GameObject BuildMechDisplay()
+        {
+            GameObject mechPrefab = null;
+            try { mechPrefab = Resources.Load<GameObject>("Models/MechHeavyBoss"); }
+            catch (System.Exception e) { Debug.LogWarning("[BossLairView] MechHeavyBoss failed to load (Models/MechHeavyBoss): " + e.Message); }
+            if (mechPrefab == null) return null;
+
+            var mech = Instantiate(mechPrefab);
+            mech.name = "MechDisplay";
+            mech.transform.SetParent(_caveRoot.transform, false);
+            mech.transform.localPosition = Vector3.zero;
+            mech.transform.localRotation = Quaternion.Euler(0f, DisplayMechYawDegrees, 0f);
+            mech.transform.localScale = Vector3.one;
+            foreach (var collider in mech.GetComponentsInChildren<Collider>())
+                Destroy(collider);
+
+            var renderers = mech.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                if (b.size.y > 0.01f)
+                {
+                    float factor = Mathf.Clamp(DisplayMechTargetHeight / b.size.y, 0.1f, 60f);
+                    mech.transform.localScale = Vector3.one * factor;
+                    b = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                    var centerLocal = _caveRoot.transform.InverseTransformPoint(b.center);
+                    var floorLocal = _caveRoot.transform.InverseTransformPoint(
+                        new Vector3(b.center.x, b.min.y, b.center.z));
+                    mech.transform.localPosition = new Vector3(
+                        4f - centerLocal.x, -floorLocal.y, -centerLocal.z);
+                }
+            }
+
+            _displayMechAnimator = mech.GetComponent<Animator>();
+            if (_displayMechAnimator == null) _displayMechAnimator = mech.GetComponentInChildren<Animator>();
+            foreach (var anim in mech.GetComponentsInChildren<Animator>(true))
+                if (anim != _displayMechAnimator) anim.enabled = false;
+            if (_displayMechAnimator != null) _displayMechAnimator.applyRootMotion = false;
+            Debug.Log("[BossLairView] MechHeavyBoss installed as the lair enter-screen display.");
+            return mech;
         }
 
         // Builds the Mech Constructor Heavy Robot as the arena
@@ -1151,6 +1222,19 @@ namespace LunarDominion.UI
             // Camera + scene set for the selected level's mode
             // (cave close-up or lava tube arena).
             PresentSceneForMode();
+            // The enter-screen mech idles. The probe + Play happen
+            // here, at Show time, when its Animator has long since
+            // warmed up — build-time probes can miss states (the
+            // Run_Turn_L dance lesson, 2026-11-17).
+            if (!_displayIdlePlayed && _displayMechAnimator != null)
+            {
+                var idle = ProbeAnimatorState(_displayMechAnimator, "Idle_Single", "Idle", "idle");
+                if (idle != null)
+                {
+                    _displayMechAnimator.Play(idle, 0, 0f);
+                    _displayIdlePlayed = true;
+                }
+            }
         }
 
         public void Hide()
@@ -1199,7 +1283,7 @@ namespace LunarDominion.UI
             int highest = HighestUnlockedBossLevel();
             bool turnBased = UseTurnBased();
             _titleText.text = turnBased
-                ? $"A.R.E.S.-09 — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}"
+                ? $"{EncounterCatalog.BossName} — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}"
                 : $"WAR ROBOT — LEVEL {_selectedBossLevel} / {EncounterCatalog.MaxBossLevel}";
             if (turnBased && boss.Spawns.Count > 0)
             {
@@ -1678,7 +1762,7 @@ namespace LunarDominion.UI
             foreach (var combatant in _combatants) fighters.Add(combatant);
             _aresController.Setup(stats, fighters, _droneTemplate, _aresVisual.transform,
                 _slamRing, _ventRing, _coverSpheres);
-            if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {(int)stats.MaxHealth} / {(int)stats.MaxHealth}";
+            if (_bossHpText != null) _bossHpText.text = $"{EncounterCatalog.BossName}  {(int)stats.MaxHealth} / {(int)stats.MaxHealth}";
             SetBossBarFraction(1f);
             _fightStartTime = Time.time;
             _realtimeActive = true;
@@ -2125,7 +2209,7 @@ namespace LunarDominion.UI
             targetsLayout.childControlHeight = true;
             targetsLayout.childForceExpandWidth = true;
             targetsLayout.childForceExpandHeight = true;
-            string[] targetNames = { "A.R.E.S.", "Drone A", "Drone B", "Cancel" };
+            string[] targetNames = { EncounterCatalog.BossShortName, "Drone A", "Drone B", "Cancel" };
             for (int i = 0; i < targetNames.Length; i++)
             {
                 int targetIndex = i;
@@ -2351,7 +2435,7 @@ namespace LunarDominion.UI
                 cam.transform.position = new Vector3(500f, 15f, -26f);
                 cam.transform.LookAt(new Vector3(500f, 7.2f, 5f));
             }
-            if (_bossHpText != null) _bossHpText.text = $"A.R.E.S.-09  {bossHp} / {bossHp}";
+            if (_bossHpText != null) _bossHpText.text = $"{EncounterCatalog.BossName}  {bossHp} / {bossHp}";
             SetBossBarFraction(1f);
             if (_hudRoot != null) _hudRoot.SetActive(true);
             if (_turnHud != null) _turnHud.SetActive(true);
@@ -2518,7 +2602,7 @@ namespace LunarDominion.UI
         private static string ShortHeroName(string full)
         {
             if (string.IsNullOrEmpty(full)) return full;
-            if (full.StartsWith("Drone") || full == "A.R.E.S.") return full;
+            if (full.StartsWith("Drone") || full == EncounterCatalog.BossShortName) return full;
             int idx = full.LastIndexOf(' ');
             return idx >= 0 ? full.Substring(idx + 1) : full;
         }
@@ -2771,7 +2855,7 @@ namespace LunarDominion.UI
                 SetBossBarFraction(_turnFight.BossMaxHp > 0
                     ? (float)_turnFight.BossHp / _turnFight.BossMaxHp : 0f);
             if (_bossHpText != null)
-                _bossHpText.text = $"A.R.E.S.-09  {_turnFight.BossHp} / {_turnFight.BossMaxHp}";
+                _bossHpText.text = $"{EncounterCatalog.BossName}  {_turnFight.BossHp} / {_turnFight.BossMaxHp}";
             if (_turnIntentText != null) _turnIntentText.text = "Intent: " + _turnFight.IntentText();
             if (_turnOrderText != null)
             {
@@ -3304,7 +3388,7 @@ namespace LunarDominion.UI
             // and the slam icon dress the bar (children of the
             // background, so they ride the fight chrome).
             BuildBarPlating(barBg);
-            _bossHpText = UIHelpers.LabelInRect(barBg, "BossHpText", "A.R.E.S.-09", 22, Color.white,
+            _bossHpText = UIHelpers.LabelInRect(barBg, "BossHpText", EncounterCatalog.BossName, 22, Color.white,
                 new Rect(0.02f, 0.02f, 0.98f, 0.98f), TextAnchor.MiddleCenter);
 
             // Telegraph warning, big and centre-top (moved down

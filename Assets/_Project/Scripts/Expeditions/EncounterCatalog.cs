@@ -38,13 +38,25 @@ namespace LunarDominion.Expeditions
 
         /// <summary>War Robot encounter for a boss level (1-15, clamped).
         /// Level 1 = the entry boss; higher levels scale up steeply.</summary>
+
+        // The boss's player-visible name (renamed Morbius 3 by
+        // Patrick, 2026-11-17, when the Mech Constructor mech
+        // took over the role from A.R.E.S.-09). Every display
+        // string — HP bars, the level header, target buttons,
+        // combat log names — routes through these two constants,
+        // so a future rename is a one-line change. Internal code
+        // names (AresBossController and friends) keep the old
+        // name; they are never shown to the player.
+        public const string BossName = "Morbius 3";
+        public const string BossShortName = "Morbius";
+
         public static EncounterDefinition CreateBossEncounter(int level)
         {
             level = Math.Max(1, Math.Min(level, MaxBossLevel));
             var boss = ScriptableObject.CreateInstance<EncounterDefinition>();
             boss.Tier = 4;
             boss.IsBoss = true;
-            boss.DisplayName = $"A.R.E.S.-09 Lv {level}";
+            boss.DisplayName = $"{BossName} Lv {level}";
             boss.RequiredNexusLevel = 10;
             boss.EnergyCost = 50 + 15 * (level - 1);
             boss.Reward = new ResourceCost(1500 * level, 1200 * level, 400 * level);
@@ -54,7 +66,7 @@ namespace LunarDominion.Expeditions
             int def = (int)Math.Round(50 * Math.Pow(BossDefGrowth, level - 1));
             boss.Spawns = new List<EnemySpawn>
             {
-                new EnemySpawn { DisplayName = "A.R.E.S.-09", Class = UnitClass.Mechanized, Health = hp, Attack = atk, Defense = def, Count = 1 }
+                new EnemySpawn { DisplayName = BossName, Class = UnitClass.Mechanized, Health = hp, Attack = atk, Defense = def, Count = 1 }
             };
             return boss;
         }

@@ -17,7 +17,7 @@ namespace LunarDominion.Inbox
         public const string WelcomeBody =
             "Welcome, Commander.\n" +
             "Build up your Nexus, raise your armies, gather Biomass, Alloy and Helium-3, " +
-            "and take the fight to A.R.E.S.-09 in its lair.\n" +
+            "and take the fight to " + LunarDominion.Expeditions.EncounterCatalog.BossName + " in its lair.\n" +
             "Field reports — battles, harvests, and boss fights — arrive here in your Inbox, " +
             "even while you are managing the base. The badge by the Inbox button shows how " +
             "many are unread.";
