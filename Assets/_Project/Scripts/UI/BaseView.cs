@@ -82,6 +82,20 @@ namespace LunarDominion.UI
         private static readonly Vector3 CamRight = new Vector3(0.7071f, 0f, -0.7071f);
         private static readonly Vector3 CamGroundForward = new Vector3(-0.7071f, 0f, -0.7071f);
         private static readonly Vector3 BaseCameraPosition = new Vector3(10f, 16f, 10f);
+        // Base camera zoom (2026-11-18, Patrick: the player should be
+        // able to scroll in and see the Command Center/Nexus detail —
+        // this lifts the earlier deferral of player-controlled base
+        // zoom at his direction). Same machinery as the Map view: the
+        // wheel/pinch set a target distance and the current distance
+        // eases toward it; pan and zoom stay independent (pan moves
+        // the look-at point, zoom only changes the distance along the
+        // fixed (10,16,10) direction, so panning never changes zoom).
+        private const float CamDistDefault = 21.35f; // |(10,16,10)|
+        private const float CamDistMin = 7f;
+        private const float CamDistMax = 34f;
+        private float _camDist = CamDistDefault;
+        private float _camDistTarget = CamDistDefault;
+        private float _pinchPrevDist = -1f;
         // Drag state: a press that moves past the threshold becomes a
         // drag (pan) and must NOT also fire as a tap on release.
         // True while the Base tab is the view on screen. Set by
@@ -2269,6 +2283,83 @@ namespace LunarDominion.UI
                 AddPan(keyPan * PanSpeed * Time.deltaTime);
             }
 
+            // Zoom (2026-11-18): mouse wheel in the Editor, two-finger
+            // pinch on the phone — the Map view's block with its steps
+            // scaled to the base's distances (default ~21 vs the Map's
+            // ~107). While a pinch is in progress the one-finger press
+            // is cancelled, so the gesture never pans or fires as a tap.
+            bool pinching = false;
+#if ENABLE_INPUT_SYSTEM
+            var zoomMouse = UnityEngine.InputSystem.Mouse.current;
+            if (zoomMouse != null)
+            {
+                // Step by SIGN, not magnitude (wheel units vary by
+                // device/host — the Map view's 2026-11-15 lesson).
+                float wheel = zoomMouse.scroll.ReadValue().y;
+                if (wheel != 0f)
+                    _camDistTarget = Mathf.Clamp(_camDistTarget - Mathf.Sign(wheel) * 2f, CamDistMin, CamDistMax);
+            }
+            var zoomTouch = UnityEngine.InputSystem.Touchscreen.current;
+            if (zoomTouch != null)
+            {
+                Vector2 pinchA = Vector2.zero, pinchB = Vector2.zero;
+                int pinchCount = 0;
+                var allTouches = zoomTouch.touches;
+                for (int i = 0; i < allTouches.Count && pinchCount < 2; i++)
+                {
+                    if (!allTouches[i].press.isPressed) continue;
+                    if (pinchCount == 0) pinchA = allTouches[i].position.ReadValue();
+                    else pinchB = allTouches[i].position.ReadValue();
+                    pinchCount++;
+                }
+                if (pinchCount == 2)
+                {
+                    pinching = true;
+                    float pinchDist = Vector2.Distance(pinchA, pinchB);
+                    if (_pinchPrevDist > 0f)
+                        _camDistTarget = Mathf.Clamp(_camDistTarget + (_pinchPrevDist - pinchDist) * 0.025f, CamDistMin, CamDistMax);
+                    _pinchPrevDist = pinchDist;
+                }
+                else _pinchPrevDist = -1f;
+            }
+#else
+            float wheelLegacy = Input.GetAxis("Mouse ScrollWheel");
+            if (wheelLegacy != 0f)
+                _camDistTarget = Mathf.Clamp(_camDistTarget - Mathf.Sign(wheelLegacy) * 2f, CamDistMin, CamDistMax);
+            if (Input.touchCount == 2)
+            {
+                pinching = true;
+                float pinchDist = Vector2.Distance(Input.GetTouch(0).position, Input.GetTouch(1).position);
+                if (_pinchPrevDist > 0f)
+                    _camDistTarget = Mathf.Clamp(_camDistTarget + (_pinchPrevDist - pinchDist) * 0.025f, CamDistMin, CamDistMax);
+                _pinchPrevDist = pinchDist;
+            }
+            else _pinchPrevDist = -1f;
+#endif
+            // Keyboard zoom (PageUp / + and PageDown / - held): a
+            // wheel-independent way to drive the same target.
+#if ENABLE_INPUT_SYSTEM
+            var zoomKeys = UnityEngine.InputSystem.Keyboard.current;
+            if (zoomKeys != null)
+            {
+                if (zoomKeys.pageUpKey.isPressed || zoomKeys.equalsKey.isPressed)
+                    _camDistTarget = Mathf.Clamp(_camDistTarget - 11f * Time.deltaTime, CamDistMin, CamDistMax);
+                if (zoomKeys.pageDownKey.isPressed || zoomKeys.minusKey.isPressed)
+                    _camDistTarget = Mathf.Clamp(_camDistTarget + 11f * Time.deltaTime, CamDistMin, CamDistMax);
+            }
+#else
+            if (Input.GetKey(KeyCode.PageUp) || Input.GetKey(KeyCode.Equals))
+                _camDistTarget = Mathf.Clamp(_camDistTarget - 11f * Time.deltaTime, CamDistMin, CamDistMax);
+            if (Input.GetKey(KeyCode.PageDown) || Input.GetKey(KeyCode.Minus))
+                _camDistTarget = Mathf.Clamp(_camDistTarget + 11f * Time.deltaTime, CamDistMin, CamDistMax);
+#endif
+            if (pinching)
+            {
+                _pointerDown = false;
+                _isDrag = true; // a pinch release must not fire as a tap
+            }
+            TickZoom(Time.deltaTime);
+
             // Pointer input: a press that barely moves is a TAP (select
             // a building or hide the panel); a press that moves past
             // the threshold is a DRAG (pan the camera) and must not
@@ -2390,8 +2481,25 @@ namespace LunarDominion.UI
         {
             var cam = Camera.main;
             if (cam == null) return;
-            cam.transform.position = BaseCameraPosition + _panOffset;
+            cam.transform.position = _panOffset + BaseCameraPosition.normalized * _camDist;
             cam.transform.LookAt(Vector3.zero + _panOffset);
+        }
+
+        // Zoom easing (same as the Map view's TickZoom): glide the
+        // current distance to the target, snapping the last hair.
+        private void TickZoom(float dt)
+        {
+            if (Mathf.Abs(_camDistTarget - _camDist) < 0.05f)
+            {
+                if (_camDist != _camDistTarget)
+                {
+                    _camDist = _camDistTarget;
+                    ApplyCamera();
+                }
+                return;
+            }
+            _camDist = Mathf.Lerp(_camDist, _camDistTarget, 1f - Mathf.Exp(-10f * dt));
+            ApplyCamera();
         }
 
         private void HandleTap(Vector2 screenPos)
@@ -2435,6 +2543,8 @@ namespace LunarDominion.UI
             if (visible)
             {
                 _panOffset = Vector3.zero;
+                _camDist = CamDistDefault;
+                _camDistTarget = CamDistDefault;
                 ApplyCamera();
             }
         }
