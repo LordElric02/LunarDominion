@@ -1089,11 +1089,10 @@ namespace LunarDominion.UI
         }
 
         // Kit Nexus instance scale: native kit size (1.0) filled the
-        // whole base camera view at the 2026-11-18 Play check; a
-        // quarter (0.25) read small, a half (0.5) crowded the plaza
-        // ring, so Patrick took a .75 reduction off the half: 0.375.
-        // One-line tuning knob.
-        private const float KitNexusScale = 0.375f;
+        // whole base camera view at the 2026-11-18 Play check; 0.25
+        // read small and 0.5 was tried; Patrick settled on 0.75 of
+        // native. One-line tuning knob.
+        private const float KitNexusScale = 0.75f;
 
         // Silver treatment dials for the kit Nexus (Patrick, 2026-11-18:
         // "more silverish and shiny"): metalness and gloss applied to
@@ -1109,9 +1108,9 @@ namespace LunarDominion.UI
         /// missing or has no meshes. The kit assembly is corner-rooted
         /// and floats above its origin (demo platform height), so the
         /// instance is recentred and grounded from its measured mesh
-        /// bounds, at 0.375x scale (native filled the camera; a
-        /// quarter read small, a half crowded the plaza ring, so
-        /// Patrick took a .75 reduction off the half, 2026-11-18). The kit's own lights and per-piece colliders are stripped: the
+        /// bounds, at 0.75x scale (native filled the camera; 0.25
+        /// read small and 0.5 was tried; Patrick settled on
+        /// three-quarters of native, 2026-11-18). The kit's own lights and per-piece colliders are stripped: the
         /// base scene lights the building, and one bounds-fitted box
         /// collider serves taps. No reactor animation: CollectReactor-
         /// Animation is not called, so the tick's empty check returns
