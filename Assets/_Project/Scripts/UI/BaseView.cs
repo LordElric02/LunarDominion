@@ -1089,9 +1089,10 @@ namespace LunarDominion.UI
         }
 
         // Kit Nexus instance scale: native kit size (1.0) filled the
-        // whole base camera view at the 2026-11-18 Play check; Patrick
-        // set the scale to a quarter of native. One-line tuning knob.
-        private const float KitNexusScale = 0.25f;
+        // whole base camera view at the 2026-11-18 Play check; a
+        // quarter (0.25) read small, so Patrick doubled it to a half.
+        // One-line tuning knob.
+        private const float KitNexusScale = 0.5f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -1101,9 +1102,9 @@ namespace LunarDominion.UI
         /// missing or has no meshes. The kit assembly is corner-rooted
         /// and floats above its origin (demo platform height), so the
         /// instance is recentred and grounded from its measured mesh
-        /// bounds, at 0.25x scale (native kit size filled the whole
-        /// base camera view at the Play check; Patrick set the scale
-        /// to a quarter of native, 2026-11-18). The kit's own lights and per-piece colliders are stripped: the
+        /// bounds, at 0.5x scale (native size filled the whole base
+        /// camera view; a quarter read small at the Play check, so
+        /// Patrick doubled it to a half, 2026-11-18). The kit's own lights and per-piece colliders are stripped: the
         /// base scene lights the building, and one bounds-fitted box
         /// collider serves taps. No reactor animation: CollectReactor-
         /// Animation is not called, so the tick's empty check returns
