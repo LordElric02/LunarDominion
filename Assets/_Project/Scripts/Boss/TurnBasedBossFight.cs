@@ -1423,6 +1423,13 @@ namespace LunarDominion.Boss
                 var fig = Instantiate(_droneTemplate);
                 fig.name = "TurnDrone_" + (i + 1);
                 fig.transform.SetParent(transform, false);
+                // Fight in the boss's frame: the boss root is
+                // yawed 180 and the heroes and boss visual live
+                // under it, while this fight object is unrotated.
+                // The hovering spheres never showed the mismatch;
+                // the directional walkers faced backwards without
+                // it (Patrick, 2026-11-17).
+                fig.transform.rotation = _bossRoot.rotation;
                 fig.SetActive(true);
                 fig.transform.localScale = Vector3.one * DroneFigureScale;
                 // Spawn a touch wider than the original +-6.8:
