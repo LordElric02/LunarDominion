@@ -1014,10 +1014,11 @@ namespace LunarDominion.UI
             // now wider than the screen — the Base view pans (arrow
             // keys / drag), like the Map view. Ground stays 56x48; the
             // spread buildings still fit inside it.
-            // Command Nexus (Blender model, 2026-11-05): use the FBX model if
-            // it loads, otherwise fall back to the old blue cylinder so the
-            // base still builds when the model file is missing.
-            if (!TryAddModelNexus())
+            // Command Nexus: prefer the Scifi-Kit prefab (2026-11-18)
+            // when Patrick has it installed, then the Blender FBX model
+            // (2026-11-05), otherwise fall back to the old blue cylinder
+            // so the base still builds when the files are missing.
+            if (!TryAddKitNexus() && !TryAddModelNexus())
                 AddBuilding(BuildingId.CommandNexus, new Vector3(0f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(2f, 3f, 2f), new Color(0.15f, 0.35f, 0.75f), "Nexus");
             // Hydroponics Dome (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old green sphere so the
@@ -1085,6 +1086,135 @@ namespace LunarDominion.UI
             marker.transform.localPosition = new Vector3(0f, 0.7f, 0f);
             marker.transform.localScale = new Vector3(0.30f, 0.30f, 0.30f);
             SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+        }
+
+        /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
+        /// NexusKit — a local-only prefab assembled in KitTest from the
+        /// Creepy Cat Control Room, glass canopy added) at the Nexus
+        /// plot if it can be loaded. Returns false (caller falls back
+        /// to the FBX model, then the primitive) when the prefab is
+        /// missing or has no meshes. The kit assembly is corner-rooted
+        /// and floats above its origin (demo platform height), so the
+        /// instance is recentred and grounded from its measured mesh
+        /// bounds, at native scale (grow decision, 2026-11-18). The
+        /// kit's own lights and per-piece colliders are stripped: the
+        /// base scene lights the building, and one bounds-fitted box
+        /// collider serves taps. No reactor animation: CollectReactor-
+        /// Animation is not called, so the tick's empty check returns
+        /// early exactly as it does for a model without named parts.</summary>
+        private bool TryAddKitNexus()
+        {
+            var prefab = Resources.Load<GameObject>("Models/NexusKit");
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "NexusBuilding";
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = Vector3.zero;
+                go.transform.localScale = Vector3.one;
+
+                // Strip the demo lighting and per-piece colliders first:
+                // neither belongs in the game scene.
+                foreach (var light in go.GetComponentsInChildren<Light>(true))
+                    Destroy(light);
+                foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                    Destroy(col);
+
+                // Captured BEFORE the marker is added, so Highlight()
+                // recolours the building parts but not the marker.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Measure the assembly in its own (prefab) space: the
+                // matrix product cancels the world frame, so the result
+                // is independent of the layout root's 45-degree yaw.
+                var meshFilters = go.GetComponentsInChildren<MeshFilter>(true);
+                if (meshFilters.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                Bounds bounds = new Bounds();
+                bool hasBounds = false;
+                var toLocal = go.transform.worldToLocalMatrix;
+                foreach (var mf in meshFilters)
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var m = toLocal * mf.transform.localToWorldMatrix;
+                    var mb = mf.sharedMesh.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var corner = new Vector3(
+                            (i & 1) == 0 ? mb.min.x : mb.max.x,
+                            (i & 2) == 0 ? mb.min.y : mb.max.y,
+                            (i & 4) == 0 ? mb.min.z : mb.max.z);
+                        var p = m.MultiplyPoint3x4(corner);
+                        if (!hasBounds)
+                        {
+                            bounds = new Bounds(p, Vector3.zero);
+                            hasBounds = true;
+                        }
+                        else bounds.Encapsulate(p);
+                    }
+                }
+                if (!hasBounds)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Recentring: the instance has identity rotation/scale,
+                // so prefab-space offsets map 1:1 into layout space.
+                // Centre the footprint on the plot and ground the float.
+                go.transform.localPosition = new Vector3(
+                    -bounds.center.x, -bounds.min.y, -bounds.center.z);
+
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared kit material.
+                    partColors[rend] = rend.material.color;
+                }
+
+                // One tap collider wrapping the whole assembly, in the
+                // root's own space (the bounds were measured there).
+                var box = go.AddComponent<BoxCollider>();
+                box.center = bounds.center;
+                box.size = bounds.size;
+
+                // Same white marker as the other buildings, just above
+                // the canopy, over the footprint centre.
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "NexusMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(
+                    bounds.center.x, bounds.max.y + 0.45f, bounds.center.z);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.CommandNexus] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.CommandNexus] = go;
+                _baseColors[BuildingId.CommandNexus] = new Color(0.15f, 0.35f, 0.75f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Nexus kit prefab failed to load, using model/primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
         }
 
         /// <summary>Instantiate the Blender Command Nexus FBX at (0,0,0) if it
