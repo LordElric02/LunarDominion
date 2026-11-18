@@ -1123,9 +1123,18 @@ namespace LunarDominion.UI
                 go.transform.localScale = Vector3.one * KitNexusScale;
 
                 // Strip the demo lighting and per-piece colliders first:
-                // neither belongs in the game scene.
+                // neither belongs in the game scene. URP hangs a
+                // UniversalAdditionalLightData on every Light and Unity
+                // refuses to destroy a component another depends on
+                // ("Can't remove Light because UniversalAdditional-
+                // LightData depends on it", 2026-11-18 Play check), so
+                // the data component goes first, then the Light itself.
                 foreach (var light in go.GetComponentsInChildren<Light>(true))
+                {
+                    var extra = light.GetComponent<UniversalAdditionalLightData>();
+                    if (extra != null) Destroy(extra);
                     Destroy(light);
+                }
                 foreach (var col in go.GetComponentsInChildren<Collider>(true))
                     Destroy(col);
 
