@@ -1094,6 +1094,12 @@ namespace LunarDominion.UI
         // One-line tuning knob.
         private const float KitNexusScale = 0.5f;
 
+        // Silver treatment dials for the kit Nexus (Patrick, 2026-11-18:
+        // "more silverish and shiny"): metalness and gloss applied to
+        // the instanced kit materials at load.
+        private const float KitNexusMetallic = 0.65f;
+        private const float KitNexusSmoothness = 0.65f;
+
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
         /// Creepy Cat Control Room, glass canopy added) at the Nexus
@@ -1200,8 +1206,21 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit material.
-                    partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Silver treatment (Patrick, 2026-11-18): cool the
+                    // tint toward silver and raise metalness/gloss,
+                    // THEN capture the colour, so Highlight() restores
+                    // the silvered base, not the kit's original paint.
+                    // Alpha is preserved so the glass stays glass.
+                    mat.color = Color.Lerp(mat.color,
+                        new Color(0.82f, 0.85f, 0.90f, mat.color.a), 0.55f);
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitNexusMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitNexusSmoothness);
+                    partColors[rend] = mat.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
