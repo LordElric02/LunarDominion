@@ -1088,6 +1088,11 @@ namespace LunarDominion.UI
             SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
         }
 
+        // Kit Nexus instance scale: native kit size (1.0) filled the
+        // whole base camera view at the 2026-11-18 Play check; Patrick
+        // set the scale to a quarter of native. One-line tuning knob.
+        private const float KitNexusScale = 0.25f;
+
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
         /// Creepy Cat Control Room, glass canopy added) at the Nexus
@@ -1096,8 +1101,9 @@ namespace LunarDominion.UI
         /// missing or has no meshes. The kit assembly is corner-rooted
         /// and floats above its origin (demo platform height), so the
         /// instance is recentred and grounded from its measured mesh
-        /// bounds, at native scale (grow decision, 2026-11-18). The
-        /// kit's own lights and per-piece colliders are stripped: the
+        /// bounds, at 0.25x scale (native kit size filled the whole
+        /// base camera view at the Play check; Patrick set the scale
+        /// to a quarter of native, 2026-11-18). The kit's own lights and per-piece colliders are stripped: the
         /// base scene lights the building, and one bounds-fitted box
         /// collider serves taps. No reactor animation: CollectReactor-
         /// Animation is not called, so the tick's empty check returns
@@ -1114,7 +1120,7 @@ namespace LunarDominion.UI
                 go.name = "NexusBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
                 go.transform.localPosition = Vector3.zero;
-                go.transform.localScale = Vector3.one;
+                go.transform.localScale = Vector3.one * KitNexusScale;
 
                 // Strip the demo lighting and per-piece colliders first:
                 // neither belongs in the game scene.
@@ -1170,11 +1176,13 @@ namespace LunarDominion.UI
                     return false;
                 }
 
-                // Recentring: the instance has identity rotation/scale,
-                // so prefab-space offsets map 1:1 into layout space.
-                // Centre the footprint on the plot and ground the float.
+                // Recentring: the measured bounds are in unscaled
+                // prefab space (the matrix product cancels the root
+                // scale), so the offset that centres the footprint on
+                // the plot and grounds the float is the bounds offset
+                // multiplied by the instance scale.
                 go.transform.localPosition = new Vector3(
-                    -bounds.center.x, -bounds.min.y, -bounds.center.z);
+                    -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitNexusScale;
 
                 var list = new List<Renderer>();
                 var partColors = new Dictionary<Renderer, Color>();
