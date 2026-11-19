@@ -73,8 +73,8 @@ namespace LunarDominion.UI
         // cannot leave the ground.
         private Vector3 _panOffset = Vector3.zero;
         private static readonly float PanSpeed = 40f; // units/second, arrow keys
-        private static readonly float PanLimitX = 30f;
-        private static readonly float PanLimitZ = 30f;
+        private static readonly float PanLimitX = 38f;
+        private static readonly float PanLimitZ = 38f;
         private static readonly float DragTapThresholdPx = 15f; // below this, a press is a tap, not a drag
         // The Base camera sits at (23.2,43.5,23.2) on the x=z diagonal, so
         // screen-right is world (0.707,0,-0.707) and screen-up on the
@@ -92,7 +92,7 @@ namespace LunarDominion.UI
         // fixed (10,16,10) direction, so panning never changes zoom).
         private const float CamDistDefault = 21.35f; // |(10,16,10)|
         private const float CamDistMin = 7f;
-        private const float CamDistMax = 34f;
+        private const float CamDistMax = 44f;
         private float _camDist = CamDistDefault;
         private float _camDistTarget = CamDistDefault;
         private float _pinchPrevDist = -1f;
@@ -612,9 +612,9 @@ namespace LunarDominion.UI
                 // so the fan's winding cannot hide or darken it.
                 var corners = new[]
                 {
-                    new Vector2(36f, 13f), new Vector2(0f, 26f),
-                    new Vector2(-36f, 13f), new Vector2(-36f, -13f),
-                    new Vector2(0f, -26f), new Vector2(36f, -13f),
+                    new Vector2(45f, 16.25f), new Vector2(0f, 32.5f),
+                    new Vector2(-45f, 16.25f), new Vector2(-45f, -16.25f),
+                    new Vector2(0f, -32.5f), new Vector2(45f, -16.25f),
                 };
                 var verts = new Vector3[7];
                 var uvs = new Vector2[7];
@@ -626,7 +626,7 @@ namespace LunarDominion.UI
                 {
                     var c = corners[i] * 1.04f;
                     verts[i + 1] = new Vector3(c.x, 0f, c.y);
-                    uvs[i + 1] = new Vector2((c.x + 34.5f) / 69f, (c.y + 21f) / 42f);
+                    uvs[i + 1] = new Vector2((c.x + 43.125f) / 86.25f, (c.y + 26.25f) / 52.5f);
                     normals[i + 1] = Vector3.up;
                 }
                 var tris = new int[18];
@@ -731,22 +731,23 @@ namespace LunarDominion.UI
         private void BuildWall()
         {
             // The east side is split into two runs for the 3.4-wide
-            // gate gap at local z 0.
-            AddWallRun(36f, -13f, 36f, -1.7f);
-            AddWallRun(36f, 1.7f, 36f, 13f);
-            AddWallRun(36f, 13f, 0f, 26f);
-            AddWallRun(0f, 26f, -36f, 13f);
-            AddWallRun(-36f, 13f, -36f, -13f);
-            AddWallRun(-36f, -13f, 0f, -26f);
-            AddWallRun(0f, -26f, 36f, -13f);
+            // gate gap at local z 0. (Hexagon grew x1.25 on
+            // 2026-11-18: vertices (+/-45, +/-16.25), (0, +/-32.5).)
+            AddWallRun(45f, -16.25f, 45f, -1.7f);
+            AddWallRun(45f, 1.7f, 45f, 16.25f);
+            AddWallRun(45f, 16.25f, 0f, 32.5f);
+            AddWallRun(0f, 32.5f, -45f, 16.25f);
+            AddWallRun(-45f, 16.25f, -45f, -16.25f);
+            AddWallRun(-45f, -16.25f, 0f, -32.5f);
+            AddWallRun(0f, -32.5f, 45f, -16.25f);
 
             // Vertex towers, each capped and topped with a glowing
             // cyan beacon.
             foreach (var v in new[]
             {
-                new Vector2(36f, 13f), new Vector2(0f, 26f),
-                new Vector2(-36f, 13f), new Vector2(-36f, -13f),
-                new Vector2(0f, -26f), new Vector2(36f, -13f),
+                new Vector2(45f, 16.25f), new Vector2(0f, 32.5f),
+                new Vector2(-45f, 16.25f), new Vector2(-45f, -16.25f),
+                new Vector2(0f, -32.5f), new Vector2(45f, -16.25f),
             })
             {
                 AddWallBox(new Vector3(v.x, 1.3f, v.y), new Vector3(2.2f, 2.6f, 2.2f), WallTowerColor);
@@ -757,13 +758,13 @@ namespace LunarDominion.UI
             // Lamp posts inside the wall: one at each side's
             // midpoint, and one in each east half-run so two lamps
             // flank the gate.
-            AddLampForRun(36f, -13f, 36f, -1.7f);
-            AddLampForRun(36f, 1.7f, 36f, 13f);
-            AddLampForRun(36f, 13f, 0f, 26f);
-            AddLampForRun(0f, 26f, -36f, 13f);
-            AddLampForRun(-36f, 13f, -36f, -13f);
-            AddLampForRun(-36f, -13f, 0f, -26f);
-            AddLampForRun(0f, -26f, 36f, -13f);
+            AddLampForRun(45f, -16.25f, 45f, -1.7f);
+            AddLampForRun(45f, 1.7f, 45f, 16.25f);
+            AddLampForRun(45f, 16.25f, 0f, 32.5f);
+            AddLampForRun(0f, 32.5f, -45f, 16.25f);
+            AddLampForRun(-45f, 16.25f, -45f, -16.25f);
+            AddLampForRun(-45f, -16.25f, 0f, -32.5f);
+            AddLampForRun(0f, -32.5f, 45f, -16.25f);
         }
 
         // One hexagonal wall run from (ax, az) to (bx, bz), in
@@ -1026,6 +1027,11 @@ namespace LunarDominion.UI
             // road network painted in GroundPaved. Before that:
             // Nexus centre, generators top, barracks bottom — readable
             // from the isometric camera and tappable on a phone screen.
+            // 2026-11-18 (Patrick): the whole layout grew x1.25 for
+            // the kit buildings — corners (+/-26.25, +/-17.5),
+            // spines (0, +/-20), Lab / Hospital (+/-37.5, 0), wall
+            // hexagon (+/-45, +/-16.25) / (0, +/-32.5); the road
+            // network in BuildGroundPavedSand.py grew with it.
             // 2026-11-05: positions tightened to 0.75x toward the centre so
             // the base fills the portrait frame better (was spread over 13
             // units wide with a lot of empty ground); ground plane and
@@ -1054,28 +1060,28 @@ namespace LunarDominion.UI
             // green sphere so the base still builds when the files
             // are missing.
             if (!TryAddKitHydroponics() && !TryAddModelHydroponicsDome())
-                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-21f, 0f, 14f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
+                AddBuilding(BuildingId.HydroponicsDome, new Vector3(-26.25f, 0f, 17.5f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
             // Alloy Extractor: prefer the Vol 2 kit reactor
             // (2026-11-18) when Patrick has it installed, then the
             // Blender FBX model (2026-11-05), otherwise fall back
             // to the old grey cube so the base still builds when
             // the files are missing.
             if (!TryAddKitAlloy() && !TryAddModelAlloyExtractor())
-                AddBuilding(BuildingId.AlloyExtractor, new Vector3(21f, 0f, 14f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
+                AddBuilding(BuildingId.AlloyExtractor, new Vector3(26.25f, 0f, 17.5f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
             // Helium-3 Harvester: prefer the Vol 2 kit tank
             // (2026-11-18) when Patrick has it installed, then the
             // Blender FBX model (2026-11-05), otherwise fall back
             // to the old cyan cylinder so the base still builds
             // when the files are missing.
             if (!TryAddKitHelium() && !TryAddModelHeliumHarvester())
-                AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 16f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
+                AddBuilding(BuildingId.HeliumHarvester, new Vector3(0f, 0f, 20f), PrimitiveType.Cylinder, new Vector3(1.4f, 2.4f, 1.4f), new Color(0.35f, 0.82f, 0.90f), "He-3");
             // Marine Foundry: prefer the Scifi-Kit prefab (2026-11-18,
             // Patrick's pick as the second kit conversion) when installed,
             // then the Blender model (2026-11-05), otherwise fall back to
             // the old green-grey cube so the base still builds when the
             // files are missing.
             if (!TryAddKitMarineFoundry() && !TryAddModelMarineFoundry())
-                AddBuilding(BuildingId.MarineFoundry, new Vector3(-21f, 0f, -14f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
+                AddBuilding(BuildingId.MarineFoundry, new Vector3(-26.25f, 0f, -17.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             // Nova Arsenal: prefer the Scifi-Kit prefab (2026-11-18,
             // the kit's Room_Small_01 — a compact room whose central
             // chamber reads as a weapons core) when installed, then
@@ -1083,7 +1089,7 @@ namespace LunarDominion.UI
             // the old red cube so the base still builds when the
             // model file is missing.
             if (!TryAddKitNovaArsenal() && !TryAddModelNovaArsenal())
-                AddBuilding(BuildingId.NovaArsenal, new Vector3(21f, 0f, -14f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
+                AddBuilding(BuildingId.NovaArsenal, new Vector3(26.25f, 0f, -17.5f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             // Aegis Motor Pool: prefer the Scifi-Kit prefab (2026-11-18,
             // Patrick re-picked the kit's Room_Large_02 complex for
             // Aegis over Nova — its open sprawl suits a motor pool)
@@ -1091,7 +1097,7 @@ namespace LunarDominion.UI
             // otherwise fall back to the old grey cube so the base
             // still builds when the model file is missing.
             if (!TryAddKitAegisMotorPool() && !TryAddModelAegisMotorPool())
-                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -16f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
+                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -20f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
             // Research Lab: prefer the Vol 2 kit room (2026-11-18)
             // when Patrick has it installed, then the Blender FBX
             // model (2026-11-05), otherwise fall back to the old
@@ -1100,7 +1106,7 @@ namespace LunarDominion.UI
             // (2026-11-01 note: west side, clear of the other buildings,
             // so it stays tappable at phone size.)
             if (!TryAddKitLab() && !TryAddModelResearchLab())
-                AddBuilding(BuildingId.ResearchLab, new Vector3(-30f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
+                AddBuilding(BuildingId.ResearchLab, new Vector3(-37.5f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
             // Hospital (2026-11-09): east side at (30, 0) since the
             // 2026-11-13 redesign (was (20.75, 0)), mirroring
             // the Research Lab on the west, clear of the other buildings
@@ -1109,7 +1115,7 @@ namespace LunarDominion.UI
             // still builds when the model file is missing (the Blender
             // model is built separately, like the other v5 buildings).
             if (!TryAddKitHospital() && !TryAddModelHospital())
-                AddBuilding(BuildingId.Hospital, new Vector3(30f, 0f, 0f), PrimitiveType.Cube, new Vector3(2f, 1.8f, 2f), new Color(0.95f, 0.95f, 0.95f), "Hospital");
+                AddBuilding(BuildingId.Hospital, new Vector3(37.5f, 0f, 0f), PrimitiveType.Cube, new Vector3(2f, 1.8f, 2f), new Color(0.95f, 0.95f, 0.95f), "Hospital");
         }
 
         private void AddBuilding(BuildingId id, Vector3 pos, PrimitiveType shape, Vector3 scale, Color color, string shortName)
@@ -1457,7 +1463,7 @@ namespace LunarDominion.UI
                 // footprint on the Marine plot and grounds the float
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(-21f, 0f, -14f)
+                go.transform.localPosition = new Vector3(-26.25f, 0f, -17.5f)
                     + new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitMarineScale;
 
@@ -1598,7 +1604,7 @@ namespace LunarDominion.UI
                 // footprint on the Aegis plot and grounds the float
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(0f, 0f, -16f)
+                go.transform.localPosition = new Vector3(0f, 0f, -20f)
                     + new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitAegisScale;
 
@@ -1737,7 +1743,7 @@ namespace LunarDominion.UI
                 // footprint on the Nova plot and grounds the float
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(21f, 0f, -14f)
+                go.transform.localPosition = new Vector3(26.25f, 0f, -17.5f)
                     + new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitNovaScale;
 
@@ -1890,7 +1896,7 @@ namespace LunarDominion.UI
                 // footprint on the Hospital plot and grounds the
                 // assembly is the plot position plus the bounds
                 // offset multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(30f, 0f, 0f)
+                go.transform.localPosition = new Vector3(37.5f, 0f, 0f)
                     + go.transform.localRotation * (new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitHospitalScale);
 
@@ -2033,7 +2039,7 @@ namespace LunarDominion.UI
                 // footprint on the Hydroponics plot and grounds the
                 // assembly is the plot position plus the bounds
                 // offset multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(-21f, 0f, 14f)
+                go.transform.localPosition = new Vector3(-26.25f, 0f, 17.5f)
                     + go.transform.localRotation * (new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitHydroponicsScale);
 
@@ -2174,7 +2180,7 @@ namespace LunarDominion.UI
                 // footprint on the Helium plot and grounds the
                 // assembly is the plot position plus the bounds
                 // offset multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(0f, 0f, 16f)
+                go.transform.localPosition = new Vector3(0f, 0f, 20f)
                     + go.transform.localRotation * (new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitHeliumScale);
 
@@ -2320,7 +2326,7 @@ namespace LunarDominion.UI
                 // assembly is the plot position plus the bounds
                 // offset multiplied per-axis by the (non-uniform)
                 // instance scale.
-                go.transform.localPosition = new Vector3(21f, 0f, 14f)
+                go.transform.localPosition = new Vector3(26.25f, 0f, 17.5f)
                     + go.transform.localRotation * new Vector3(
                         -bounds.center.x * KitAlloyScaleXZ,
                         -bounds.min.y * KitAlloyScaleY,
@@ -2470,7 +2476,7 @@ namespace LunarDominion.UI
                 // footprint on the Lab plot and grounds the assembly
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(-30f, 0f, 0f)
+                go.transform.localPosition = new Vector3(-37.5f, 0f, 0f)
                     + go.transform.localRotation * (new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitLabScale);
 

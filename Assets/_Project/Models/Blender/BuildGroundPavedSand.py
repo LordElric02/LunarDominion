@@ -7,8 +7,9 @@
 # BuildGroundPaved.py, so installing these REPLACES the current
 # floor textures; back the old PNGs up first):
 #   GroundPaved.png — 2048x1024 interior colour texture, ONE TILE
-#     across the whole base interior (69 x 42 units, x +/-34.5,
-#     z +/-21 in BaseView layout-root local space). Contents:
+#     across the whole base interior (86.25 x 52.5 units,
+#     x +/-43.125, z +/-26.25 in BaseView layout-root local
+#     space; the compound grew x1.25 on 2026-11-18). Contents:
 #       * Cracked lunar regolith base (Sand_01-style): a warm
 #         grey-tan sand with a voronoi crack network, pebble
 #         speckle and soft tonal patches. NO concrete plates.
@@ -76,8 +77,8 @@ EMISSION_PATH = os.path.join(SCRIPT_DIR, EMISSION_FILE)
 # Interior size in layout-root local units (redesigned base,
 # 2026-11-13): wall at x +/-36, z +/-22; the paving stops a margin
 # inside it.
-HALF_X = 34.5
-HALF_Z = 21.0
+HALF_X = 43.125
+HALF_Z = 26.25
 TEX_W = 2048
 TEX_H = 1024
 NORMAL_STRENGTH = 2.0
@@ -99,25 +100,27 @@ PLAZA_RING = (0.150, 0.450, 0.520)
 HAZARD_YELLOW = (0.90, 0.75, 0.20)
 HAZARD_DARK = (0.15, 0.15, 0.16)
 
-# Road network in layout-root local space (2026-11-13 redesign;
-# IDENTICAL to BuildGroundPaved.py — do not edit one without the
-# other): segments as (ax, az, bx, bz), all 3 units wide. A ring
-# road around the Nexus plaza (its east/west edges extend to
-# serve the four corner buildings' driveways), the main street
-# running Research Lab - ring - Hospital - east gate, and the
-# two spines from the plaza to the Helium-3 Harvester and Aegis
+# Road network in layout-root local space (2026-11-13 redesign,
+# grown x1.25 with the compound on 2026-11-18): segments as
+# (ax, az, bx, bz), all 3 units wide. A ring road around the
+# Nexus plaza (its east/west edges extend to serve the four
+# corner buildings' driveways), the main street running
+# Research Lab - ring - Hospital - east gate, and the two
+# spines from the plaza to the Helium-3 Harvester and Aegis
 # Motor Pool. Building positions (BaseView.cs): Nexus (0,0);
-# Hydroponics (-21,14); Alloy (21,14); Helium-3 (0,16);
-# Marine (-21,-14); Nova (21,-14); Aegis (0,-16); Lab (-30,0);
-# Hospital (30,0).
+# Hydroponics (-26.25,17.5); Alloy (26.25,17.5);
+# Helium-3 (0,20); Marine (-26.25,-17.5); Nova (26.25,-17.5);
+# Aegis (0,-20); Lab (-37.5,0); Hospital (37.5,0).
+# (BuildGroundPaved.py keeps the pre-growth network — that
+# generator retired with the black-glass floor.)
 ROAD_SEGMENTS = [
-    (-21.0, 9.5, 21.0, 9.5),      # ring north
-    (-21.0, -9.5, 21.0, -9.5),    # ring south
-    (-21.0, -11.5, -21.0, 11.5),  # ring west (+ corner driveways)
-    (21.0, -11.5, 21.0, 11.5),    # ring east (+ corner driveways)
-    (-27.5, 0.0, 36.0, 0.0),      # main street: Lab to the gate
-    (0.0, 6.0, 0.0, 13.5),        # north spine to Helium-3
-    (0.0, -13.5, 0.0, -6.0),      # south spine to Aegis
+    (-26.25, 11.875, 26.25, 11.875),    # ring north
+    (-26.25, -11.875, 26.25, -11.875),  # ring south
+    (-26.25, -14.375, -26.25, 14.375),  # ring west (+ corner driveways)
+    (26.25, -14.375, 26.25, 14.375),    # ring east (+ corner driveways)
+    (-34.375, 0.0, 45.0, 0.0),          # main street: Lab to the gate
+    (0.0, 7.5, 0.0, 16.875),            # north spine to Helium-3
+    (0.0, -16.875, 0.0, -7.5),          # south spine to Aegis
 ]
 ROAD_HALF_WIDTH = 1.5
 ROAD_EDGE_IN = 1.26   # edge lines live between 1.26 and 1.5
