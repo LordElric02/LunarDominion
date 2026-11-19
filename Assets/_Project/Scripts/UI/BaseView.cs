@@ -678,8 +678,12 @@ namespace LunarDominion.UI
                     rend.material.SetColor("_EmissionColor", Color.white);
                     rend.material.EnableKeyword("_EMISSION");
                 }
-                rend.material.SetFloat("_Smoothness", 0.55f);
-                rend.material.SetFloat("_Metallic", 0.1f);
+                // Matte since the 2026-11-18 sand floor
+                // (Option C): dry regolith takes almost no
+                // sheen — the 0.55 / 0.1 values were tuned for
+                // the jet-black glass pass this replaced.
+                rend.material.SetFloat("_Smoothness", 0.15f);
+                rend.material.SetFloat("_Metallic", 0.0f);
                 // Double-sided (URP Lit _Cull = Off): the
                 // hand-built fan's winding is not relied on.
                 rend.material.SetInt("_Cull", 0);
