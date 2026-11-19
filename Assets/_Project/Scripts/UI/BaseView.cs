@@ -288,16 +288,22 @@ namespace LunarDominion.UI
             // new wall (layout x +/-36, z +/-22) — the outer eight
             // have matching flat pads in BuildTerrain.py (world
             // conversions of these layout spots).
-            AddRock(new Vector3(-14f, 0f, 0f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(14f, 0f, 3f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+            // 2026-11-19 (Patrick): re-scattered inside the x1.5
+            // compound (there is no ground outside the wall any
+            // more, and one old rock sat on the new wall line).
+            // Every position below was verified numerically:
+            // >= 3 inside every wall edge, clear of every painted
+            // road and every building plot.
+            AddRock(new Vector3(-17f, 0f, 6f), 0.4f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(17f, 0f, -6f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
             AddRock(new Vector3(40f, 0f, 10f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
             AddRock(new Vector3(20f, 0f, 26f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(27f, 0f, 24f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(38f, 0f, 20f), 0.4f, new Color(0.33f, 0.35f, 0.39f));
-            AddRock(new Vector3(34f, 0f, 27f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
-            AddRock(new Vector3(13f, 0f, 30f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
-            AddRock(new Vector3(-27f, 0f, 27f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
-            AddRock(new Vector3(41f, 0f, 3f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
+            AddRock(new Vector3(16f, 0f, 27f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(44f, 0f, 14f), 0.4f, new Color(0.33f, 0.35f, 0.39f));
+            AddRock(new Vector3(18f, 0f, -27f), 0.5f, new Color(0.38f, 0.4f, 0.44f));
+            AddRock(new Vector3(8f, 0f, 31f), 0.45f, new Color(0.3f, 0.32f, 0.36f));
+            AddRock(new Vector3(-20f, 0f, 28f), 0.5f, new Color(0.35f, 0.37f, 0.41f));
+            AddRock(new Vector3(49f, 0f, -9f), 0.5f, new Color(0.33f, 0.35f, 0.39f));
 
             // 2026-11-07: Blender debris models (rubble / rocks /
             // shards), placed in world space like the ground plane.
@@ -355,14 +361,18 @@ namespace LunarDominion.UI
         // the existing decor still show.
         private void AddDebris()
         {
-            AddDebrisAt("Models/DebrisRubble", new Vector3(0f, 0f, -7.5f), 0f);
-            AddDebrisAt("Models/DebrisRocks", new Vector3(-7.5f, 0f, 0f), 40f);
-            AddDebrisAt("Models/DebrisShards", new Vector3(7.5f, 0f, 0f), 80f);
-            AddDebrisAt("Models/DebrisRubble", new Vector3(-0.5f, 0f, 7.5f), 130f);
-            AddDebrisAt("Models/DebrisRocks", new Vector3(14f, 0f, -10f), 200f);
-            AddDebrisAt("Models/DebrisShards", new Vector3(-14f, 0f, 20f), 260f);
-            AddDebrisAt("Models/DebrisRubble", new Vector3(20f, 0f, 8f), 310f);
-            AddDebrisAt("Models/DebrisRubble", new Vector3(13f, 0f, -9f), 25f);
+            // 2026-11-19: re-scattered for the x1.5 compound —
+            // world conversions of verified layout spots (four on
+            // the plaza aprons, four filling the outer bands),
+            // clear of the wall, roads and building plots.
+            AddDebrisAt("Models/DebrisRubble", new Vector3(0.35f, 0f, -15.2f), 0f);
+            AddDebrisAt("Models/DebrisRocks", new Vector3(-0.35f, 0f, 15.2f), 40f);
+            AddDebrisAt("Models/DebrisShards", new Vector3(15.56f, 0f, -1.41f), 80f);
+            AddDebrisAt("Models/DebrisRubble", new Vector3(-15.56f, 0f, 1.41f), 130f);
+            AddDebrisAt("Models/DebrisRocks", new Vector3(-16.97f, 0f, 36.77f), 200f);
+            AddDebrisAt("Models/DebrisShards", new Vector3(18.38f, 0f, -38.18f), 260f);
+            AddDebrisAt("Models/DebrisRubble", new Vector3(15.56f, 0f, 26.87f), 310f);
+            AddDebrisAt("Models/DebrisRubble", new Vector3(-13.44f, 0f, -27.58f), 25f);
         }
 
         private void AddDebrisAt(string resourcePath, Vector3 position, float rotationY)
@@ -420,15 +430,20 @@ namespace LunarDominion.UI
             // aprons, clear of the roads and buildings); the gate
             // moves to the new EAST wall gap (layout (36, 0) ->
             // world (25.46, -25.46)), rotated to span the gap.
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.66f, 0f, 12.73f), 30f, "Prop");
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(5.66f, 0f, -12.73f), -20f, "Prop");
-            AddSceneryAt("Models/PropSolarPanel", new Vector3(-12.73f, 0f, 5.66f), -30f, "Prop");
-            AddSceneryAt("Models/PropCrates", new Vector3(20.51f, 0f, -13.44f), 15f, "Prop");
-            AddSceneryAt("Models/PropCrates", new Vector3(-20.51f, 0f, 13.44f), 70f, "Prop");
-            AddSceneryAt("Models/PropStorageTank", new Vector3(-13.44f, 0f, 20.51f), 0f, "Prop");
-            AddSceneryAt("Models/PropStorageTank", new Vector3(13.44f, 0f, -20.51f), 0f, "Prop");
-            AddSceneryAt("Models/PropRover", new Vector3(-8.49f, 0f, 4.24f), -45f, "Prop");
-            AddSceneryAt("Models/PropGate", new Vector3(25.46f, 0f, -25.46f), -45f, "Prop");
+            // 2026-11-19: re-spread for the x1.5 compound (world
+            // conversions of verified layout spots), and the gate
+            // moves to the NEW east wall gap — layout (54, 0) ->
+            // world (38.18, -38.18); it had been stranded at the
+            // old wall line, mid-compound on the main street.
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(-5.66f, 0f, 19.8f), 30f, "Prop");
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(5.66f, 0f, -19.8f), -20f, "Prop");
+            AddSceneryAt("Models/PropSolarPanel", new Vector3(22.63f, 0f, -8.49f), -30f, "Prop");
+            AddSceneryAt("Models/PropCrates", new Vector3(20.51f, 0f, -14.85f), 15f, "Prop");
+            AddSceneryAt("Models/PropCrates", new Vector3(-20.51f, 0f, 14.85f), 70f, "Prop");
+            AddSceneryAt("Models/PropStorageTank", new Vector3(-15.91f, 0f, 22.27f), 0f, "Prop");
+            AddSceneryAt("Models/PropStorageTank", new Vector3(15.91f, 0f, -22.27f), 0f, "Prop");
+            AddSceneryAt("Models/PropRover", new Vector3(-9.55f, 0f, 4.6f), -45f, "Prop");
+            AddSceneryAt("Models/PropGate", new Vector3(38.18f, 0f, -38.18f), -45f, "Prop");
         }
 
         private void AddSceneryAt(string resourcePath, Vector3 position, float rotationY, string name)
