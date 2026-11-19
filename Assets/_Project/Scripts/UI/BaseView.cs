@@ -90,7 +90,7 @@ namespace LunarDominion.UI
         // eases toward it; pan and zoom stay independent (pan moves
         // the look-at point, zoom only changes the distance along the
         // fixed (10,16,10) direction, so panning never changes zoom).
-        private const float CamDistDefault = 21.35f; // |(10,16,10)|
+        private const float CamDistDefault = 40f; // 2026-11-19, Patrick: opening framing = whole compound readable (was 21.35 = |(10,16,10)|, the tight Nexus framing)
         private const float CamDistMin = 7f;
         private const float CamDistMax = 52f;
         private float _camDist = CamDistDefault;
@@ -173,6 +173,13 @@ namespace LunarDominion.UI
             // panning moves camera and look-at together, so
             // scrolling can never change the zoom (a player zoom
             // control is a later feature, per Patrick).
+            // 2026-11-19: player zoom shipped 2026-11-18; the
+            // opening distance is now CamDistDefault = 40 at
+            // Patrick's direction (his screenshot: the whole
+            // 108x78 compound readable at load, north wall in
+            // frame, Lab/Hospital just cropped at the edges).
+            // The (10,16,10) direction and 48.5-degree pitch
+            // are unchanged.
             // 2026-11-09 expanded base: the camera position is now
             // ApplyCamera() (base position + pan offset), so the player
             // can scroll across the wider base.
