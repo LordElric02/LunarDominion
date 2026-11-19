@@ -1148,11 +1148,11 @@ namespace LunarDominion.UI
 
         // Kit Hydroponics instance scale: the Vol 2 Circular_Room_01
         // drum is natively ~12 units across and ~10 tall (measured
-        // against the KitTest grid, 2026-11-18), so 0.625 lands it
-        // at ~7.5 across — in the same presence family as the kit
-        // Nexus and Marine at their settled scales. One-line
-        // tuning knob.
-        private const float KitHydroponicsScale = 0.625f;
+        // against the KitTest grid, 2026-11-18). First wired at
+        // 0.625, which Play showed too big; Patrick settled 0.5
+        // (~6 across, in line with the kit Marine/Nexus) the same
+        // evening. One-line tuning knob.
+        private const float KitHydroponicsScale = 0.5f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -1899,7 +1899,7 @@ namespace LunarDominion.UI
         /// recentred on the plot and grounded from mesh bounds
         /// measured in prefab space, one bounds-fitted tap
         /// collider, white marker, kit paint kept as-is, kit scale
-        /// 0.625. No yaw: the drum is near-symmetrical.</summary>
+        /// 0.5. No yaw: the drum is near-symmetrical.</summary>
         private bool TryAddKitHydroponics()
         {
             var prefab = Resources.Load<GameObject>("Models/HydroponicsKit");
