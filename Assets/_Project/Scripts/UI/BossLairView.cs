@@ -164,11 +164,11 @@ namespace LunarDominion.UI
         // bottom (Patrick, 2026-11-19).
         private static readonly Vector2[] FanPoints =
         {
-            new Vector2(0.827f, 0.050f), new Vector2(0.846f, 0.180f),
-            new Vector2(0.900f, 0.275f), new Vector2(0.972f, 0.310f),
+            new Vector2(0.797f, 0.070f), new Vector2(0.819f, 0.218f),
+            new Vector2(0.880f, 0.326f), new Vector2(0.962f, 0.365f),
         };
-        private const float FanHalfW = 0.027f;
-        private const float FanHalfH = 0.048f;
+        private const float FanHalfW = 0.036f;
+        private const float FanHalfH = 0.064f;
         private readonly Image[] _skillIcons = new Image[3];
         private readonly Image[] _skillSweeps = new Image[3];
         private readonly Text[] _skillBadges = new Text[3];
@@ -2298,7 +2298,7 @@ namespace LunarDominion.UI
             // button, or while a touch long-press holds one. It
             // never intercepts clicks (raycast targets off).
             _actionTooltip = UIHelpers.Panel(_turnHud, "TurnTooltip", UIHelpers.Hex("#0D1420"),
-                new Vector2(0.56f, 0.375f), new Vector2(0.985f, 0.44f), Vector2.zero, Vector2.zero);
+                new Vector2(0.56f, 0.45f), new Vector2(0.985f, 0.515f), Vector2.zero, Vector2.zero);
             var tipImg = _actionTooltip.GetComponent<Image>();
             if (tipImg != null) tipImg.raycastTarget = false;
             _actionTooltipText = UIHelpers.LabelInRect(_actionTooltip, "TurnTooltipText", "", 20, Color.white,
