@@ -1084,7 +1084,7 @@ namespace LunarDominion.UI
             // the old green-grey cube so the base still builds when the
             // files are missing.
             if (!TryAddKitMarineFoundry() && !TryAddModelMarineFoundry())
-                AddBuilding(BuildingId.MarineFoundry, new Vector3(-31.5f, 0f, -21f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
+                AddBuilding(BuildingId.MarineFoundry, new Vector3(-28.5f, 0f, -18f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             // Nova Arsenal: prefer the Scifi-Kit prefab (2026-11-18,
             // the kit's Room_Small_01 — a compact room whose central
             // chamber reads as a weapons core) when installed, then
@@ -1092,7 +1092,7 @@ namespace LunarDominion.UI
             // the old red cube so the base still builds when the
             // model file is missing.
             if (!TryAddKitNovaArsenal() && !TryAddModelNovaArsenal())
-                AddBuilding(BuildingId.NovaArsenal, new Vector3(31.5f, 0f, -21f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
+                AddBuilding(BuildingId.NovaArsenal, new Vector3(28.5f, 0f, -18f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             // Aegis Motor Pool: prefer the Scifi-Kit prefab (2026-11-18,
             // Patrick re-picked the kit's Room_Large_02 complex for
             // Aegis over Nova — its open sprawl suits a motor pool)
@@ -1466,7 +1466,7 @@ namespace LunarDominion.UI
                 // footprint on the Marine plot and grounds the float
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(-31.5f, 0f, -21f)
+                go.transform.localPosition = new Vector3(-28.5f, 0f, -18f)
                     + new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitMarineScale;
 
@@ -1746,7 +1746,7 @@ namespace LunarDominion.UI
                 // footprint on the Nova plot and grounds the float
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(31.5f, 0f, -21f)
+                go.transform.localPosition = new Vector3(28.5f, 0f, -18f)
                     + new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitNovaScale;
 
