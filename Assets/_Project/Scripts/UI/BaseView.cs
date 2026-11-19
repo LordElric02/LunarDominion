@@ -1168,16 +1168,19 @@ namespace LunarDominion.UI
         // One-line tuning knob.
         private const float KitHeliumScale = 1.0f;
 
-        // Kit Alloy instance scale: the Vol 2 Geo_Reactor_01
-        // processing tower is natively ~2 units wide and ~5.5
-        // tall (measured in its prefab view, 2026-11-18). Dialled
-        // 1.5 -> 1.1 -> 0.44 across the evening's Play checks:
-        // the glass chamber between its top and bottom sections
-        // barely renders against the dark base, so the tower read
-        // as two stacked units; Patrick's 60%-off pick (0.44,
-        // ~0.9 across, ~2.4 tall) keeps the two units together
-        // visually. One-line tuning knob.
-        private const float KitAlloyScale = 0.44f;
+        // Kit Alloy instance scale (NON-uniform): the Vol 2
+        // Geo_Reactor_01 processing tower is natively ~2 units
+        // wide and ~5.5 tall (measured in its prefab view,
+        // 2026-11-18). Dialled 1.5 -> 1.1 -> 0.44 uniform across
+        // the evening's Play checks: its glass chamber barely
+        // renders against the dark base, so at large scales the
+        // tower read as two separate stacked units, while 0.44
+        // uniform was simply too small. Patrick's settle: widen
+        // the footprint to 0.8 and keep the height at 0.55 (25%
+        // taller than the 0.44 pass) — ~1.6 across, ~3.0 tall.
+        // One-line tuning knobs.
+        private const float KitAlloyScaleXZ = 0.8f;
+        private const float KitAlloyScaleY = 0.55f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -2206,7 +2209,8 @@ namespace LunarDominion.UI
         /// stripped, recentred on the plot and grounded from mesh
         /// bounds measured in prefab space, one bounds-fitted tap
         /// collider, white marker, kit paint kept as-is, kit scale
-        /// 0.44. The reactor's Particle System child (steam) is
+        /// 0.8 wide / 0.55 tall (non-uniform). The reactor's
+        /// Particle System child (steam) is
         /// deliberately NOT stripped — a live wisp over the
         /// extractor is a feature; judged at the Play check. No
         /// yaw: the pipe side faces where it faces.</summary>
@@ -2222,7 +2226,7 @@ namespace LunarDominion.UI
                 go.name = "AlloyBuilding";
                 go.transform.SetParent(_layoutRoot.transform, false);
                 go.transform.localPosition = Vector3.zero;
-                go.transform.localScale = Vector3.one * KitAlloyScale;
+                go.transform.localScale = new Vector3(KitAlloyScaleXZ, KitAlloyScaleY, KitAlloyScaleXZ);
 
                 // Strip the kit lighting and per-piece colliders:
                 // the UniversalAdditionalLightData goes before its
@@ -2287,10 +2291,13 @@ namespace LunarDominion.UI
                 // prefab space, so the offset that centres the
                 // footprint on the Alloy plot and grounds the
                 // assembly is the plot position plus the bounds
-                // offset multiplied by the instance scale.
+                // offset multiplied per-axis by the (non-uniform)
+                // instance scale.
                 go.transform.localPosition = new Vector3(21f, 0f, 14f)
-                    + go.transform.localRotation * (new Vector3(
-                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitAlloyScale);
+                    + go.transform.localRotation * new Vector3(
+                        -bounds.center.x * KitAlloyScaleXZ,
+                        -bounds.min.y * KitAlloyScaleY,
+                        -bounds.center.z * KitAlloyScaleXZ);
 
                 var list = new List<Renderer>();
                 var partColors = new Dictionary<Renderer, Color>();
@@ -2316,7 +2323,10 @@ namespace LunarDominion.UI
                 marker.transform.SetParent(go.transform, false);
                 marker.transform.localPosition = new Vector3(
                     bounds.center.x, bounds.max.y + 0.45f, bounds.center.z);
-                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                // Y compensated for the non-uniform root scale so
+                // the marker stays a sphere, not a squashed disc.
+                marker.transform.localScale = new Vector3(
+                    0.6f, 0.6f * KitAlloyScaleXZ / KitAlloyScaleY, 0.6f);
                 SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
 
                 _modelRenderers[BuildingId.AlloyExtractor] = list;
