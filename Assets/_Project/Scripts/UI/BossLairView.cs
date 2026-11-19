@@ -2682,23 +2682,12 @@ namespace LunarDominion.UI
             return idx >= 0 ? full.Substring(idx + 1) : full;
         }
 
-        // Tapping the acting hero (the 3D figure or their
-        // chip) opens the action bar; tapping again closes it.
-        // Acting closes it too — selection then moves to the
-        // next slot in the Speed order.
+        // Tapping a hero (the 3D figure or their chip) used
+        // to open and close the action bar; the fan opens for
+        // the acting hero on its own now (Patrick, 2026-11-19),
+        // so a tap just refreshes the panel.
         private void OnHeroTapped(int heroIndex)
         {
-            if (_turnFight == null || _turnFight.Finished || _turnFight.Busy || _turnFight.AwaitingTarget) return;
-            if (heroIndex != _turnFight.SelectedHero) return;
-            if (_actionBarOpen && _barForHero == heroIndex)
-            {
-                _actionBarOpen = false;
-            }
-            else
-            {
-                _actionBarOpen = true;
-                _barForHero = heroIndex;
-            }
             RefreshTurnPanel();
         }
 
@@ -3049,21 +3038,25 @@ namespace LunarDominion.UI
                 _turnLogText.text = string.Join("\n", lines);
             }
 
-            // The action bar belongs to the acting hero: any
-            // other state (busy, targeting, another actor, the
-            // fight over) closes it.
+            // The action fan belongs to the acting hero and
+            // opens for them on its own (Patrick, 2026-11-19 —
+            // no need to tap the hero first); any other state
+            // (busy, targeting, the fight over, the selected
+            // hero already ordered or down) closes it.
             bool inputReady = !_turnFight.Busy && !_turnFight.AwaitingTarget && !_turnFight.Finished
                 && _turnFight.SelectedHero >= 0;
-            if (!inputReady || _barForHero != _turnFight.SelectedHero) _actionBarOpen = false;
+            var acting = SelectedHeroState();
+            bool canOpen = inputReady && acting != null && acting.Alive && !acting.Acted;
+            _actionBarOpen = canOpen;
+            if (canOpen) _barForHero = _turnFight.SelectedHero;
             if (_actionBar != null) _actionBar.SetActive(_actionBarOpen && inputReady);
 
-            // Hint line: the one thing to do right now.
+            // Hint line: the one thing to do right now. (The
+            // fan opens on its own for the acting hero, so the
+            // old "Tap X to act" prompt is retired.)
             string hintText;
-            var hintHero = SelectedHeroState();
             if (_turnFight.Finished) hintText = "";
             else if (_turnFight.AwaitingTarget) hintText = "Choose a target";
-            else if (!inputReady || _actionBarOpen) hintText = "";
-            else if (hintHero != null) hintText = $"Tap {ShortHeroName(hintHero.Name)} to act";
             else hintText = "";
             if (_turnHintText != null) _turnHintText.text = hintText;
 
