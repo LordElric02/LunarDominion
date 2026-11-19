@@ -1188,9 +1188,12 @@ namespace LunarDominion.UI
         // is natively SMALLER than its sibling rooms (~6.5 across
         // against Room_Small_01's ~12), so the shared 0.375 landed
         // it only ~2.4 across — too small at the first Play check.
-        // Patrick settled 0.75 (~4.9 across, the Hospital's scale).
-        // One-line tuning knob.
-        private const float KitLabScale = 0.75f;
+        // Dialled 0.375 -> 0.75 -> 0.9: at 0.75 it still read a
+        // bit smaller than the Hospital (whose room is natively
+        // bigger at the same 0.75), so Patrick settled 0.9
+        // (~5.9 across, roughly the Hospital's size). One-line
+        // tuning knob.
+        private const float KitLabScale = 0.9f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -2374,7 +2377,7 @@ namespace LunarDominion.UI
         /// per-piece colliders stripped, recentred on the plot and
         /// grounded from mesh bounds measured in prefab space, one
         /// bounds-fitted tap collider, white marker, kit paint kept
-        /// as-is, kit scale 0.75. No yaw.</summary>
+        /// as-is, kit scale 0.9. No yaw.</summary>
         private bool TryAddKitLab()
         {
             var prefab = Resources.Load<GameObject>("Models/LabKit");
