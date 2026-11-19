@@ -1041,10 +1041,12 @@ namespace LunarDominion.UI
             // are missing.
             if (!TryAddKitHydroponics() && !TryAddModelHydroponicsDome())
                 AddBuilding(BuildingId.HydroponicsDome, new Vector3(-21f, 0f, 14f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
-            // Alloy Extractor (Blender model, 2026-11-05): use the FBX model if
-            // it loads, otherwise fall back to the old grey cube so the
-            // base still builds when the model file is missing.
-            if (!TryAddModelAlloyExtractor())
+            // Alloy Extractor: prefer the Vol 2 kit reactor
+            // (2026-11-18) when Patrick has it installed, then the
+            // Blender FBX model (2026-11-05), otherwise fall back
+            // to the old grey cube so the base still builds when
+            // the files are missing.
+            if (!TryAddKitAlloy() && !TryAddModelAlloyExtractor())
                 AddBuilding(BuildingId.AlloyExtractor, new Vector3(21f, 0f, 14f), PrimitiveType.Cube, new Vector3(1.8f, 1.6f, 1.8f), new Color(0.65f, 0.68f, 0.72f), "Alloy");
             // Helium-3 Harvester: prefer the Vol 2 kit tank
             // (2026-11-18) when Patrick has it installed, then the
@@ -1165,6 +1167,14 @@ namespace LunarDominion.UI
         // drum; Patrick settled full native 1.0 the same evening.
         // One-line tuning knob.
         private const float KitHeliumScale = 1.0f;
+
+        // Kit Alloy instance scale: the Vol 2 Geo_Reactor_01
+        // processing tower is natively ~2 units wide and ~5.5
+        // tall (measured in its prefab view, 2026-11-18), so 1.5
+        // lands it ~3 across and ~8 tall — a spire in the same
+        // height family as the native-size Helium tank. One-line
+        // tuning knob.
+        private const float KitAlloyScale = 1.5f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -2172,6 +2182,150 @@ namespace LunarDominion.UI
             catch (System.Exception e)
             {
                 Debug.LogWarning("[BaseView] Helium kit prefab failed to load, using model/primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Instantiate the Scifi-Kit Vol 2 Alloy reactor
+        /// (Resources/Models/AlloyKit — a local-only prefab Patrick
+        /// saved in KitTest from Vol 2's Geo_Reactor_01 prop,
+        /// 2026-11-18) at the Alloy plot (21, 0, 14) if it can be
+        /// loaded. Returns false (caller falls back to the FBX
+        /// model, then the primitive) when the prefab is missing or
+        /// has no meshes. The piece is a processing tower: a metal
+        /// base with a green glow ring, a glass reaction chamber
+        /// around a glowing core, a vent housing on top and a fat
+        /// green pipe running down its side into the ground. It
+        /// stands flat on its base ring (checked in its prefab
+        /// view). Same treatment as the other kit buildings: kit
+        /// lights (data component first) and per-piece colliders
+        /// stripped, recentred on the plot and grounded from mesh
+        /// bounds measured in prefab space, one bounds-fitted tap
+        /// collider, white marker, kit paint kept as-is, kit scale
+        /// 1.5. The reactor's Particle System child (steam) is
+        /// deliberately NOT stripped — a live wisp over the
+        /// extractor is a feature; judged at the Play check. No
+        /// yaw: the pipe side faces where it faces.</summary>
+        private bool TryAddKitAlloy()
+        {
+            var prefab = Resources.Load<GameObject>("Models/AlloyKit");
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "AlloyBuilding";
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = Vector3.zero;
+                go.transform.localScale = Vector3.one * KitAlloyScale;
+
+                // Strip the kit lighting and per-piece colliders:
+                // the UniversalAdditionalLightData goes before its
+                // Light, the order the Nexus strip proved necessary.
+                foreach (var light in go.GetComponentsInChildren<Light>(true))
+                {
+                    var extra = light.GetComponent<UniversalAdditionalLightData>();
+                    if (extra != null) Destroy(extra);
+                    Destroy(light);
+                }
+                foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                    Destroy(col);
+
+                // Captured BEFORE the marker is added, so Highlight()
+                // recolours the building parts but not the marker.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Measure the assembly in its own (prefab) space: the
+                // matrix product cancels the world frame, so the result
+                // is independent of the layout root's 45-degree yaw.
+                var meshFilters = go.GetComponentsInChildren<MeshFilter>(true);
+                if (meshFilters.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                Bounds bounds = new Bounds();
+                bool hasBounds = false;
+                var toLocal = go.transform.worldToLocalMatrix;
+                foreach (var mf in meshFilters)
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var m = toLocal * mf.transform.localToWorldMatrix;
+                    var mb = mf.sharedMesh.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var corner = new Vector3(
+                            (i & 1) == 0 ? mb.min.x : mb.max.x,
+                            (i & 2) == 0 ? mb.min.y : mb.max.y,
+                            (i & 4) == 0 ? mb.min.z : mb.max.z);
+                        var p = m.MultiplyPoint3x4(corner);
+                        if (!hasBounds)
+                        {
+                            bounds = new Bounds(p, Vector3.zero);
+                            hasBounds = true;
+                        }
+                        else bounds.Encapsulate(p);
+                    }
+                }
+                if (!hasBounds)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Recentring: the measured bounds are in unscaled
+                // prefab space, so the offset that centres the
+                // footprint on the Alloy plot and grounds the
+                // assembly is the plot position plus the bounds
+                // offset multiplied by the instance scale.
+                go.transform.localPosition = new Vector3(21f, 0f, 14f)
+                    + go.transform.localRotation * (new Vector3(
+                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitAlloyScale);
+
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared kit materials.
+                    // The kit paint is captured as-is (no treatment).
+                    partColors[rend] = rend.material.color;
+                }
+
+                // One tap collider wrapping the whole assembly, in the
+                // root's own space (the bounds were measured there).
+                var box = go.AddComponent<BoxCollider>();
+                box.center = bounds.center;
+                box.size = bounds.size;
+
+                // Same white marker as the other buildings, just above
+                // the roofline, over the footprint centre.
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "AlloyMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(
+                    bounds.center.x, bounds.max.y + 0.45f, bounds.center.z);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.AlloyExtractor] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.AlloyExtractor] = go;
+                _baseColors[BuildingId.AlloyExtractor] = new Color(0.65f, 0.68f, 0.72f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Alloy kit prefab failed to load, using model/primitive: " + e.Message);
                 if (go != null) Destroy(go);
                 return false;
             }
