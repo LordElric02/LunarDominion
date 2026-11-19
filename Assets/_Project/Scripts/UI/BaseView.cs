@@ -1034,10 +1034,12 @@ namespace LunarDominion.UI
             // so the base still builds when the files are missing.
             if (!TryAddKitNexus() && !TryAddModelNexus())
                 AddBuilding(BuildingId.CommandNexus, new Vector3(0f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(2f, 3f, 2f), new Color(0.15f, 0.35f, 0.75f), "Nexus");
-            // Hydroponics Dome (Blender model, 2026-11-05): use the FBX model if
-            // it loads, otherwise fall back to the old green sphere so the
-            // base still builds when the model file is missing.
-            if (!TryAddModelHydroponicsDome())
+            // Hydroponics: prefer the Vol 2 kit drum (2026-11-18)
+            // when Patrick has it installed, then the Blender FBX
+            // dome (2026-11-05), otherwise fall back to the old
+            // green sphere so the base still builds when the files
+            // are missing.
+            if (!TryAddKitHydroponics() && !TryAddModelHydroponicsDome())
                 AddBuilding(BuildingId.HydroponicsDome, new Vector3(-21f, 0f, 14f), PrimitiveType.Sphere, new Vector3(2f, 1.2f, 2f), new Color(0.25f, 0.75f, 0.35f), "Hydro");
             // Alloy Extractor (Blender model, 2026-11-05): use the FBX model if
             // it loads, otherwise fall back to the old grey cube so the
@@ -1143,6 +1145,14 @@ namespace LunarDominion.UI
         // dwarfed next to the kit room assemblies (Patrick,
         // 2026-11-18). One-line tuning knob.
         private const float KitHospitalScale = 0.75f;
+
+        // Kit Hydroponics instance scale: the Vol 2 Circular_Room_01
+        // drum is natively ~12 units across and ~10 tall (measured
+        // against the KitTest grid, 2026-11-18), so 0.625 lands it
+        // at ~7.5 across — in the same presence family as the kit
+        // Nexus and Marine at their settled scales. One-line
+        // tuning knob.
+        private const float KitHydroponicsScale = 0.625f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -1866,6 +1876,149 @@ namespace LunarDominion.UI
             catch (System.Exception e)
             {
                 Debug.LogWarning("[BaseView] Hospital kit prefab failed to load, using model/primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Instantiate the Scifi-Kit Vol 2 Hydroponics drum
+        /// (Resources/Models/HydroponicsKit — a local-only prefab
+        /// Patrick saved in KitTest from Vol 2's Circular_Room_01,
+        /// 2026-11-18) at the Hydroponics plot (-21, 0, 14) if it
+        /// can be loaded. Returns false (caller falls back to the
+        /// FBX dome, then the primitive) when the prefab is missing
+        /// or has no meshes. The drum is a rounded-square tower:
+        /// three stacked panel bands with orange stripes, slit
+        /// windows and a glass skylight grid on the roof — the
+        /// greenhouse read comes from that roof at the base camera's
+        /// downward angle. Unlike Vol 2's Room_Small pieces it sits
+        /// flat on the ground with no lower storey (checked in
+        /// KitTest), so the standard treatment applies unchanged:
+        /// the kit's Point light child and per-piece colliders are
+        /// stripped (light data component first), the instance is
+        /// recentred on the plot and grounded from mesh bounds
+        /// measured in prefab space, one bounds-fitted tap
+        /// collider, white marker, kit paint kept as-is, kit scale
+        /// 0.625. No yaw: the drum is near-symmetrical.</summary>
+        private bool TryAddKitHydroponics()
+        {
+            var prefab = Resources.Load<GameObject>("Models/HydroponicsKit");
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "HydroponicsBuilding";
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = Vector3.zero;
+                go.transform.localScale = Vector3.one * KitHydroponicsScale;
+
+                // Strip the kit lighting and per-piece colliders:
+                // the UniversalAdditionalLightData goes before its
+                // Light, the order the Nexus strip proved necessary.
+                foreach (var light in go.GetComponentsInChildren<Light>(true))
+                {
+                    var extra = light.GetComponent<UniversalAdditionalLightData>();
+                    if (extra != null) Destroy(extra);
+                    Destroy(light);
+                }
+                foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                    Destroy(col);
+
+                // Captured BEFORE the marker is added, so Highlight()
+                // recolours the building parts but not the marker.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Measure the assembly in its own (prefab) space: the
+                // matrix product cancels the world frame, so the result
+                // is independent of the layout root's 45-degree yaw.
+                var meshFilters = go.GetComponentsInChildren<MeshFilter>(true);
+                if (meshFilters.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                Bounds bounds = new Bounds();
+                bool hasBounds = false;
+                var toLocal = go.transform.worldToLocalMatrix;
+                foreach (var mf in meshFilters)
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var m = toLocal * mf.transform.localToWorldMatrix;
+                    var mb = mf.sharedMesh.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var corner = new Vector3(
+                            (i & 1) == 0 ? mb.min.x : mb.max.x,
+                            (i & 2) == 0 ? mb.min.y : mb.max.y,
+                            (i & 4) == 0 ? mb.min.z : mb.max.z);
+                        var p = m.MultiplyPoint3x4(corner);
+                        if (!hasBounds)
+                        {
+                            bounds = new Bounds(p, Vector3.zero);
+                            hasBounds = true;
+                        }
+                        else bounds.Encapsulate(p);
+                    }
+                }
+                if (!hasBounds)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Recentring: the measured bounds are in unscaled
+                // prefab space, so the offset that centres the
+                // footprint on the Hydroponics plot and grounds the
+                // assembly is the plot position plus the bounds
+                // offset multiplied by the instance scale.
+                go.transform.localPosition = new Vector3(-21f, 0f, 14f)
+                    + go.transform.localRotation * (new Vector3(
+                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitHydroponicsScale);
+
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared kit materials.
+                    // The kit paint is captured as-is (no treatment).
+                    partColors[rend] = rend.material.color;
+                }
+
+                // One tap collider wrapping the whole assembly, in the
+                // root's own space (the bounds were measured there).
+                var box = go.AddComponent<BoxCollider>();
+                box.center = bounds.center;
+                box.size = bounds.size;
+
+                // Same white marker as the other buildings, just above
+                // the roofline, over the footprint centre.
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "HydroponicsMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(
+                    bounds.center.x, bounds.max.y + 0.45f, bounds.center.z);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.HydroponicsDome] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.HydroponicsDome] = go;
+                _baseColors[BuildingId.HydroponicsDome] = new Color(0.25f, 0.75f, 0.35f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Hydroponics kit prefab failed to load, using model/primitive: " + e.Message);
                 if (go != null) Destroy(go);
                 return false;
             }
