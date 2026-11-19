@@ -734,13 +734,21 @@ namespace LunarDominion.UI
             // gate gap at local z 0. (Hexagon growth, 2026-11-18:
             // x1.25 first, then x1.5 the same night at Patrick's
             // call — vertices (+/-54, +/-19.5), (0, +/-39).)
-            AddWallRun(54f, -19.5f, 54f, -1.7f);
-            AddWallRun(54f, 1.7f, 54f, 19.5f);
-            AddWallRun(54f, 19.5f, 0f, 39f);
-            AddWallRun(0f, 39f, -54f, 19.5f);
-            AddWallRun(-54f, 19.5f, -54f, -19.5f);
-            AddWallRun(-54f, -19.5f, 0f, -39f);
-            AddWallRun(0f, -39f, 54f, -19.5f);
+            // 2026-11-19 (Patrick): the perimeter is built from
+            // the Vol 2 kit piece saved as Models/WallKit when it
+            // is installed (local-only asset); without it, the
+            // stepped box runs below build exactly as before.
+            bool kitWall = TryBuildKitWall();
+            if (!kitWall)
+            {
+                AddWallRun(54f, -19.5f, 54f, -1.7f);
+                AddWallRun(54f, 1.7f, 54f, 19.5f);
+                AddWallRun(54f, 19.5f, 0f, 39f);
+                AddWallRun(0f, 39f, -54f, 19.5f);
+                AddWallRun(-54f, 19.5f, -54f, -19.5f);
+                AddWallRun(-54f, -19.5f, 0f, -39f);
+                AddWallRun(0f, -39f, 54f, -19.5f);
+            }
 
             // Vertex towers, each capped and topped with a glowing
             // cyan beacon.
@@ -766,6 +774,154 @@ namespace LunarDominion.UI
             AddLampForRun(-54f, 19.5f, -54f, -19.5f);
             AddLampForRun(-54f, -19.5f, 0f, -39f);
             AddLampForRun(0f, -39f, 54f, -19.5f);
+        }
+
+        // The kit perimeter (2026-11-19, Patrick): tiles the
+        // WallKit piece (Vol 2 Wall_Separator_01 — a hollow trough,
+        // measured at runtime) along the seven wall runs. Each
+        // segment is TWO pieces: one upright, one rotated 180
+        // degrees about its long axis and seated mouth-to-mouth
+        // on the first, closing the pair into a solid beam with
+        // the slatted detail on both faces. The segment count per
+        // run rounds to the piece's measured length; the small
+        // remainder is absorbed by scaling each segment along the
+        // run only. Returns false (and the box wall builds) when
+        // the prefab is missing or has no meshes.
+        private bool TryBuildKitWall()
+        {
+            var prefab = Resources.Load<GameObject>("Models/WallKit");
+            if (prefab == null) return false;
+
+            // Measure one probe instance in its own space: the
+            // matrix product cancels the world frame, exactly as
+            // in the building kits.
+            var probe = Instantiate(prefab);
+            probe.transform.SetParent(_layoutRoot.transform, false);
+            probe.transform.localPosition = Vector3.zero;
+            probe.transform.localRotation = Quaternion.identity;
+            probe.transform.localScale = Vector3.one;
+            Bounds b;
+            bool ok = TryMeasureBoundsIn(probe, probe.transform, out b);
+            Destroy(probe);
+            if (!ok) return false;
+
+            bool alongX = b.size.x >= b.size.z;
+            float segLen = alongX ? b.size.x : b.size.z;
+            float pieceH = b.size.y;
+            if (segLen < 0.5f || pieceH < 0.1f) return false;
+
+            AddKitWallRun(prefab, alongX, segLen, pieceH, 54f, -19.5f, 54f, -1.7f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, 54f, 1.7f, 54f, 19.5f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, 54f, 19.5f, 0f, 39f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, 0f, 39f, -54f, 19.5f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, -54f, 19.5f, -54f, -19.5f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, -54f, -19.5f, 0f, -39f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, 0f, -39f, 54f, -19.5f);
+            return true;
+        }
+
+        // Mesh bounds of a whole hierarchy, expressed in the
+        // given transform's local space.
+        private static bool TryMeasureBoundsIn(GameObject go, Transform space, out Bounds bounds)
+        {
+            bounds = new Bounds();
+            var meshFilters = go.GetComponentsInChildren<MeshFilter>(true);
+            if (meshFilters.Length == 0) return false;
+            var toSpace = space.worldToLocalMatrix;
+            bool has = false;
+            foreach (var mf in meshFilters)
+            {
+                if (mf.sharedMesh == null) continue;
+                var m = toSpace * mf.transform.localToWorldMatrix;
+                var mb = mf.sharedMesh.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = new Vector3(
+                        (i & 1) == 0 ? mb.min.x : mb.max.x,
+                        (i & 2) == 0 ? mb.min.y : mb.max.y,
+                        (i & 4) == 0 ? mb.min.z : mb.max.z);
+                    var p = m.MultiplyPoint3x4(corner);
+                    if (!has)
+                    {
+                        bounds = new Bounds(p, Vector3.zero);
+                        has = true;
+                    }
+                    else bounds.Encapsulate(p);
+                }
+            }
+            return has;
+        }
+
+        // One kit wall run: segment holders along the run, each
+        // holding the upright + flipped piece pair.
+        private void AddKitWallRun(GameObject prefab, bool alongX, float segLen, float pieceH,
+            float ax, float az, float bx, float bz)
+        {
+            float dx = bx - ax, dz = bz - az;
+            float runLen = Mathf.Sqrt(dx * dx + dz * dz);
+            int n = Mathf.Max(1, Mathf.RoundToInt(runLen / segLen));
+            float stretch = (runLen / n) / segLen;
+            // Holder +Z points along the run direction.
+            float yaw = Mathf.Atan2(dx, dz) * Mathf.Rad2Deg;
+            for (int i = 0; i < n; i++)
+            {
+                float t = (i + 0.5f) / n;
+                var holder = new GameObject("WallKitSegment");
+                _wallPieces.Add(holder);
+                ParentToLayout(holder);
+                holder.transform.localPosition = new Vector3(ax + dx * t, 0f, az + dz * t);
+                holder.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+                AddKitWallPiece(prefab, holder, alongX, stretch, false, 0f);
+                AddKitWallPiece(prefab, holder, alongX, stretch, true, pieceH);
+            }
+        }
+
+        // One WallKit piece inside a segment holder: its long
+        // axis aligned to the holder's +Z, centred on the holder
+        // origin, base seated at baseY (holder space). When
+        // flipped, the piece is first rotated 180 degrees about
+        // its own long axis (mouth down), so the pair closes
+        // into a beam. The seat is computed from the piece's
+        // measured bounds in holder space, so the prefab's own
+        // pivot placement does not matter.
+        private void AddKitWallPiece(GameObject prefab, GameObject holder, bool alongX,
+            float stretch, bool flipped, float baseY)
+        {
+            var go = Instantiate(prefab);
+            go.name = "WallKitPiece";
+            go.transform.SetParent(holder.transform, false);
+
+            // Strip kit lights and colliders, as in the building
+            // kits (the light data component goes before its
+            // Light — URP dependency).
+            foreach (var light in go.GetComponentsInChildren<Light>(true))
+            {
+                var extra = light.GetComponent<UniversalAdditionalLightData>();
+                if (extra != null) Destroy(extra);
+                Destroy(light);
+            }
+            foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                Destroy(col);
+
+            var rot = Quaternion.identity;
+            if (flipped)
+                rot = Quaternion.AngleAxis(180f, alongX ? Vector3.right : Vector3.forward) * rot;
+            if (alongX)
+                rot = Quaternion.Euler(0f, -90f, 0f) * rot;
+            go.transform.localRotation = rot;
+            go.transform.localScale = alongX
+                ? new Vector3(stretch, 1f, 1f)
+                : new Vector3(1f, 1f, stretch);
+            go.transform.localPosition = Vector3.zero;
+
+            Bounds hb;
+            if (!TryMeasureBoundsIn(go, holder.transform, out hb))
+            {
+                Destroy(go);
+                return;
+            }
+            go.transform.localPosition = new Vector3(
+                -hb.center.x, baseY - hb.min.y, -hb.center.z);
         }
 
         // One hexagonal wall run from (ax, az) to (bx, bz), in
