@@ -177,7 +177,11 @@ namespace LunarDominion.UI
             // ApplyCamera() (base position + pan offset), so the player
             // can scroll across the wider base.
             ApplyCamera();
-            cam.backgroundColor = new Color(0.02f, 0.03f, 0.06f);
+            // 2026-11-18 (Patrick): hazy-green horizon backdrop,
+            // replacing the near-black space colour — the old
+            // earth-like moon perimeter is retired (see the
+            // BuildWall call site below).
+            cam.backgroundColor = new Color(0.36f, 0.50f, 0.38f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 
             var lightGo = new GameObject("Directional Light");
@@ -305,8 +309,14 @@ namespace LunarDominion.UI
             AddProps();
 
             BuildWall();
-            BuildMountains();
-            BuildAlienPlanet();
+            // 2026-11-18 (Patrick): the horizon composition is
+            // retired — with no ground outside the wall, the
+            // mountain ring read as floating rocks over the void,
+            // and the banded planet belonged to the same old
+            // earth-like moon concept. The horizon is the plain
+            // hazy-green backdrop for now. BuildMountains() and
+            // BuildAlienPlanet() stay in this file, uncalled, so
+            // either can be restored with one line.
         }
 
         // 2026-11-06: planet-and-stars sky removed from the base view —
