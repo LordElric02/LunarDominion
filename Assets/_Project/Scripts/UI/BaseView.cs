@@ -1159,10 +1159,12 @@ namespace LunarDominion.UI
 
         // Kit Helium instance scale: the Vol 2 Pillar_Tank_01 silo
         // is natively ~6.5 units across its feet and ~8 tall
-        // (measured against the KitTest grid, 2026-11-18), so
-        // 0.625 lands it ~4 across and ~5 tall — a narrow, tall
-        // silo on the north plot. One-line tuning knob.
-        private const float KitHeliumScale = 0.625f;
+        // (measured against the KitTest grid, 2026-11-18), but the
+        // tank BODY is much narrower than the feet spread, so at
+        // the first-wired 0.625 it read dwarfed next to the Hydro
+        // drum; Patrick settled full native 1.0 the same evening.
+        // One-line tuning knob.
+        private const float KitHeliumScale = 1.0f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -2049,7 +2051,7 @@ namespace LunarDominion.UI
         /// per-piece colliders stripped, recentred on the plot and
         /// grounded from mesh bounds measured in prefab space, one
         /// bounds-fitted tap collider, white marker, kit paint kept
-        /// as-is, kit scale 0.625. No yaw: the tank is radial, the
+        /// as-is, kit scale 1.0 (native). No yaw: the tank is radial, the
         /// pipework faces where it faces.</summary>
         private bool TryAddKitHelium()
         {
