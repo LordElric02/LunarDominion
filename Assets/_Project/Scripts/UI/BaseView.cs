@@ -776,6 +776,9 @@ namespace LunarDominion.UI
             AddLampForRun(0f, -39f, 54f, -19.5f);
         }
 
+        // Kit wall widening across the run (see AddKitWallPiece).
+        private const float KitWallThickness = 1.5f;
+
         // The kit perimeter (2026-11-19, Patrick): tiles the
         // WallKit piece (Vol 2 Wall_Separator_01 — a hollow trough,
         // measured at runtime) along the seven wall runs. Each
@@ -883,7 +886,11 @@ namespace LunarDominion.UI
         // its own long axis (mouth down), so the pair closes
         // into a beam. The seat is computed from the piece's
         // measured bounds in holder space, so the prefab's own
-        // pivot placement does not matter.
+        // pivot placement does not matter. The piece is widened
+        // across the run by KitWallThickness (2026-11-19,
+        // Patrick: the raw separator read too thin — the old box
+        // wall's base was 1.7 thick, and 1.5x lands the kit beam
+        // at about the same substance).
         private void AddKitWallPiece(GameObject prefab, GameObject holder, bool alongX,
             float stretch, bool flipped, float baseY)
         {
@@ -910,8 +917,8 @@ namespace LunarDominion.UI
                 rot = Quaternion.Euler(0f, -90f, 0f) * rot;
             go.transform.localRotation = rot;
             go.transform.localScale = alongX
-                ? new Vector3(stretch, 1f, 1f)
-                : new Vector3(1f, 1f, stretch);
+                ? new Vector3(stretch, 1f, KitWallThickness)
+                : new Vector3(KitWallThickness, 1f, stretch);
             go.transform.localPosition = Vector3.zero;
 
             Bounds hb;
