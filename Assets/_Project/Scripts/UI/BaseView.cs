@@ -1170,11 +1170,12 @@ namespace LunarDominion.UI
 
         // Kit Alloy instance scale: the Vol 2 Geo_Reactor_01
         // processing tower is natively ~2 units wide and ~5.5
-        // tall (measured in its prefab view, 2026-11-18), so 1.5
-        // lands it ~3 across and ~8 tall — a spire in the same
-        // height family as the native-size Helium tank. One-line
+        // tall (measured in its prefab view, 2026-11-18). First
+        // wired at 1.5, which held its own too much next to the
+        // Hydro drum; Patrick settled 1.1 (~2.2 across, ~6 tall)
+        // so it sits slightly smaller than Hydroponics. One-line
         // tuning knob.
-        private const float KitAlloyScale = 1.5f;
+        private const float KitAlloyScale = 1.1f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -2203,7 +2204,7 @@ namespace LunarDominion.UI
         /// stripped, recentred on the plot and grounded from mesh
         /// bounds measured in prefab space, one bounds-fitted tap
         /// collider, white marker, kit paint kept as-is, kit scale
-        /// 1.5. The reactor's Particle System child (steam) is
+        /// 1.1. The reactor's Particle System child (steam) is
         /// deliberately NOT stripped — a live wisp over the
         /// extractor is a feature; judged at the Play check. No
         /// yaw: the pipe side faces where it faces.</summary>
