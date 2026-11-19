@@ -148,7 +148,27 @@ namespace LunarDominion.UI
         private readonly GameObject[] _portraitSlashes = new GameObject[4];
         private readonly UnitId[] _portraitIds = new UnitId[4];
         private int _actingPortrait = -1;
-        private readonly Image[] _cardFrames = new Image[5];
+        private readonly Image[] _cardFrames = new Image[4];
+        private readonly Image[] _cardCovers = new Image[4];
+        private readonly Image[] _fanIcons = new Image[4];
+        private readonly Dictionary<string, Sprite> _actionIconCache =
+            new Dictionary<string, Sprite>();
+        private Sprite _whiteSprite;
+        private int _pressAction = -1;
+        private float _pressStartedAt;
+        private bool _pressTooltipShown;
+        private int _suppressAction = -1;
+        private const float LongPressSeconds = 0.45f;
+        // Anchor points of the radial fan buttons along a
+        // quarter arc in the bottom-right corner, Attack at the
+        // bottom (Patrick, 2026-11-19).
+        private static readonly Vector2[] FanPoints =
+        {
+            new Vector2(0.827f, 0.050f), new Vector2(0.846f, 0.180f),
+            new Vector2(0.900f, 0.275f), new Vector2(0.972f, 0.310f),
+        };
+        private const float FanHalfW = 0.027f;
+        private const float FanHalfH = 0.048f;
         private readonly Image[] _skillIcons = new Image[3];
         private readonly Image[] _skillSweeps = new Image[3];
         private readonly Text[] _skillBadges = new Text[3];
@@ -2111,34 +2131,48 @@ namespace LunarDominion.UI
                 _portraitSlashes[i] = slash.gameObject;
             }
 
-            // The action bar: hidden until the acting hero is
-            // tapped; Attack / Defend / the hero's 3 skills.
+            // The action fan: hidden until the acting hero is
+            // tapped; Attack / the hero's 3 skills, arranged in a
+            // radial fan in the bottom-right corner (Patrick,
+            // 2026-11-19 — the container spans the HUD and each
+            // button is anchored on the arc, see FanPoints).
+            // Defend is gone as a universal action (Patrick: it
+            // is something certain heroes do, through their
+            // skills), so the fan has four buttons.
             _actionBar = new GameObject("TurnActions");
             _actionBar.transform.SetParent(_turnHud.transform, false);
             var actionsRt = _actionBar.AddComponent<RectTransform>();
-            actionsRt.anchorMin = new Vector2(0.24f, 0.015f);
-            actionsRt.anchorMax = new Vector2(0.76f, 0.115f);
+            actionsRt.anchorMin = Vector2.zero;
+            actionsRt.anchorMax = Vector2.one;
             actionsRt.offsetMin = Vector2.zero;
             actionsRt.offsetMax = Vector2.zero;
-            var actionsLayout = _actionBar.AddComponent<HorizontalLayoutGroup>();
-            actionsLayout.spacing = 8;
-            actionsLayout.childAlignment = TextAnchor.MiddleCenter;
-            actionsLayout.childControlWidth = true;
-            actionsLayout.childControlHeight = true;
-            actionsLayout.childForceExpandWidth = true;
-            actionsLayout.childForceExpandHeight = true;
-            string[] actionNames = { "Attack", "Defend", "Skill 1", "Skill 2", "Skill 3" };
+            string[] actionNames = { "Attack", "Skill 1", "Skill 2", "Skill 3" };
             for (int i = 0; i < actionNames.Length; i++)
             {
                 int actionIndex = i;
                 var btn = MakePanelButton(_actionBar, "TurnAction" + i, actionNames[i], 22,
                     UIHelpers.Hex("#1A2436"), out var label);
+                // Fan placement: anchored on the arc; the button's
+                // own plate goes transparent — the medallion (or
+                // the card dressing, in fallback) is the face.
+                var btnRt = btn.GetComponent<RectTransform>();
+                btnRt.anchorMin = FanPoints[actionIndex] - new Vector2(FanHalfW, FanHalfH);
+                btnRt.anchorMax = FanPoints[actionIndex] + new Vector2(FanHalfW, FanHalfH);
+                btnRt.offsetMin = Vector2.zero;
+                btnRt.offsetMax = Vector2.zero;
+                btn.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0f);
                 btn.onClick.AddListener(() =>
                 {
+                    // A release that ends a long-press preview is
+                    // swallowed (see OnActionPointerUp).
+                    if (_suppressAction == actionIndex)
+                    {
+                        _suppressAction = -1;
+                        return;
+                    }
                     if (_turnFight == null) return;
                     if (actionIndex == 0) _turnFight.ChooseAttack();
-                    else if (actionIndex == 1) _turnFight.ChooseDefend();
-                    else _turnFight.ChooseSkill(actionIndex - 2);
+                    else _turnFight.ChooseSkill(actionIndex - 1);
                 });
                 // Hover tooltip (Patrick 2026-11-11): the
                 // description shows while the mouse is over the
@@ -2151,6 +2185,19 @@ namespace LunarDominion.UI
                 var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
                 exit.callback.AddListener(_ => HideActionTooltip());
                 trigger.triggers.Add(exit);
+                // Long-press preview on touch (Patrick,
+                // 2026-11-19): a normal tap fires the action; a
+                // hold shows the tooltip instead and swallows the
+                // release click.
+                var down = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
+                down.callback.AddListener(_ => OnActionPointerDown(actionIndex));
+                trigger.triggers.Add(down);
+                var up = new EventTrigger.Entry { eventID = EventTriggerType.PointerUp };
+                up.callback.AddListener(_ => OnActionPointerUp(actionIndex));
+                trigger.triggers.Add(up);
+                var exitPress = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+                exitPress.callback.AddListener(_ => OnActionPointerExit(actionIndex));
+                trigger.triggers.Add(exitPress);
                 _turnActionButtons.Add(btn);
                 _turnActionLabels.Add(label);
 
@@ -2170,9 +2217,10 @@ namespace LunarDominion.UI
                     new Vector2(3f, 3f), new Vector2(-3f, -3f));
                 cardCover.transform.SetSiblingIndex(1);
                 _cardFrames[actionIndex] = cardFrame;
-                if (actionIndex >= 2)
+                _cardCovers[actionIndex] = cardCover;
+                if (actionIndex >= 1)
                 {
-                    int slot = actionIndex - 2;
+                    int slot = actionIndex - 1;
                     // Keep the skill's name clear of the diamond.
                     label.rectTransform.anchorMin =
                         new Vector2(0.17f, label.rectTransform.anchorMin.y);
@@ -2183,14 +2231,34 @@ namespace LunarDominion.UI
                     _skillIcons[slot] = icon;
                     var sweep = PlatePiece(btn.transform, "SkillSweep",
                         new Color(0f, 0f, 0f, 0.62f),
-                        new Vector2(0f, 1f), Vector2.one, Vector2.zero, Vector2.zero);
+                        Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                    // Radial cooldown (2026-11-19): the dark sweep
+                    // fills the medallion by the fraction of the
+                    // cooldown still to run (the refresh sets
+                    // fillAmount); a filled image needs a sprite.
+                    sweep.type = Image.Type.Filled;
+                    sweep.fillMethod = Image.FillMethod.Radial360;
+                    sweep.fillOrigin = (int)Image.Origin360.Top;
+                    sweep.fillClockwise = false;
+                    sweep.sprite = SharedWhiteSprite();
                     sweep.gameObject.SetActive(false);
                     _skillSweeps[slot] = sweep;
                     _skillBadges[slot] = UIHelpers.LabelInRect(btn.gameObject,
-                        "SkillBadge", "", 20, UIHelpers.Hex("#FFD54F"),
-                        new Rect(0.78f, 0.58f, 0.97f, 0.95f), TextAnchor.MiddleRight);
+                        "SkillBadge", "", 34, UIHelpers.Hex("#FFD54F"),
+                        new Rect(0.15f, 0.2f, 0.85f, 0.8f), TextAnchor.MiddleCenter);
                     _skillBadges[slot].verticalOverflow = VerticalWrapMode.Overflow;
                 }
+                // The generated medallion (installed under
+                // Resources/UI/ActionIcons): the refresh shows it
+                // when present, with the card + label as the
+                // fallback. It renders above the cover but below
+                // the sweep and the badge.
+                var fanIcon = PlatePiece(btn.transform, "ActionIcon", Color.white,
+                    new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.96f),
+                    Vector2.zero, Vector2.zero);
+                fanIcon.transform.SetSiblingIndex(2);
+                fanIcon.gameObject.SetActive(false);
+                _fanIcons[actionIndex] = fanIcon;
             }
 
             // Target row (boss / drones / cancel), shown only
@@ -2225,14 +2293,12 @@ namespace LunarDominion.UI
                 _turnTargetLabels.Add(label);
             }
 
-            // Action tooltip: a slim strip above the action bar
-            // (the target row's band — the two never show at
-            // once, since choosing an action closes the bar
-            // before a target is picked). Visible only while the
-            // mouse hovers an action button. It never intercepts
-            // clicks (raycast targets off).
+            // Action tooltip: a slim strip above the action
+            // fan. Visible while the mouse hovers an action
+            // button, or while a touch long-press holds one. It
+            // never intercepts clicks (raycast targets off).
             _actionTooltip = UIHelpers.Panel(_turnHud, "TurnTooltip", UIHelpers.Hex("#0D1420"),
-                new Vector2(0.22f, 0.125f), new Vector2(0.78f, 0.185f), Vector2.zero, Vector2.zero);
+                new Vector2(0.56f, 0.375f), new Vector2(0.985f, 0.44f), Vector2.zero, Vector2.zero);
             var tipImg = _actionTooltip.GetComponent<Image>();
             if (tipImg != null) tipImg.raycastTarget = false;
             _actionTooltipText = UIHelpers.LabelInRect(_actionTooltip, "TurnTooltipText", "", 20, Color.white,
@@ -2240,14 +2306,15 @@ namespace LunarDominion.UI
             _actionTooltipText.raycastTarget = false;
             _actionTooltip.SetActive(false);
 
-            // Surrender: bottom-right corner. The
+            // Surrender: upper-left corner (the radial action
+            // fan owns the bottom-right since 2026-11-19). The
             // first tap arms it ("Sure?"); a second tap inside
             // the window ends the fight as a defeat.
             _surrenderButton = MakePanelButton(_turnHud, "SurrenderButton", "Surrender", 20,
                 UIHelpers.Hex("#4A1420"), out _surrenderLabel);
             var surrenderRt = _surrenderButton.GetComponent<RectTransform>();
-            surrenderRt.anchorMin = new Vector2(0.775f, 0.015f);
-            surrenderRt.anchorMax = new Vector2(0.985f, 0.115f);
+            surrenderRt.anchorMin = new Vector2(0.012f, 0.915f);
+            surrenderRt.anchorMax = new Vector2(0.135f, 0.978f);
             surrenderRt.offsetMin = Vector2.zero;
             surrenderRt.offsetMax = Vector2.zero;
             _surrenderButton.onClick.AddListener(OnSurrenderClicked);
@@ -2641,6 +2708,92 @@ namespace LunarDominion.UI
         // the bar closes — it never stays on screen. Skill text
         // comes from SkillCatalog's Blurb, so it cannot drift
         // from the real effect.
+        // The generated medallion for an action, loaded once
+        // from Resources/UI/ActionIcons (installed by Patrick
+        // from the icon ZIP) and cached — including misses, so
+        // an uninstalled icon falls back quietly every frame.
+        private Sprite ActionIconSprite(string key)
+        {
+            if (_actionIconCache.TryGetValue(key, out var cached)) return cached;
+            Sprite created = null;
+            var tex = Resources.Load<Texture2D>("UI/ActionIcons/" + key);
+            if (tex != null)
+                created = Sprite.Create(tex,
+                    new Rect(0f, 0f, tex.width, tex.height),
+                    new Vector2(0.5f, 0.5f));
+            _actionIconCache[key] = created;
+            return created;
+        }
+
+        private Sprite SharedWhiteSprite()
+        {
+            if (_whiteSprite == null)
+                _whiteSprite = Sprite.Create(Texture2D.whiteTexture,
+                    new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f));
+            return _whiteSprite;
+        }
+
+        // Show a button's medallion, or restore its card +
+        // label fallback when the icon is not installed. The
+        // action's name lives in the tooltip in medallion mode.
+        private void ApplyFanIcon(int index, Sprite sprite)
+        {
+            var icon = _fanIcons[index];
+            if (icon == null) return;
+            bool has = sprite != null;
+            icon.gameObject.SetActive(has);
+            if (has) icon.sprite = sprite;
+            if (_cardFrames[index] != null)
+                _cardFrames[index].gameObject.SetActive(!has);
+            if (_cardCovers[index] != null)
+                _cardCovers[index].gameObject.SetActive(!has);
+            if (index < _turnActionLabels.Count && _turnActionLabels[index] != null)
+                _turnActionLabels[index].gameObject.SetActive(!has);
+        }
+
+        // Long-press preview (Patrick, 2026-11-19): touch only —
+        // on desktop the hover tooltip already does this job and
+        // mouse clicks must never be swallowed. A press that
+        // lasts LongPressSeconds (checked in Update) shows the
+        // tooltip; the release that ends the preview is marked
+        // so the button's click handler ignores it.
+        private void OnActionPointerDown(int actionIndex)
+        {
+            _suppressAction = -1;
+            if (!IsTouchPointerActive()) return;
+            _pressAction = actionIndex;
+            _pressStartedAt = Time.unscaledTime;
+            _pressTooltipShown = false;
+        }
+
+        private void OnActionPointerUp(int actionIndex)
+        {
+            if (_pressAction != actionIndex) return;
+            if (_pressTooltipShown)
+            {
+                HideActionTooltip();
+                _suppressAction = actionIndex;
+            }
+            _pressAction = -1;
+        }
+
+        private void OnActionPointerExit(int actionIndex)
+        {
+            if (_pressAction != actionIndex) return;
+            if (_pressTooltipShown) HideActionTooltip();
+            _pressAction = -1;
+        }
+
+        private static bool IsTouchPointerActive()
+        {
+#if ENABLE_INPUT_SYSTEM
+            var ts = UnityEngine.InputSystem.Touchscreen.current;
+            return ts != null && ts.primaryTouch.press.isPressed;
+#else
+            return Input.touchCount > 0;
+#endif
+        }
+
         private void ShowActionTooltip(int actionIndex)
         {
             if (_actionTooltip == null || _actionTooltipText == null) return;
@@ -2655,13 +2808,9 @@ namespace LunarDominion.UI
             {
                 text = "Attack — a basic strike: this hero's ATK against the target's DEF.";
             }
-            else if (actionIndex == 1)
-            {
-                text = "Defend — brace: this hero takes half damage until their next turn.";
-            }
             else
             {
-                int slot = actionIndex - 2;
+                int slot = actionIndex - 1;
                 var skills = SkillCatalog.ForHero(selected.Member.Definition.Id);
                 var skill = skills != null && slot < skills.Length ? skills[slot] : null;
                 if (skill == null)
@@ -2728,8 +2877,19 @@ namespace LunarDominion.UI
                     if (_skillIcons[s] == null || !_skillHot[s]) continue;
                     float t = 0.72f + 0.28f * Mathf.Sin(Time.time * 6f);
                     var bc = _skillIconBase[s];
-                    _skillIcons[s].color = new Color(
+                    var pulse = new Color(
                         bc.r * t + 0.15f, bc.g * t + 0.15f, bc.b * t + 0.15f, 1f);
+                    _skillIcons[s].color = pulse;
+                    if (_fanIcons[s + 1] != null) _fanIcons[s + 1].color = pulse;
+                }
+                // Long-press preview: a held touch on an action
+                // button shows its tooltip (and marks the coming
+                // release to be swallowed).
+                if (_pressAction >= 0 && !_pressTooltipShown
+                    && Time.unscaledTime - _pressStartedAt >= LongPressSeconds)
+                {
+                    _pressTooltipShown = true;
+                    ShowActionTooltip(_pressAction);
                 }
             }
             if (!_turnActive || _turnFight == null || _turnFight.Finished)
@@ -2939,22 +3099,17 @@ namespace LunarDominion.UI
                     btn.interactable = canAct;
                     if (_cardFrames[i] != null && selected != null)
                         _cardFrames[i].color = ClassColour(selected.Member.Definition.Class);
-                }
-                else if (i == 1)
-                {
-                    _turnActionLabels[i].text = "Defend";
-                    btn.interactable = canAct;
-                    if (_cardFrames[i] != null && selected != null)
-                        _cardFrames[i].color = ClassColour(selected.Member.Definition.Class);
+                    ApplyFanIcon(i, ActionIconSprite("Attack"));
                 }
                 else
                 {
-                    int slot = i - 2;
+                    int slot = i - 1;
                     var skill = skills != null ? skills[slot] : null;
                     if (skill == null || selected == null)
                     {
                         _turnActionLabels[i].text = "—";
                         btn.interactable = false;
+                        ApplyFanIcon(i, null);
                         if (_skillSweeps[slot] != null)
                             _skillSweeps[slot].gameObject.SetActive(false);
                         if (_skillBadges[slot] != null) _skillBadges[slot].text = "";
@@ -2973,8 +3128,26 @@ namespace LunarDominion.UI
                         // left (the label no longer appends "(cd)").
                         if (_cardFrames[i] != null)
                             _cardFrames[i].color = ClassColour(selected.Member.Definition.Class);
-                        if (_skillIcons[slot] != null)
+                        var medallion = ActionIconSprite(skill.Id.ToString());
+                        ApplyFanIcon(i, medallion);
+                        if (medallion != null)
                         {
+                            // Medallion mode: the generated art is
+                            // the icon — white base, dimmed while
+                            // cooling, the diamond hidden; the hot
+                            // pulse runs on the medallion (Update
+                            // reads _skillIconBase, set to white).
+                            _skillIconBase[slot] = Color.white;
+                            if (_fanIcons[i] != null)
+                                _fanIcons[i].color = cd > 0
+                                    ? new Color(0.45f, 0.45f, 0.45f, 1f)
+                                    : Color.white;
+                            if (_skillIcons[slot] != null)
+                                _skillIcons[slot].gameObject.SetActive(false);
+                        }
+                        else if (_skillIcons[slot] != null)
+                        {
+                            _skillIcons[slot].gameObject.SetActive(true);
                             _skillIconBase[slot] = SkillIconColour(skill);
                             _skillIcons[slot].color = _skillIconBase[slot];
                         }
@@ -2984,11 +3157,8 @@ namespace LunarDominion.UI
                             bool cooling = cd > 0 && skill.Cooldown > 0;
                             _skillSweeps[slot].gameObject.SetActive(cooling);
                             if (cooling)
-                            {
-                                var srt = _skillSweeps[slot].rectTransform;
-                                srt.anchorMin = new Vector2(0f,
-                                    1f - (float)cd / skill.Cooldown);
-                            }
+                                _skillSweeps[slot].fillAmount =
+                                    (float)cd / skill.Cooldown;
                         }
                         if (_skillBadges[slot] != null)
                             _skillBadges[slot].text = cd > 0 ? cd.ToString() : "";
