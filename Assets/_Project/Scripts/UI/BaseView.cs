@@ -1078,12 +1078,14 @@ namespace LunarDominion.UI
             // still builds when the model file is missing.
             if (!TryAddKitAegisMotorPool() && !TryAddModelAegisMotorPool())
                 AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -16f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
-            // Research Lab (Blender model, 2026-11-05): use the FBX model if
-            // it loads, otherwise fall back to the old purple cylinder so
-            // the base still builds when the model file is missing.
+            // Research Lab: prefer the Vol 2 kit room (2026-11-18)
+            // when Patrick has it installed, then the Blender FBX
+            // model (2026-11-05), otherwise fall back to the old
+            // purple cylinder so the base still builds when the
+            // files are missing.
             // (2026-11-01 note: west side, clear of the other buildings,
             // so it stays tappable at phone size.)
-            if (!TryAddModelResearchLab())
+            if (!TryAddKitLab() && !TryAddModelResearchLab())
                 AddBuilding(BuildingId.ResearchLab, new Vector3(-30f, 0f, 0f), PrimitiveType.Cylinder, new Vector3(1.8f, 2.2f, 1.8f), new Color(0.55f, 0.30f, 0.85f), "Lab");
             // Hospital (2026-11-09): east side at (30, 0) since the
             // 2026-11-13 redesign (was (20.75, 0)), mirroring
@@ -1181,6 +1183,13 @@ namespace LunarDominion.UI
         // One-line tuning knobs.
         private const float KitAlloyScaleXZ = 0.8f;
         private const float KitAlloyScaleY = 0.55f;
+
+        // Kit Lab instance scale: the Vol 2 Room_Small_2_Window_01
+        // is in the same size family as the other small rooms
+        // (Nova's Room_Small_01 measured ~12 across natively and
+        // settled at 0.375, ~4.5 across), so the Lab starts at the
+        // shared 0.375. One-line tuning knob.
+        private const float KitLabScale = 0.375f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab assembled in KitTest from the
@@ -2339,6 +2348,151 @@ namespace LunarDominion.UI
             catch (System.Exception e)
             {
                 Debug.LogWarning("[BaseView] Alloy kit prefab failed to load, using model/primitive: " + e.Message);
+                if (go != null) Destroy(go);
+                return false;
+            }
+        }
+
+        /// <summary>Instantiate the Scifi-Kit Vol 2 Research Lab
+        /// (Resources/Models/LabKit — a local-only prefab Patrick
+        /// saved in KitTest from Vol 2's Room_Small_2_Window_01,
+        /// 2026-11-18) at the Lab plot (-30, 0, 0) if it can be
+        /// loaded. Returns false (caller falls back to the FBX
+        /// model, then the primitive) when the prefab is missing or
+        /// has no meshes. The piece is a compact square room with
+        /// rounded corners, big glass walls with lit consoles
+        /// visible inside, orange accents and a roof unit with a
+        /// green light. Like the Hospital's room it hid a lower
+        /// storey (Floor_Normal_Bottom_01, Floor_Normal_Bottom_End_01
+        /// x2, Corridor_Coin_Small_Bottom_02 x4) that Patrick
+        /// stripped from the saved prefab before wiring; the
+        /// Wall_Simple_Bottom_01 skirts stay, and Wall_Simple_Bottom_02
+        /// turned out to be roofline eave trim (checked in KitTest),
+        /// not part of the storey. Same treatment as the other kit
+        /// buildings: kit lights (data component first) and
+        /// per-piece colliders stripped, recentred on the plot and
+        /// grounded from mesh bounds measured in prefab space, one
+        /// bounds-fitted tap collider, white marker, kit paint kept
+        /// as-is, shared kit scale 0.375. No yaw.</summary>
+        private bool TryAddKitLab()
+        {
+            var prefab = Resources.Load<GameObject>("Models/LabKit");
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Instantiate(prefab);
+                go.name = "LabBuilding";
+                go.transform.SetParent(_layoutRoot.transform, false);
+                go.transform.localPosition = Vector3.zero;
+                go.transform.localScale = Vector3.one * KitLabScale;
+
+                // Strip the kit lighting and per-piece colliders:
+                // the UniversalAdditionalLightData goes before its
+                // Light, the order the Nexus strip proved necessary.
+                foreach (var light in go.GetComponentsInChildren<Light>(true))
+                {
+                    var extra = light.GetComponent<UniversalAdditionalLightData>();
+                    if (extra != null) Destroy(extra);
+                    Destroy(light);
+                }
+                foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                    Destroy(col);
+
+                // Captured BEFORE the marker is added, so Highlight()
+                // recolours the building parts but not the marker.
+                var renderers = go.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Measure the assembly in its own (prefab) space: the
+                // matrix product cancels the world frame, so the result
+                // is independent of the layout root's 45-degree yaw.
+                var meshFilters = go.GetComponentsInChildren<MeshFilter>(true);
+                if (meshFilters.Length == 0)
+                {
+                    Destroy(go);
+                    return false;
+                }
+                Bounds bounds = new Bounds();
+                bool hasBounds = false;
+                var toLocal = go.transform.worldToLocalMatrix;
+                foreach (var mf in meshFilters)
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var m = toLocal * mf.transform.localToWorldMatrix;
+                    var mb = mf.sharedMesh.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var corner = new Vector3(
+                            (i & 1) == 0 ? mb.min.x : mb.max.x,
+                            (i & 2) == 0 ? mb.min.y : mb.max.y,
+                            (i & 4) == 0 ? mb.min.z : mb.max.z);
+                        var p = m.MultiplyPoint3x4(corner);
+                        if (!hasBounds)
+                        {
+                            bounds = new Bounds(p, Vector3.zero);
+                            hasBounds = true;
+                        }
+                        else bounds.Encapsulate(p);
+                    }
+                }
+                if (!hasBounds)
+                {
+                    Destroy(go);
+                    return false;
+                }
+
+                // Recentring: the measured bounds are in unscaled
+                // prefab space, so the offset that centres the
+                // footprint on the Lab plot and grounds the assembly
+                // is the plot position plus the bounds offset
+                // multiplied by the instance scale.
+                go.transform.localPosition = new Vector3(-30f, 0f, 0f)
+                    + go.transform.localRotation * (new Vector3(
+                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitLabScale);
+
+                var list = new List<Renderer>();
+                var partColors = new Dictionary<Renderer, Color>();
+                foreach (var rend in renderers)
+                {
+                    list.Add(rend);
+                    // Accessing .material makes a per-renderer copy, so
+                    // Highlight() never touches the shared kit materials.
+                    // The kit paint is captured as-is (no treatment).
+                    partColors[rend] = rend.material.color;
+                }
+
+                // One tap collider wrapping the whole assembly, in the
+                // root's own space (the bounds were measured there).
+                var box = go.AddComponent<BoxCollider>();
+                box.center = bounds.center;
+                box.size = bounds.size;
+
+                // Same white marker as the other buildings, just above
+                // the roofline, over the footprint centre.
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                marker.name = "LabMarker";
+                marker.transform.SetParent(go.transform, false);
+                marker.transform.localPosition = new Vector3(
+                    bounds.center.x, bounds.max.y + 0.45f, bounds.center.z);
+                marker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
+                SetPrimitiveColor(marker.GetComponent<Renderer>(), Color.white);
+
+                _modelRenderers[BuildingId.ResearchLab] = list;
+                foreach (var pair in partColors)
+                    _modelBaseColors[pair.Key] = pair.Value;
+                _buildingObjects[BuildingId.ResearchLab] = go;
+                _baseColors[BuildingId.ResearchLab] = new Color(0.55f, 0.30f, 0.85f);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Lab kit prefab failed to load, using model/primitive: " + e.Message);
                 if (go != null) Destroy(go);
                 return false;
             }
