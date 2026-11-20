@@ -3271,7 +3271,11 @@ namespace LunarDominion.UI
         // its authored facing against the +Z the steering expects
         // (a Play-check dial, like the buildings' 180-degree yaws).
         private const float KitVehicleLength = 2.6f;
-        private const float KitVehicleYaw = 0f;
+        // -90: the rover's authored nose points +X, not the +Z the
+        // steering expects (Patrick's first Play check, 2026-11-20:
+        // it drove the circuit sideways). If it ever drives
+        // backwards instead, the nose was -X and this flips to +90.
+        private const float KitVehicleYaw = -90f;
 
         /// <summary>Build the support vehicle (Patrick, 2026-11-20):
         /// the kit rover (Models/VehicleKit) when Patrick has saved
