@@ -56,17 +56,15 @@ namespace LunarDominion.UI
         private float _reactorAnimTime;
 
         // Base ambient life (Patrick, 2026-11-20: "make the base
-        // come alive"): the kit Nexus's radar dish sweeps, a holo
-        // globe turns above the Nexus roof, and a hover support
-        // vehicle works the road circuit. All driven from
+        // come alive"): the kit Nexus's radar dish sweeps and a
+        // support vehicle works the road circuit. All driven from
         // AnimateBaseLife in Update; every piece no-ops when its
-        // object is missing (primitive/FBX fallbacks).
+        // object is missing (primitive/FBX fallbacks). (A code-
+        // built holo globe above the Nexus was tried the same day
+        // and removed at Patrick's direction — it never read
+        // right in the Bright Day scene.)
         private Transform _dishPivot;
         private Quaternion _dishBaseRot = Quaternion.identity;
-        private GameObject _holoGroup;
-        private Transform _holoSpin;
-        private Transform _holoRing;
-        private float _holoBaseY;
         private GameObject _vehicle;
         private int _vehicleTarget;
         private Vector3 _vehicleFrom;
@@ -1650,7 +1648,7 @@ namespace LunarDominion.UI
                     _modelBaseColors[pair.Key] = pair.Value;
                 _buildingObjects[BuildingId.CommandNexus] = go;
                 _baseColors[BuildingId.CommandNexus] = new Color(0.15f, 0.35f, 0.75f);
-                CollectNexusAmbient(go, bounds);
+                CollectNexusAmbient(go);
                 return true;
             }
             catch (System.Exception e)
@@ -3125,15 +3123,13 @@ namespace LunarDominion.UI
         /// <summary>Collect the kit Nexus's moving piece for the
         /// ambient animation: the radar dish (the prefab piece is
         /// Station_Radar_01, found by name PREFIX like the reactor
-        /// parts — an exact match missed it at the first Play check,
-        /// the assembled piece carries a suffix), and build the roof
-        /// holo from the measured bounds. Missing pieces are simply
-        /// skipped, as in CollectReactorAnimation.</summary>
-        private void CollectNexusAmbient(GameObject nexusGo, Bounds bounds)
+        /// parts — an exact match missed it at the first Play
+        /// check, the assembled piece carries a suffix). A missing
+        /// dish is simply skipped, as in CollectReactorAnimation.</summary>
+        private void CollectNexusAmbient(GameObject nexusGo)
         {
             _dishPivot = FindDeepPrefix(nexusGo.transform, "Station_Radar");
             if (_dishPivot != null) _dishBaseRot = _dishPivot.localRotation;
-            BuildNexusHolo(bounds);
         }
 
         /// <summary>FindDeep variant matching the first transform
@@ -3148,102 +3144,6 @@ namespace LunarDominion.UI
                 if (found != null) return found;
             }
             return null;
-        }
-
-        /// <summary>A holographic globe above the Nexus roof: a
-        /// translucent emissive sphere with equator and meridian
-        /// bands (so its spin reads), inside a tilted segmented
-        /// ring, all built from primitives with colliders stripped
-        /// (it must never block a tap). The kit cluster's own deck
-        /// holo already animates through its material; this is the
-        /// skyline piece. Its height comes from the Nexus's measured
-        /// bounds, so it tracks the kit scale dial.</summary>
-        private void BuildNexusHolo(Bounds bounds)
-        {
-            if (_layoutRoot == null) return;
-            if (_holoGroup != null) Destroy(_holoGroup);
-            _holoGroup = new GameObject("NexusHolo");
-            _holoGroup.transform.SetParent(_layoutRoot.transform, false);
-            // Grounded height: the loader grounds bounds.min.y to
-            // zero, so the top (the radar dish) sits at (max - min)
-            // x scale — using max.y alone buried the holo inside the
-            // roof at the first Play check (the prefab's kept skirt
-            // pieces hang below its origin, so min.y is negative).
-            // The +2.6 floats the globe well clear of the sweeping
-            // dish: at +1.6 it read as nestled at the dish hub
-            // (Patrick's second Play check, 2026-11-20).
-            _holoBaseY = (bounds.max.y - bounds.min.y) * KitNexusScale + 2.6f;
-            _holoGroup.transform.localPosition = new Vector3(0f, _holoBaseY, 0f);
-
-            var spin = new GameObject("HoloSpin");
-            spin.transform.SetParent(_holoGroup.transform, false);
-            _holoSpin = spin.transform;
-
-            var globe = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            globe.name = "HoloGlobe";
-            globe.transform.SetParent(spin.transform, false);
-            globe.transform.localScale = new Vector3(2.0f, 2.0f, 2.0f);
-            StripCollider(globe);
-            SetHoloMaterial(globe.GetComponent<Renderer>(), 0.45f);
-
-            var equator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            equator.name = "HoloEquator";
-            equator.transform.SetParent(spin.transform, false);
-            equator.transform.localScale = new Vector3(2.24f, 0.06f, 2.24f);
-            StripCollider(equator);
-            SetHoloMaterial(equator.GetComponent<Renderer>(), 0.6f);
-
-            var meridian = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            meridian.name = "HoloMeridian";
-            meridian.transform.SetParent(spin.transform, false);
-            meridian.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-            meridian.transform.localScale = new Vector3(2.24f, 0.06f, 2.24f);
-            StripCollider(meridian);
-            SetHoloMaterial(meridian.GetComponent<Renderer>(), 0.6f);
-
-            var tilt = new GameObject("HoloRingTilt");
-            tilt.transform.SetParent(_holoGroup.transform, false);
-            tilt.transform.localRotation = Quaternion.Euler(24f, 0f, 12f);
-            var ring = new GameObject("HoloRing");
-            ring.transform.SetParent(tilt.transform, false);
-            _holoRing = ring.transform;
-            for (int i = 0; i < 14; i++)
-            {
-                float a = (Mathf.PI * 2f * i) / 14f;
-                var seg = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                seg.name = "HoloRingSeg";
-                seg.transform.SetParent(ring.transform, false);
-                seg.transform.localPosition = new Vector3(
-                    Mathf.Sin(a) * 1.85f, 0f, Mathf.Cos(a) * 1.85f);
-                seg.transform.localRotation = Quaternion.Euler(0f, a * Mathf.Rad2Deg, 0f);
-                seg.transform.localScale = new Vector3(0.40f, 0.08f, 0.18f);
-                StripCollider(seg);
-                SetHoloMaterial(seg.GetComponent<Renderer>(), 0.75f);
-            }
-        }
-
-        /// <summary>Translucent emissive cyan for the holo pieces:
-        /// a URP Lit material (via SetPrimitiveColor) switched to
-        /// transparent with an emission tint, so the holo reads as
-        /// projected light in the Bright Day scene.</summary>
-        private static void SetHoloMaterial(Renderer renderer, float alpha)
-        {
-            if (renderer == null) return;
-            SetPrimitiveColor(renderer, new Color(0.35f, 0.85f, 1f));
-            var mat = renderer.material;
-            if (mat == null) return;
-            var col = new Color(0.35f, 0.85f, 1f, alpha);
-            mat.color = col;
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", col);
-            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
-            if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
-            if (mat.HasProperty("_EmissionColor"))
-            {
-                mat.SetColor("_EmissionColor", new Color(0.25f, 0.65f, 0.90f));
-                mat.EnableKeyword("_EMISSION");
-            }
-            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            mat.renderQueue = 3000;
         }
 
         // The support vehicle's road circuit (layout space). The
@@ -3443,25 +3343,14 @@ namespace LunarDominion.UI
 
         /// <summary>Ambient life, run every frame from Update like
         /// AnimateReactor: the Nexus dish sweeps +/-52 degrees on a
-        /// slow sine, the holo globe and ring turn while the group
-        /// bobs, and the support vehicle works its circuit. Each
-        /// piece no-ops when its object is missing.</summary>
+        /// slow sine, and the support vehicle works its circuit.
+        /// Each piece no-ops when its object is missing.</summary>
         private void AnimateBaseLife()
         {
             if (_dishPivot != null)
             {
                 float sweep = Mathf.Sin(Time.time * 0.45f) * 52f;
                 _dishPivot.localRotation = Quaternion.Euler(0f, sweep, 0f) * _dishBaseRot;
-            }
-            if (_holoGroup != null)
-            {
-                var p = _holoGroup.transform.localPosition;
-                p.y = _holoBaseY + Mathf.Sin(Time.time * 1.25f) * 0.16f;
-                _holoGroup.transform.localPosition = p;
-                if (_holoSpin != null)
-                    _holoSpin.Rotate(Vector3.up, 14f * Time.deltaTime, Space.World);
-                if (_holoRing != null)
-                    _holoRing.Rotate(Vector3.up, -22f * Time.deltaTime, Space.Self);
             }
             AnimateVehicle();
         }
