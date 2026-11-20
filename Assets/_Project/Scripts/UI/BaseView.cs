@@ -1404,20 +1404,24 @@ namespace LunarDominion.UI
         private const float KitLabScale = 0.9f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
-        /// NexusKit — a local-only prefab assembled in KitTest from the
-        /// Creepy Cat Control Room, glass canopy added) at the Nexus
-        /// plot if it can be loaded. Returns false (caller falls back
-        /// to the FBX model, then the primitive) when the prefab is
-        /// missing or has no meshes. The kit assembly is corner-rooted
-        /// and floats above its origin (demo platform height), so the
-        /// instance is recentred and grounded from its measured mesh
-        /// bounds, at 0.375x scale (native filled the camera; the
-        /// dial toured 0.25, 0.5 and 0.75 before Patrick halved the
-        /// 0.75 to settle here, 2026-11-18). The kit's own lights and per-piece colliders are stripped: the
-        /// base scene lights the building, and one bounds-fitted box
-        /// collider serves taps. No reactor animation: CollectReactor-
-        /// Animation is not called, so the tick's empty check returns
-        /// early exactly as it does for a model without named parts.</summary>
+        /// NexusKit — a local-only prefab) at the Nexus plot if it can
+        /// be loaded. Returns false (caller falls back to the FBX
+        /// model, then the primitive) when the prefab is missing or
+        /// has no meshes. Since 2026-11-20 the prefab is the Vol 2
+        /// Example_01 central cluster (Room_Large_Windows hub,
+        /// Big_Turn pieces, Corridor_Simple tail, Station_Radar_01
+        /// dish), assembled by Patrick in the AegisCandidate scene
+        /// with the example's under-deck support structure stripped;
+        /// it replaces the Starter Control Room assembly (parked
+        /// locally as NexusKitOld). The instance is recentred and
+        /// grounded from its measured mesh bounds at 0.375x scale,
+        /// with a 180-degree yaw so the ramp front and the dish face
+        /// the camera side. The kit's own lights and per-piece
+        /// colliders are stripped: the base scene lights the
+        /// building, and one bounds-fitted box collider serves taps.
+        /// No reactor animation: CollectReactorAnimation is not
+        /// called, so the tick's empty check returns early exactly
+        /// as it does for a model without named parts.</summary>
         private bool TryAddKitNexus()
         {
             var prefab = Resources.Load<GameObject>("Models/NexusKit");
@@ -1431,6 +1435,12 @@ namespace LunarDominion.UI
                 go.transform.SetParent(_layoutRoot.transform, false);
                 go.transform.localPosition = Vector3.zero;
                 go.transform.localScale = Vector3.one * KitNexusScale;
+                // The cluster's front (ramp side, dish face) points
+                // away from the base camera as saved; a half-turn
+                // fronts it to the camera side (Patrick, 2026-11-20).
+                // The recentring offset below is rotated by the
+                // same yaw.
+                go.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
 
                 // Strip the demo lighting and per-piece colliders first:
                 // neither belongs in the game scene. URP hangs a
@@ -1500,8 +1510,8 @@ namespace LunarDominion.UI
                 // scale), so the offset that centres the footprint on
                 // the plot and grounds the float is the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(
-                    -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitNexusScale;
+                go.transform.localPosition = go.transform.localRotation * (new Vector3(
+                    -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitNexusScale);
 
                 var list = new List<Renderer>();
                 var partColors = new Dictionary<Renderer, Color>();
@@ -1517,13 +1527,22 @@ namespace LunarDominion.UI
                     // THEN capture the colour, so Highlight() restores
                     // the silvered base, not the kit's original paint.
                     // Alpha is preserved so the glass stays glass.
-                    mat.color = Color.Lerp(mat.color,
-                        new Color(0.82f, 0.85f, 0.90f, mat.color.a), 0.55f);
+                    // The hologram's particle/additive materials have
+                    // no _Color property: reading or writing .color on
+                    // them logs an error per material (2026-11-20 Play
+                    // check), so they skip the tint and the capture
+                    // and keep their own animated look; Highlight()
+                    // skips renderers with no captured colour.
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.82f, 0.85f, 0.90f, mat.color.a), 0.55f);
+                        partColors[rend] = mat.color;
+                    }
                     if (mat.HasProperty("_Metallic"))
                         mat.SetFloat("_Metallic", KitNexusMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitNexusSmoothness);
-                    partColors[rend] = mat.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
