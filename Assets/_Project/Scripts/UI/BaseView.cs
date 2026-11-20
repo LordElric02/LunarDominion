@@ -3120,14 +3120,30 @@ namespace LunarDominion.UI
 
         /// <summary>Collect the kit Nexus's moving piece for the
         /// ambient animation: the radar dish (the prefab piece is
-        /// Station_Radar_01, found by name like the reactor parts),
-        /// and build the roof holo from the measured bounds. Missing
-        /// pieces are simply skipped, as in CollectReactorAnimation.</summary>
+        /// Station_Radar_01, found by name PREFIX like the reactor
+        /// parts — an exact match missed it at the first Play check,
+        /// the assembled piece carries a suffix), and build the roof
+        /// holo from the measured bounds. Missing pieces are simply
+        /// skipped, as in CollectReactorAnimation.</summary>
         private void CollectNexusAmbient(GameObject nexusGo, Bounds bounds)
         {
-            _dishPivot = FindDeep(nexusGo.transform, "Station_Radar_01");
+            _dishPivot = FindDeepPrefix(nexusGo.transform, "Station_Radar");
             if (_dishPivot != null) _dishBaseRot = _dishPivot.localRotation;
             BuildNexusHolo(bounds);
+        }
+
+        /// <summary>FindDeep variant matching the first transform
+        /// whose name STARTS WITH the given prefix, for kit pieces
+        /// whose assembled names carry a suffix.</summary>
+        private static Transform FindDeepPrefix(Transform root, string prefix)
+        {
+            if (root.name.StartsWith(prefix)) return root;
+            foreach (Transform child in root)
+            {
+                var found = FindDeepPrefix(child, prefix);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         /// <summary>A holographic globe above the Nexus roof: a
@@ -3144,7 +3160,12 @@ namespace LunarDominion.UI
             if (_holoGroup != null) Destroy(_holoGroup);
             _holoGroup = new GameObject("NexusHolo");
             _holoGroup.transform.SetParent(_layoutRoot.transform, false);
-            _holoBaseY = bounds.max.y * KitNexusScale + 1.9f;
+            // Grounded height: the loader grounds bounds.min.y to
+            // zero, so the roof sits at (max - min) x scale — using
+            // max.y alone buried the holo inside the roof at the
+            // first Play check (the prefab's kept skirt pieces hang
+            // below its origin, so min.y is negative).
+            _holoBaseY = (bounds.max.y - bounds.min.y) * KitNexusScale + 1.6f;
             _holoGroup.transform.localPosition = new Vector3(0f, _holoBaseY, 0f);
 
             var spin = new GameObject("HoloSpin");
@@ -3156,7 +3177,7 @@ namespace LunarDominion.UI
             globe.transform.SetParent(spin.transform, false);
             globe.transform.localScale = new Vector3(1.7f, 1.7f, 1.7f);
             StripCollider(globe);
-            SetHoloMaterial(globe.GetComponent<Renderer>(), 0.35f);
+            SetHoloMaterial(globe.GetComponent<Renderer>(), 0.45f);
 
             var equator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             equator.name = "HoloEquator";
