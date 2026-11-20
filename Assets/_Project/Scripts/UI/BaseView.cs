@@ -90,9 +90,9 @@ namespace LunarDominion.UI
         // eases toward it; pan and zoom stay independent (pan moves
         // the look-at point, zoom only changes the distance along the
         // fixed (10,16,10) direction, so panning never changes zoom).
-        private const float CamDistDefault = 40f; // 2026-11-19, Patrick: opening framing = whole compound readable (was 21.35 = |(10,16,10)|, the tight Nexus framing)
+        private const float CamDistDefault = 52f; // 2026-11-20, Patrick: pull the opening framing back until every building is in frame (was 40 from 2026-11-19, which still cropped the edge buildings; before that 21.35 = |(10,16,10)|, the tight Nexus framing)
         private const float CamDistMin = 7f;
-        private const float CamDistMax = 52f;
+        private const float CamDistMax = 64f;
         private float _camDist = CamDistDefault;
         private float _camDistTarget = CamDistDefault;
         private float _pinchPrevDist = -1f;
@@ -174,10 +174,12 @@ namespace LunarDominion.UI
             // scrolling can never change the zoom (a player zoom
             // control is a later feature, per Patrick).
             // 2026-11-19: player zoom shipped 2026-11-18; the
-            // opening distance is now CamDistDefault = 40 at
+            // opening distance is now CamDistDefault at
             // Patrick's direction (his screenshot: the whole
             // 108x78 compound readable at load, north wall in
             // frame, Lab/Hospital just cropped at the edges).
+            // 2026-11-20: 40 still cropped the edge buildings,
+            // so the default pulled back to 52 (max 64).
             // The (10,16,10) direction and 48.5-degree pitch
             // are unchanged.
             // 2026-11-09 expanded base: the camera position is now
