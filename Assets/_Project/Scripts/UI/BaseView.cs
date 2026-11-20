@@ -1340,10 +1340,13 @@ namespace LunarDominion.UI
         private const float KitNexusMetallic = 0.65f;
         private const float KitNexusSmoothness = 0.65f;
 
-        // Kit Marine instance scale: starts at the Nexus's settled
-        // 0.375 so the kit's module proportions stay consistent
-        // across buildings. One-line tuning knob.
-        private const float KitMarineScale = 0.375f;
+        // Kit Marine instance scale: 0.5 (Patrick, 2026-11-20).
+        // The 2026-11-20 barracks assembly is built from Small
+        // parts, so the shared 0.375 (calibrated on the Large
+        // assemblies) read small at the Play check; Patrick asked
+        // for a bit larger than the Research Lab. Was 0.375 for
+        // the Starter Room_Large_01 prefab. One-line tuning knob.
+        private const float KitMarineScale = 0.5f;
 
         // Kit Aegis instance scale: Room_Large_02 is natively ~30
         // units long, so at the shared 0.375 it sprawled across
@@ -1579,21 +1582,24 @@ namespace LunarDominion.UI
         }
 
         /// <summary>Instantiate the Scifi-Kit Marine Foundry (Resources/
-        /// Models/MarineKit — a local-only prefab Patrick saved in
-        /// KitTest from the Creepy Cat Room_Large_01 assembly,
-        /// 2026-11-18) at the Marine plot (-21, -14) if it can be
-        /// loaded. Returns false (caller falls back to the FBX model,
-        /// then the primitive) when the prefab is missing or has no
-        /// meshes. Same treatment as the kit Nexus: the demo lights
-        /// (data component first, then the Light) and per-piece
-        /// colliders are stripped, the assembly is recentred on the
-        /// plot and grounded from its measured mesh bounds, and one
-        /// bounds-fitted box collider serves taps. Unlike the Nexus
-        /// the kit paint is kept as-is (no silver treatment — that
-        /// was the Nexus's own colour call); the room is open-topped
-        /// with a furnished interior, which reads as detail from the
-        /// base camera. Scale starts at the Nexus's settled 0.375 so
-        /// the kit's module proportions stay consistent.</summary>
+        /// Models/MarineKit — a local-only prefab) at the Marine plot
+        /// (-28.5, -18) if it can be loaded. Returns false (caller
+        /// falls back to the FBX model, then the primitive) when the
+        /// prefab is missing or has no meshes. Since 2026-11-20 the
+        /// prefab is the Vol 2 Example_01 far group (Big_Turn_01 hub,
+        /// Corridor_Window_00 with the door piece, Room_Small_1_
+        /// Window_01, and the coloured pipe cluster), copied by
+        /// Patrick in KitTest as a barracks; it replaces the Starter
+        /// Room_Large_01 prefab (parked locally as MarineKitOld).
+        /// Same treatment as the kit Nexus: the demo lights (data
+        /// component first, then the Light) and per-piece colliders
+        /// are stripped, the assembly is recentred on the plot and
+        /// grounded from its measured mesh bounds, and one bounds-
+        /// fitted box collider serves taps. Unlike the Nexus the kit
+        /// paint is kept as-is (no silver treatment — that was the
+        /// Nexus's own colour call). Scale is 0.5: the assembly is
+        /// built from Small parts, so the shared 0.375 read small;
+        /// Patrick asked for a bit larger than the Research Lab.</summary>
         private bool TryAddKitMarineFoundry()
         {
             var prefab = Resources.Load<GameObject>("Models/MarineKit");
