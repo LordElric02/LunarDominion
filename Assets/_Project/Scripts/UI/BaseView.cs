@@ -1782,6 +1782,13 @@ namespace LunarDominion.UI
                 go.transform.SetParent(_layoutRoot.transform, false);
                 go.transform.localPosition = Vector3.zero;
                 go.transform.localScale = Vector3.one * KitAegisScale;
+                // As saved, the drum fronts the base camera and the
+                // T crossbar (the building's face, with the door and
+                // the open bay ends) sits behind it; a half-turn
+                // fronts the T to the camera side (Patrick,
+                // 2026-11-20). The recentring offset below is
+                // rotated by the same yaw.
+                go.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
 
                 // Strip the demo lighting and per-piece colliders:
                 // the UniversalAdditionalLightData goes before its
@@ -1846,10 +1853,11 @@ namespace LunarDominion.UI
                 // prefab space, so the offset that centres the
                 // footprint on the Aegis plot and grounds the float
                 // is the plot position plus the bounds offset
-                // multiplied by the instance scale.
+                // multiplied by the instance scale and rotated by
+                // the instance yaw.
                 go.transform.localPosition = new Vector3(0f, 0f, -24f)
-                    + new Vector3(
-                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitAegisScale;
+                    + go.transform.localRotation * (new Vector3(
+                        -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitAegisScale);
 
                 var list = new List<Renderer>();
                 var partColors = new Dictionary<Renderer, Color>();
