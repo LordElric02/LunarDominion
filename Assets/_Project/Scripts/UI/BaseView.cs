@@ -1331,14 +1331,19 @@ namespace LunarDominion.UI
         // Kit Nexus instance scale: native kit size (1.0) filled the
         // whole base camera view at the 2026-11-18 Play check; the
         // dial toured 0.25 (small), 0.5 and 0.75 before Patrick
-        // halved the 0.75 to settle at 0.375. One-line tuning knob.
+        // halved the 0.75 to settle at 0.375; raised to 0.5 on
+        // 2026-11-20 (Patrick: the Nexus should stand out as the
+        // centrepiece). One-line tuning knob.
         private const float KitNexusScale = 0.5f;
 
         // Silver treatment dials for the kit Nexus (Patrick, 2026-11-18:
         // "more silverish and shiny"): metalness and gloss applied to
-        // the instanced kit materials at load.
-        private const float KitNexusMetallic = 0.65f;
-        private const float KitNexusSmoothness = 0.65f;
+        // the instanced kit materials at load. Raised 2026-11-20
+        // (metallic 0.65 -> 0.75, smoothness 0.65 -> 0.8) as part of
+        // the base colour scheme: the Nexus stays the brightest,
+        // cleanest metal in the base.
+        private const float KitNexusMetallic = 0.75f;
+        private const float KitNexusSmoothness = 0.8f;
 
         // Kit Marine instance scale: 0.7 (Patrick, 2026-11-20).
         // The 2026-11-20 barracks assembly is built from Small
@@ -1355,22 +1360,40 @@ namespace LunarDominion.UI
         private const float KitMarineMetallic = 0.5f;
         private const float KitMarineSmoothness = 0.6f;
 
-        // Kit Aegis instance scale: Room_Large_02 is natively ~30
-        // units long, so at the shared 0.375 it sprawled across
-        // the roads at the 2026-11-18 Play check; Patrick shrank
-        // it to 0.25 ahead of the end-of-conversion layout pass,
-        // which settles final sizes. One-line tuning knob.
+        // Kit Aegis instance scale: 0.5 for the 2026-11-20 Vol 2
+        // rebuild (Circular_Room_01 drum + one corridor connector
+        // + the Big_Turn T crossbar as the front). Was 0.25 for
+        // the lost Starter Room_Large_02 prefab. One-line tuning
+        // knob.
         private const float KitAegisScale = 0.5f;
+
+        // Treatment dials for the kit building (base colour
+        // scheme, Patrick, 2026-11-20): metalness and gloss
+        // applied to the instanced kit materials at load.
+        private const float KitAegisMetallic = 0.5f;
+        private const float KitAegisSmoothness = 0.5f;
 
         // Kit Nova instance scale: the shared 0.375 (Room_Small_01
         // is a compact assembly). One-line tuning knob.
         private const float KitNovaScale = 0.375f;
+
+        // Treatment dials for the kit building (base colour
+        // scheme, Patrick, 2026-11-20): metalness and gloss
+        // applied to the instanced kit materials at load.
+        private const float KitNovaMetallic = 0.6f;
+        private const float KitNovaSmoothness = 0.45f;
 
         // Kit Hospital instance scale: 0.75, double the shared
         // 0.375 — at 0.375 the hand-built 6x12 flat-stack read
         // dwarfed next to the kit room assemblies (Patrick,
         // 2026-11-18). One-line tuning knob.
         private const float KitHospitalScale = 0.75f;
+
+        // Treatment dials for the kit building (base colour
+        // scheme, Patrick, 2026-11-20): metalness and gloss
+        // applied to the instanced kit materials at load.
+        private const float KitHospitalMetallic = 0.3f;
+        private const float KitHospitalSmoothness = 0.75f;
 
         // Kit Hydroponics instance scale: the Vol 2 Circular_Room_01
         // drum is natively ~12 units across and ~10 tall (measured
@@ -1381,6 +1404,12 @@ namespace LunarDominion.UI
         // tuning knob.
         private const float KitHydroponicsScale = 0.375f;
 
+        // Treatment dials for the kit building (base colour
+        // scheme, Patrick, 2026-11-20): metalness and gloss
+        // applied to the instanced kit materials at load.
+        private const float KitHydroponicsMetallic = 0.3f;
+        private const float KitHydroponicsSmoothness = 0.55f;
+
         // Kit Helium instance scale: the Vol 2 Pillar_Tank_01 silo
         // is natively ~6.5 units across its feet and ~8 tall
         // (measured against the KitTest grid, 2026-11-18), but the
@@ -1389,6 +1418,12 @@ namespace LunarDominion.UI
         // drum; Patrick settled full native 1.0 the same evening.
         // One-line tuning knob.
         private const float KitHeliumScale = 1.0f;
+
+        // Treatment dials for the kit building (base colour
+        // scheme, Patrick, 2026-11-20): metalness and gloss
+        // applied to the instanced kit materials at load.
+        private const float KitHeliumMetallic = 0.5f;
+        private const float KitHeliumSmoothness = 0.65f;
 
         // Kit Alloy instance scale (NON-uniform): the Vol 2
         // Geo_Reactor_01 processing tower is natively ~2 units
@@ -1404,6 +1439,12 @@ namespace LunarDominion.UI
         private const float KitAlloyScaleXZ = 0.8f;
         private const float KitAlloyScaleY = 0.55f;
 
+        // Treatment dials for the kit building (base colour
+        // scheme, Patrick, 2026-11-20): metalness and gloss
+        // applied to the instanced kit materials at load.
+        private const float KitAlloyMetallic = 0.55f;
+        private const float KitAlloySmoothness = 0.5f;
+
         // Kit Lab instance scale: the Vol 2 Room_Small_2_Window_01
         // is natively SMALLER than its sibling rooms (~6.5 across
         // against Room_Small_01's ~12), so the shared 0.375 landed
@@ -1414,6 +1455,12 @@ namespace LunarDominion.UI
         // (~5.9 across, roughly the Hospital's size). One-line
         // tuning knob.
         private const float KitLabScale = 0.9f;
+
+        // Treatment dials for the kit building (base colour
+        // scheme, Patrick, 2026-11-20): metalness and gloss
+        // applied to the instanced kit materials at load.
+        private const float KitLabMetallic = 0.4f;
+        private const float KitLabSmoothness = 0.6f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab) at the Nexus plot if it can
@@ -1426,7 +1473,7 @@ namespace LunarDominion.UI
         /// with the example's under-deck support structure stripped;
         /// it replaces the Starter Control Room assembly (parked
         /// locally as NexusKitOld). The instance is recentred and
-        /// grounded from its measured mesh bounds at 0.375x scale,
+        /// grounded from its measured mesh bounds at KitNexusScale,
         /// with a 180-degree yaw so the ramp front and the dish face
         /// the camera side. The kit's own lights and per-piece
         /// colliders are stripped: the base scene lights the
@@ -1865,12 +1912,27 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit materials.
-                    // The kit paint is captured as-is (no treatment).
-                    // _Color-less particle materials skip the capture
-                    // (see the Nexus guard).
-                    if (rend.material.HasProperty("_Color"))
-                        partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Slate olive treatment (base colour scheme, Patrick,
+                    // 2026-11-20): the military family — the Marine olive
+                    // taken darker and greyer for the vehicle pool. The
+                    // treatment is applied THEN captured, so Highlight()
+                    // restores the treated base, not the kit’s original
+                    // paint. Alpha is preserved so the glass stays glass.
+                    // _Color-less particle materials skip the tint and
+                    // the capture (see the Nexus guard).
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.30f, 0.36f, 0.28f, mat.color.a), 0.50f);
+                        partColors[rend] = mat.color;
+                    }
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitAegisMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitAegisSmoothness);
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2007,12 +2069,27 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit materials.
-                    // The kit paint is captured as-is (no treatment).
-                    // _Color-less particle materials skip the capture
-                    // (see the Nexus guard).
-                    if (rend.material.HasProperty("_Color"))
-                        partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Charcoal treatment (base colour scheme, Patrick,
+                    // 2026-11-20): the arsenal goes dark graphite, the
+                    // darkest finish in the base. The
+                    // treatment is applied THEN captured, so Highlight()
+                    // restores the treated base, not the kit’s original
+                    // paint. Alpha is preserved so the glass stays glass.
+                    // _Color-less particle materials skip the tint and
+                    // the capture (see the Nexus guard).
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.23f, 0.24f, 0.27f, mat.color.a), 0.45f);
+                        partColors[rend] = mat.color;
+                    }
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitNovaMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitNovaSmoothness);
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2163,12 +2240,27 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit materials.
-                    // The kit paint is captured as-is (no treatment).
-                    // _Color-less particle materials skip the capture
-                    // (see the Nexus guard).
-                    if (rend.material.HasProperty("_Color"))
-                        partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Clinical treatment (base colour scheme, Patrick,
+                    // 2026-11-20): a pale wash of the Lab’s teal family
+                    // with a glossier, cleaner finish. The
+                    // treatment is applied THEN captured, so Highlight()
+                    // restores the treated base, not the kit’s original
+                    // paint. Alpha is preserved so the glass stays glass.
+                    // _Color-less particle materials skip the tint and
+                    // the capture (see the Nexus guard).
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.75f, 0.85f, 0.85f, mat.color.a), 0.25f);
+                        partColors[rend] = mat.color;
+                    }
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitHospitalMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitHospitalSmoothness);
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2309,16 +2401,30 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit materials.
-                    // The kit paint is captured as-is (no treatment).
-                    // The dome's bubble/smoke particle materials have
-                    // no _Color property: reading .color on them logs
-                    // an error per material (2026-11-20 Play check),
-                    // so they skip the capture and keep their own
-                    // look; Highlight() skips renderers with no
-                    // captured colour.
-                    if (rend.material.HasProperty("_Color"))
-                        partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Leaf treatment (base colour scheme, Patrick,
+                    // 2026-11-20): a soft living green, brighter than the
+                    // Marine olive so the two greens don’t fight. The
+                    // treatment is applied THEN captured, so Highlight()
+                    // restores the treated base, not the kit’s original
+                    // paint. Alpha is preserved so the glass stays glass.
+                    // _Color-less particle materials skip the tint and
+                    // the capture (see the Nexus guard).
+                    // The dome’s bubble/smoke particle materials are
+                    // exactly that _Color-less case (2026-11-20 Play
+                    // check), so they keep their own look.
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.45f, 0.60f, 0.35f, mat.color.a), 0.35f);
+                        partColors[rend] = mat.color;
+                    }
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitHydroponicsMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitHydroponicsSmoothness);
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2457,12 +2563,27 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit materials.
-                    // The kit paint is captured as-is (no treatment).
-                    // _Color-less particle materials skip the capture
-                    // (see the Nexus guard).
-                    if (rend.material.HasProperty("_Color"))
-                        partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Ice treatment (base colour scheme, Patrick,
+                    // 2026-11-20): a cold cyan for the cryogenic gas
+                    // harvester, the coldest colour in the base. The
+                    // treatment is applied THEN captured, so Highlight()
+                    // restores the treated base, not the kit’s original
+                    // paint. Alpha is preserved so the glass stays glass.
+                    // _Color-less particle materials skip the tint and
+                    // the capture (see the Nexus guard).
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.55f, 0.75f, 0.80f, mat.color.a), 0.40f);
+                        partColors[rend] = mat.color;
+                    }
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitHeliumMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitHeliumSmoothness);
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2608,12 +2729,27 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit materials.
-                    // The kit paint is captured as-is (no treatment).
-                    // _Color-less particle materials skip the capture
-                    // (see the Nexus guard).
-                    if (rend.material.HasProperty("_Color"))
-                        partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Rust treatment (base colour scheme, Patrick,
+                    // 2026-11-20): an ochre leaning into the orange
+                    // already in the reactor’s own textures. The
+                    // treatment is applied THEN captured, so Highlight()
+                    // restores the treated base, not the kit’s original
+                    // paint. Alpha is preserved so the glass stays glass.
+                    // _Color-less particle materials skip the tint and
+                    // the capture (see the Nexus guard).
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.60f, 0.38f, 0.22f, mat.color.a), 0.40f);
+                        partColors[rend] = mat.color;
+                    }
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitAlloyMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitAlloySmoothness);
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2759,12 +2895,27 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit materials.
-                    // The kit paint is captured as-is (no treatment).
-                    // _Color-less particle materials skip the capture
-                    // (see the Nexus guard).
-                    if (rend.material.HasProperty("_Color"))
-                        partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Teal treatment (base colour scheme, Patrick,
+                    // 2026-11-20): muted science teal; the Hospital wears
+                    // a pale wash of the same family. The
+                    // treatment is applied THEN captured, so Highlight()
+                    // restores the treated base, not the kit’s original
+                    // paint. Alpha is preserved so the glass stays glass.
+                    // _Color-less particle materials skip the tint and
+                    // the capture (see the Nexus guard).
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.30f, 0.48f, 0.50f, mat.color.a), 0.45f);
+                        partColors[rend] = mat.color;
+                    }
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitLabMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitLabSmoothness);
                 }
 
                 // One tap collider wrapping the whole assembly, in the
