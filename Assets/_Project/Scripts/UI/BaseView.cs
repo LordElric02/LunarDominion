@@ -3161,11 +3161,14 @@ namespace LunarDominion.UI
             _holoGroup = new GameObject("NexusHolo");
             _holoGroup.transform.SetParent(_layoutRoot.transform, false);
             // Grounded height: the loader grounds bounds.min.y to
-            // zero, so the roof sits at (max - min) x scale — using
-            // max.y alone buried the holo inside the roof at the
-            // first Play check (the prefab's kept skirt pieces hang
-            // below its origin, so min.y is negative).
-            _holoBaseY = (bounds.max.y - bounds.min.y) * KitNexusScale + 1.6f;
+            // zero, so the top (the radar dish) sits at (max - min)
+            // x scale — using max.y alone buried the holo inside the
+            // roof at the first Play check (the prefab's kept skirt
+            // pieces hang below its origin, so min.y is negative).
+            // The +2.6 floats the globe well clear of the sweeping
+            // dish: at +1.6 it read as nestled at the dish hub
+            // (Patrick's second Play check, 2026-11-20).
+            _holoBaseY = (bounds.max.y - bounds.min.y) * KitNexusScale + 2.6f;
             _holoGroup.transform.localPosition = new Vector3(0f, _holoBaseY, 0f);
 
             var spin = new GameObject("HoloSpin");
@@ -3175,14 +3178,14 @@ namespace LunarDominion.UI
             var globe = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             globe.name = "HoloGlobe";
             globe.transform.SetParent(spin.transform, false);
-            globe.transform.localScale = new Vector3(1.7f, 1.7f, 1.7f);
+            globe.transform.localScale = new Vector3(2.0f, 2.0f, 2.0f);
             StripCollider(globe);
             SetHoloMaterial(globe.GetComponent<Renderer>(), 0.45f);
 
             var equator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             equator.name = "HoloEquator";
             equator.transform.SetParent(spin.transform, false);
-            equator.transform.localScale = new Vector3(1.9f, 0.05f, 1.9f);
+            equator.transform.localScale = new Vector3(2.24f, 0.06f, 2.24f);
             StripCollider(equator);
             SetHoloMaterial(equator.GetComponent<Renderer>(), 0.6f);
 
@@ -3190,7 +3193,7 @@ namespace LunarDominion.UI
             meridian.name = "HoloMeridian";
             meridian.transform.SetParent(spin.transform, false);
             meridian.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-            meridian.transform.localScale = new Vector3(1.9f, 0.05f, 1.9f);
+            meridian.transform.localScale = new Vector3(2.24f, 0.06f, 2.24f);
             StripCollider(meridian);
             SetHoloMaterial(meridian.GetComponent<Renderer>(), 0.6f);
 
@@ -3207,9 +3210,9 @@ namespace LunarDominion.UI
                 seg.name = "HoloRingSeg";
                 seg.transform.SetParent(ring.transform, false);
                 seg.transform.localPosition = new Vector3(
-                    Mathf.Sin(a) * 1.55f, 0f, Mathf.Cos(a) * 1.55f);
+                    Mathf.Sin(a) * 1.85f, 0f, Mathf.Cos(a) * 1.85f);
                 seg.transform.localRotation = Quaternion.Euler(0f, a * Mathf.Rad2Deg, 0f);
-                seg.transform.localScale = new Vector3(0.34f, 0.07f, 0.16f);
+                seg.transform.localScale = new Vector3(0.40f, 0.08f, 0.18f);
                 StripCollider(seg);
                 SetHoloMaterial(seg.GetComponent<Renderer>(), 0.75f);
             }
@@ -3232,7 +3235,7 @@ namespace LunarDominion.UI
             if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
             if (mat.HasProperty("_EmissionColor"))
             {
-                mat.SetColor("_EmissionColor", new Color(0.20f, 0.55f, 0.75f));
+                mat.SetColor("_EmissionColor", new Color(0.25f, 0.65f, 0.90f));
                 mat.EnableKeyword("_EMISSION");
             }
             mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
