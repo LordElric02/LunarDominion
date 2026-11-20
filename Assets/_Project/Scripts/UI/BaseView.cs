@@ -55,6 +55,26 @@ namespace LunarDominion.UI
         private readonly List<float> _reactorRingSpeeds = new List<float>();
         private float _reactorAnimTime;
 
+        // Base ambient life (Patrick, 2026-11-20: "make the base
+        // come alive"): the kit Nexus's radar dish sweeps, a holo
+        // globe turns above the Nexus roof, and a hover support
+        // vehicle works the road circuit. All driven from
+        // AnimateBaseLife in Update; every piece no-ops when its
+        // object is missing (primitive/FBX fallbacks).
+        private Transform _dishPivot;
+        private Quaternion _dishBaseRot = Quaternion.identity;
+        private GameObject _holoGroup;
+        private Transform _holoSpin;
+        private Transform _holoRing;
+        private float _holoBaseY;
+        private GameObject _vehicle;
+        private int _vehicleTarget;
+        private Vector3 _vehicleFrom;
+        private Vector3 _vehicleTo;
+        private float _vehicleLegT;
+        private float _vehicleLegDur = 1f;
+        private float _vehicleDwell;
+
         // Hospital alert (2026-11-09): a red pulsing sphere above the
         // Hospital when injured units are waiting to be healed. Created
         // lazily (the Hospital may be the FBX model or the primitive
@@ -126,6 +146,7 @@ namespace LunarDominion.UI
             _layoutRoot.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
             BuildGroundAndCamera();
             BuildBuildings();
+            BuildSupportVehicle();
         }
 
         private void BuildGroundAndCamera()
@@ -1625,6 +1646,7 @@ namespace LunarDominion.UI
                     _modelBaseColors[pair.Key] = pair.Value;
                 _buildingObjects[BuildingId.CommandNexus] = go;
                 _baseColors[BuildingId.CommandNexus] = new Color(0.15f, 0.35f, 0.75f);
+                CollectNexusAmbient(go, bounds);
                 return true;
             }
             catch (System.Exception e)
@@ -3096,6 +3118,262 @@ namespace LunarDominion.UI
             }
         }
 
+        /// <summary>Collect the kit Nexus's moving piece for the
+        /// ambient animation: the radar dish (the prefab piece is
+        /// Station_Radar_01, found by name like the reactor parts),
+        /// and build the roof holo from the measured bounds. Missing
+        /// pieces are simply skipped, as in CollectReactorAnimation.</summary>
+        private void CollectNexusAmbient(GameObject nexusGo, Bounds bounds)
+        {
+            _dishPivot = FindDeep(nexusGo.transform, "Station_Radar_01");
+            if (_dishPivot != null) _dishBaseRot = _dishPivot.localRotation;
+            BuildNexusHolo(bounds);
+        }
+
+        /// <summary>A holographic globe above the Nexus roof: a
+        /// translucent emissive sphere with equator and meridian
+        /// bands (so its spin reads), inside a tilted segmented
+        /// ring, all built from primitives with colliders stripped
+        /// (it must never block a tap). The kit cluster's own deck
+        /// holo already animates through its material; this is the
+        /// skyline piece. Its height comes from the Nexus's measured
+        /// bounds, so it tracks the kit scale dial.</summary>
+        private void BuildNexusHolo(Bounds bounds)
+        {
+            if (_layoutRoot == null) return;
+            if (_holoGroup != null) Destroy(_holoGroup);
+            _holoGroup = new GameObject("NexusHolo");
+            _holoGroup.transform.SetParent(_layoutRoot.transform, false);
+            _holoBaseY = bounds.max.y * KitNexusScale + 1.9f;
+            _holoGroup.transform.localPosition = new Vector3(0f, _holoBaseY, 0f);
+
+            var spin = new GameObject("HoloSpin");
+            spin.transform.SetParent(_holoGroup.transform, false);
+            _holoSpin = spin.transform;
+
+            var globe = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            globe.name = "HoloGlobe";
+            globe.transform.SetParent(spin.transform, false);
+            globe.transform.localScale = new Vector3(1.7f, 1.7f, 1.7f);
+            StripCollider(globe);
+            SetHoloMaterial(globe.GetComponent<Renderer>(), 0.35f);
+
+            var equator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            equator.name = "HoloEquator";
+            equator.transform.SetParent(spin.transform, false);
+            equator.transform.localScale = new Vector3(1.9f, 0.05f, 1.9f);
+            StripCollider(equator);
+            SetHoloMaterial(equator.GetComponent<Renderer>(), 0.6f);
+
+            var meridian = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            meridian.name = "HoloMeridian";
+            meridian.transform.SetParent(spin.transform, false);
+            meridian.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            meridian.transform.localScale = new Vector3(1.9f, 0.05f, 1.9f);
+            StripCollider(meridian);
+            SetHoloMaterial(meridian.GetComponent<Renderer>(), 0.6f);
+
+            var tilt = new GameObject("HoloRingTilt");
+            tilt.transform.SetParent(_holoGroup.transform, false);
+            tilt.transform.localRotation = Quaternion.Euler(24f, 0f, 12f);
+            var ring = new GameObject("HoloRing");
+            ring.transform.SetParent(tilt.transform, false);
+            _holoRing = ring.transform;
+            for (int i = 0; i < 14; i++)
+            {
+                float a = (Mathf.PI * 2f * i) / 14f;
+                var seg = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                seg.name = "HoloRingSeg";
+                seg.transform.SetParent(ring.transform, false);
+                seg.transform.localPosition = new Vector3(
+                    Mathf.Sin(a) * 1.55f, 0f, Mathf.Cos(a) * 1.55f);
+                seg.transform.localRotation = Quaternion.Euler(0f, a * Mathf.Rad2Deg, 0f);
+                seg.transform.localScale = new Vector3(0.34f, 0.07f, 0.16f);
+                StripCollider(seg);
+                SetHoloMaterial(seg.GetComponent<Renderer>(), 0.75f);
+            }
+        }
+
+        /// <summary>Translucent emissive cyan for the holo pieces:
+        /// a URP Lit material (via SetPrimitiveColor) switched to
+        /// transparent with an emission tint, so the holo reads as
+        /// projected light in the Bright Day scene.</summary>
+        private static void SetHoloMaterial(Renderer renderer, float alpha)
+        {
+            if (renderer == null) return;
+            SetPrimitiveColor(renderer, new Color(0.35f, 0.85f, 1f));
+            var mat = renderer.material;
+            if (mat == null) return;
+            var col = new Color(0.35f, 0.85f, 1f, alpha);
+            mat.color = col;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", col);
+            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
+            if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
+            if (mat.HasProperty("_EmissionColor"))
+            {
+                mat.SetColor("_EmissionColor", new Color(0.20f, 0.55f, 0.75f));
+                mat.EnableKeyword("_EMISSION");
+            }
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = 3000;
+        }
+
+        // The support vehicle's road circuit (layout space). The
+        // painted ring roads run at x +/-31.5 and z +/-14.25; the
+        // loop sits a touch inside them so the vehicle never grazes
+        // a building frontage (the Marine/Nova fronts reach
+        // z -14.5). Dwell is the pause ON ARRIVAL at each point:
+        // delivery stops on the four cardinal straights, outside
+        // the Helium, Lab, Aegis and Hospital plots.
+        private static readonly Vector3[] VehicleRoute =
+        {
+            new Vector3(30.8f, 0f, 13.4f),
+            new Vector3(0f, 0f, 13.4f),
+            new Vector3(-30.8f, 0f, 13.4f),
+            new Vector3(-30.8f, 0f, 0f),
+            new Vector3(-30.8f, 0f, -13.4f),
+            new Vector3(0f, 0f, -13.4f),
+            new Vector3(30.8f, 0f, -13.4f),
+            new Vector3(30.8f, 0f, 0f),
+        };
+        private static readonly float[] VehicleDwell = { 0f, 3f, 0f, 3f, 0f, 3f, 0f, 3f };
+        private const float VehicleSpeed = 5f;
+
+        /// <summary>Build the hover support vehicle from primitives
+        /// (Patrick, 2026-11-20): a utility-yellow hauler with a
+        /// glass cab, cargo block, light bar, four hover pads and a
+        /// cyan under-glow disc. Built facing +Z; AnimateVehicle
+        /// steers it. Every collider is stripped — it is scenery
+        /// and must never block a building tap.</summary>
+        private void BuildSupportVehicle()
+        {
+            if (_layoutRoot == null) return;
+            if (_vehicle != null) Destroy(_vehicle);
+            var root = new GameObject("SupportVehicle");
+            root.transform.SetParent(_layoutRoot.transform, false);
+            _vehicle = root;
+
+            AddVehiclePart(root, "Body", PrimitiveType.Cube,
+                new Vector3(0f, 0.62f, 0f), new Vector3(1.5f, 0.5f, 2.4f),
+                new Color(0.85f, 0.60f, 0.12f));
+            AddVehiclePart(root, "Cab", PrimitiveType.Cube,
+                new Vector3(0f, 0.98f, 0.72f), new Vector3(1.2f, 0.36f, 0.8f),
+                new Color(0.12f, 0.17f, 0.22f));
+            AddVehiclePart(root, "Cargo", PrimitiveType.Cube,
+                new Vector3(0f, 1.08f, -0.55f), new Vector3(1.3f, 0.55f, 1.0f),
+                new Color(0.60f, 0.63f, 0.66f));
+            AddVehiclePart(root, "LightBar", PrimitiveType.Cube,
+                new Vector3(0f, 1.22f, 0.72f), new Vector3(0.9f, 0.12f, 0.14f),
+                new Color(1f, 0.93f, 0.75f));
+            AddVehiclePart(root, "PadFL", PrimitiveType.Cylinder,
+                new Vector3(-0.6f, 0.22f, 0.85f), new Vector3(0.52f, 0.08f, 0.52f),
+                new Color(0.20f, 0.21f, 0.23f));
+            AddVehiclePart(root, "PadFR", PrimitiveType.Cylinder,
+                new Vector3(0.6f, 0.22f, 0.85f), new Vector3(0.52f, 0.08f, 0.52f),
+                new Color(0.20f, 0.21f, 0.23f));
+            AddVehiclePart(root, "PadRL", PrimitiveType.Cylinder,
+                new Vector3(-0.6f, 0.22f, -0.85f), new Vector3(0.52f, 0.08f, 0.52f),
+                new Color(0.20f, 0.21f, 0.23f));
+            AddVehiclePart(root, "PadRR", PrimitiveType.Cylinder,
+                new Vector3(0.6f, 0.22f, -0.85f), new Vector3(0.52f, 0.08f, 0.52f),
+                new Color(0.20f, 0.21f, 0.23f));
+            AddVehiclePart(root, "Glow", PrimitiveType.Cylinder,
+                new Vector3(0f, 0.05f, 0f), new Vector3(1.7f, 0.025f, 1.7f),
+                new Color(0.40f, 0.90f, 1f));
+
+            _vehicleTarget = 1;
+            _vehicleFrom = VehicleRoute[0];
+            _vehicleTo = VehicleRoute[1];
+            _vehicleLegT = 0f;
+            _vehicleLegDur = Vector3.Distance(_vehicleFrom, _vehicleTo) / VehicleSpeed;
+            _vehicleDwell = 0f;
+            root.transform.localPosition = _vehicleFrom;
+            root.transform.localRotation = Quaternion.LookRotation(
+                (_vehicleTo - _vehicleFrom).normalized, Vector3.up);
+        }
+
+        private static void AddVehiclePart(GameObject root, string name, PrimitiveType type,
+            Vector3 pos, Vector3 scale, Color color)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            part.name = name;
+            part.transform.SetParent(root.transform, false);
+            part.transform.localPosition = pos;
+            part.transform.localScale = scale;
+            StripCollider(part);
+            SetPrimitiveColor(part.GetComponent<Renderer>(), color);
+        }
+
+        /// <summary>Ambient life, run every frame from Update like
+        /// AnimateReactor: the Nexus dish sweeps +/-52 degrees on a
+        /// slow sine, the holo globe and ring turn while the group
+        /// bobs, and the support vehicle works its circuit. Each
+        /// piece no-ops when its object is missing.</summary>
+        private void AnimateBaseLife()
+        {
+            if (_dishPivot != null)
+            {
+                float sweep = Mathf.Sin(Time.time * 0.45f) * 52f;
+                _dishPivot.localRotation = Quaternion.Euler(0f, sweep, 0f) * _dishBaseRot;
+            }
+            if (_holoGroup != null)
+            {
+                var p = _holoGroup.transform.localPosition;
+                p.y = _holoBaseY + Mathf.Sin(Time.time * 1.25f) * 0.16f;
+                _holoGroup.transform.localPosition = p;
+                if (_holoSpin != null)
+                    _holoSpin.Rotate(Vector3.up, 14f * Time.deltaTime, Space.World);
+                if (_holoRing != null)
+                    _holoRing.Rotate(Vector3.up, -22f * Time.deltaTime, Space.Self);
+            }
+            AnimateVehicle();
+        }
+
+        /// <summary>The support vehicle's circuit: legs between the
+        /// route points at VehicleSpeed with a smoothstep ease (it
+        /// slows into each stop and corner), a dwell on arrival
+        /// where the route asks for one, a gentle hover bob, and a
+        /// smoothed turn toward the leg direction while moving.</summary>
+        private void AnimateVehicle()
+        {
+            if (_vehicle == null) return;
+            float dt = Time.deltaTime;
+            if (_vehicleDwell > 0f)
+            {
+                _vehicleDwell -= dt;
+            }
+            else
+            {
+                _vehicleLegT += dt / _vehicleLegDur;
+                if (_vehicleLegT >= 1f)
+                {
+                    _vehicleFrom = _vehicleTo;
+                    _vehicleDwell = VehicleDwell[_vehicleTarget];
+                    _vehicleTarget = (_vehicleTarget + 1) % VehicleRoute.Length;
+                    _vehicleTo = VehicleRoute[_vehicleTarget];
+                    _vehicleLegT = 0f;
+                    _vehicleLegDur = Mathf.Max(0.1f,
+                        Vector3.Distance(_vehicleFrom, _vehicleTo) / VehicleSpeed);
+                }
+            }
+            var pos = Vector3.Lerp(_vehicleFrom, _vehicleTo,
+                Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_vehicleLegT)));
+            pos.y = Mathf.Sin(Time.time * 2.3f) * 0.08f;
+            _vehicle.transform.localPosition = pos;
+            if (_vehicleDwell <= 0f)
+            {
+                var dir = _vehicleTo - _vehicleFrom;
+                dir.y = 0f;
+                if (dir.sqrMagnitude > 0.001f)
+                {
+                    var target = Quaternion.LookRotation(dir.normalized, Vector3.up);
+                    _vehicle.transform.localRotation = Quaternion.Slerp(
+                        _vehicle.transform.localRotation, target,
+                        1f - Mathf.Exp(-5f * dt));
+                }
+            }
+        }
+
         /// <summary>Hospital alert (2026-11-09): when injured units are
         /// waiting to be healed, a red sphere above the Hospital pulses
         /// (the hospital "lights up"); when none are injured it is
@@ -3927,6 +4205,8 @@ namespace LunarDominion.UI
             // The reactor animation runs every frame, unlike the tap
             // handling below, which returns early when nothing is tapped.
             AnimateReactor();
+            // Ambient life (2026-11-20): dish sweep, holo, vehicle.
+            AnimateBaseLife();
             // Hospital alert (2026-11-09): the red pulsing sphere above
             // the Hospital when injured units are waiting to be healed.
             UpdateHospitalAlert();
