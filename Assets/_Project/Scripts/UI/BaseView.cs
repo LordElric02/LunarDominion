@@ -1349,6 +1349,12 @@ namespace LunarDominion.UI
         // the Starter Room_Large_01 prefab. One-line tuning knob.
         private const float KitMarineScale = 0.7f;
 
+        // Green treatment dials for the kit Marine (Patrick,
+        // 2026-11-20: "greenish with a shine"): metalness and
+        // gloss applied to the instanced kit materials at load.
+        private const float KitMarineMetallic = 0.5f;
+        private const float KitMarineSmoothness = 0.6f;
+
         // Kit Aegis instance scale: Room_Large_02 is natively ~30
         // units long, so at the shared 0.375 it sprawled across
         // the roads at the 2026-11-18 Play check; Patrick shrank
@@ -1596,9 +1602,10 @@ namespace LunarDominion.UI
         /// component first, then the Light) and per-piece colliders
         /// are stripped, the assembly is recentred on the plot and
         /// grounded from its measured mesh bounds, and one bounds-
-        /// fitted box collider serves taps. Unlike the Nexus the kit
-        /// paint is kept as-is (no silver treatment — that was the
-        /// Nexus's own colour call). Scale is 0.7: the assembly is
+        /// fitted box collider serves taps. The kit paint gets a
+        /// green treatment (olive tint plus raised metalness/gloss;
+        /// Patrick, 2026-11-20) instead of the Nexus's silver.
+        /// Scale is 0.7: the assembly is
         /// built from Small parts, so the shared 0.375 read small
         /// and 0.5 still read smaller than the Research Lab;
         /// Patrick: the Marine building should be bigger than
@@ -1691,12 +1698,27 @@ namespace LunarDominion.UI
                 {
                     list.Add(rend);
                     // Accessing .material makes a per-renderer copy, so
-                    // Highlight() never touches the shared kit materials.
-                    // The kit paint is captured as-is (no treatment).
-                    // _Color-less particle materials skip the capture
-                    // (see the Nexus guard).
-                    if (rend.material.HasProperty("_Color"))
-                        partColors[rend] = rend.material.color;
+                    // the treatment below and Highlight() never touch
+                    // the shared kit materials.
+                    var mat = rend.material;
+                    // Green treatment (Patrick, 2026-11-20: "greenish
+                    // with a shine"): tint toward olive green and
+                    // raise metalness/gloss, THEN capture the colour,
+                    // so Highlight() restores the treated base, not
+                    // the kit's original paint. Alpha is preserved so
+                    // the glass stays glass. _Color-less particle
+                    // materials skip the tint and the capture (see
+                    // the Nexus guard).
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.color = Color.Lerp(mat.color,
+                            new Color(0.38f, 0.48f, 0.31f, mat.color.a), 0.55f);
+                        partColors[rend] = mat.color;
+                    }
+                    if (mat.HasProperty("_Metallic"))
+                        mat.SetFloat("_Metallic", KitMarineMetallic);
+                    if (mat.HasProperty("_Smoothness"))
+                        mat.SetFloat("_Smoothness", KitMarineSmoothness);
                 }
 
                 // One tap collider wrapping the whole assembly, in the
