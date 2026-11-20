@@ -33,6 +33,7 @@ namespace LunarDominion.UI
             public UnitDefinition Def;
             public Text NameText;
             public Text StatsText;
+            public Text OwnedText;
             public Text CostText;
             public Button RecruitButton;
         }
@@ -363,7 +364,9 @@ namespace LunarDominion.UI
                     $"{def.DisplayName} — Tier {def.Tier}", 26, Color.white,
                     new Rect(0.03f, 0.66f, 0.66f, 0.98f), TextAnchor.MiddleLeft);
                 row.StatsText = UIHelpers.LabelInRect(row.Root, "Stats", "", 22, UIHelpers.Hex("#C0C8D0"),
-                    new Rect(0.03f, 0.38f, 0.66f, 0.66f), TextAnchor.MiddleLeft);
+                    new Rect(0.03f, 0.38f, 0.45f, 0.66f), TextAnchor.MiddleLeft);
+                row.OwnedText = UIHelpers.LabelInRect(row.Root, "Owned", "", 22, UIHelpers.Hex("#C0C8D0"),
+                    new Rect(0.47f, 0.38f, 0.22f, 0.66f), TextAnchor.MiddleRight);
                 row.CostText = UIHelpers.LabelInRect(row.Root, "Cost", "", 20, UIHelpers.Hex("#C0C8D0"),
                     new Rect(0.03f, 0.03f, 0.66f, 0.38f), TextAnchor.MiddleLeft);
 
@@ -378,7 +381,14 @@ namespace LunarDominion.UI
                 row.RecruitButton.onClick.AddListener(() => OnRecruitClicked(captured));
 
                 int owned = _controller.Recruitment.CountOwned(def.Id);
-                row.StatsText.text = $"HP {def.BaseHealth}  ATK {def.BaseAttack}  DEF {def.BaseDefense}  •  Owned: {owned}";
+                // Owned gets its own right-aligned label on the
+                // stats band (2026-11-20, Patrick): appended to the
+                // stats string it overflowed the label's width and
+                // clipped off at the bullet — the same failure the
+                // cost line had on 2026-11-16 — so the count never
+                // showed even though it was always computed.
+                row.StatsText.text = $"HP {def.BaseHealth}  ATK {def.BaseAttack}  DEF {def.BaseDefense}";
+                row.OwnedText.text = $"Owned: {owned}";
                 var status = _controller.Recruitment.CheckRecruit(def, out var cost, out var reason);
                 // Cost on its own line (2026-11-16, Patrick): it
                 // used to be appended to the name line, where the
