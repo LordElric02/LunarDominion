@@ -1360,7 +1360,7 @@ namespace LunarDominion.UI
         // the roads at the 2026-11-18 Play check; Patrick shrank
         // it to 0.25 ahead of the end-of-conversion layout pass,
         // which settles final sizes. One-line tuning knob.
-        private const float KitAegisScale = 0.25f;
+        private const float KitAegisScale = 0.5f;
 
         // Kit Nova instance scale: the shared 0.375 (Room_Small_01
         // is a compact assembly). One-line tuning knob.
