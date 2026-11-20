@@ -364,16 +364,20 @@ namespace LunarDominion.UI
                     $"{def.DisplayName} — Tier {def.Tier}", 26, Color.white,
                     new Rect(0.03f, 0.66f, 0.66f, 0.98f), TextAnchor.MiddleLeft);
                 row.StatsText = UIHelpers.LabelInRect(row.Root, "Stats", "", 22, UIHelpers.Hex("#C0C8D0"),
-                    new Rect(0.03f, 0.38f, 0.45f, 0.66f), TextAnchor.MiddleLeft);
-                row.OwnedText = UIHelpers.LabelInRect(row.Root, "Owned", "", 22, UIHelpers.Hex("#C0C8D0"),
-                    new Rect(0.47f, 0.38f, 0.22f, 0.66f), TextAnchor.MiddleRight);
+                    new Rect(0.03f, 0.38f, 0.66f, 0.66f), TextAnchor.MiddleLeft);
+                // Owned sits as a caption UNDER the Recruit button:
+                // the one patch of row space no text line can grow
+                // into. (LabelInRect's Rect is anchor corners —
+                // minX, minY, maxX, maxY — not x/y/width/height.)
+                row.OwnedText = UIHelpers.LabelInRect(row.Root, "Owned", "", 20, UIHelpers.Hex("#C0C8D0"),
+                    new Rect(0.68f, 0.02f, 0.97f, 0.28f), TextAnchor.MiddleCenter);
                 row.CostText = UIHelpers.LabelInRect(row.Root, "Cost", "", 20, UIHelpers.Hex("#C0C8D0"),
                     new Rect(0.03f, 0.03f, 0.66f, 0.38f), TextAnchor.MiddleLeft);
 
                 row.RecruitButton = UIHelpers.Button(row.Root, "RecruitBtn", "Recruit", 24,
                     UIHelpers.Hex("#2E7D32"), Color.white);
                 var btnRt = row.RecruitButton.GetComponent<RectTransform>();
-                btnRt.anchorMin = new Vector2(0.68f, 0.12f);
+                btnRt.anchorMin = new Vector2(0.68f, 0.30f);
                 btnRt.anchorMax = new Vector2(0.97f, 0.88f);
                 btnRt.offsetMin = Vector2.zero;
                 btnRt.offsetMax = Vector2.zero;
@@ -381,13 +385,16 @@ namespace LunarDominion.UI
                 row.RecruitButton.onClick.AddListener(() => OnRecruitClicked(captured));
 
                 int owned = _controller.Recruitment.CountOwned(def.Id);
-                // Owned gets its own right-aligned label on the
-                // stats band (2026-11-20, Patrick): appended to the
+                // Owned gets its own label under the Recruit
+                // button (2026-11-20, Patrick): appended to the
                 // stats string it overflowed the label's width and
                 // clipped off at the bullet — the same failure the
                 // cost line had on 2026-11-16 — so the count never
-                // showed even though it was always computed.
-                row.StatsText.text = $"HP {def.BaseHealth}  ATK {def.BaseAttack}  DEF {def.BaseDefense}";
+                // showed even though it was always computed. The
+                // stats string is single-spaced for width margin
+                // (the top tiers' four-digit numbers are the
+                // longest strings the label ever holds).
+                row.StatsText.text = $"HP {def.BaseHealth} ATK {def.BaseAttack} DEF {def.BaseDefense}";
                 row.OwnedText.text = $"Owned: {owned}";
                 var status = _controller.Recruitment.CheckRecruit(def, out var cost, out var reason);
                 // Cost on its own line (2026-11-16, Patrick): it
