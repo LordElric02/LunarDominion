@@ -1332,7 +1332,7 @@ namespace LunarDominion.UI
         // whole base camera view at the 2026-11-18 Play check; the
         // dial toured 0.25 (small), 0.5 and 0.75 before Patrick
         // halved the 0.75 to settle at 0.375. One-line tuning knob.
-        private const float KitNexusScale = 0.375f;
+        private const float KitNexusScale = 0.5f;
 
         // Silver treatment dials for the kit Nexus (Patrick, 2026-11-18:
         // "more silverish and shiny"): metalness and gloss applied to
