@@ -1340,13 +1340,14 @@ namespace LunarDominion.UI
         private const float KitNexusMetallic = 0.65f;
         private const float KitNexusSmoothness = 0.65f;
 
-        // Kit Marine instance scale: 0.5 (Patrick, 2026-11-20).
+        // Kit Marine instance scale: 0.7 (Patrick, 2026-11-20).
         // The 2026-11-20 barracks assembly is built from Small
         // parts, so the shared 0.375 (calibrated on the Large
-        // assemblies) read small at the Play check; Patrick asked
-        // for a bit larger than the Research Lab. Was 0.375 for
+        // assemblies) read small at the Play check, and 0.5 still
+        // read smaller than the Research Lab; Patrick: the Marine
+        // building should be bigger than the Lab. Was 0.375 for
         // the Starter Room_Large_01 prefab. One-line tuning knob.
-        private const float KitMarineScale = 0.5f;
+        private const float KitMarineScale = 0.7f;
 
         // Kit Aegis instance scale: Room_Large_02 is natively ~30
         // units long, so at the shared 0.375 it sprawled across
@@ -1597,9 +1598,11 @@ namespace LunarDominion.UI
         /// grounded from its measured mesh bounds, and one bounds-
         /// fitted box collider serves taps. Unlike the Nexus the kit
         /// paint is kept as-is (no silver treatment — that was the
-        /// Nexus's own colour call). Scale is 0.5: the assembly is
-        /// built from Small parts, so the shared 0.375 read small;
-        /// Patrick asked for a bit larger than the Research Lab.</summary>
+        /// Nexus's own colour call). Scale is 0.7: the assembly is
+        /// built from Small parts, so the shared 0.375 read small
+        /// and 0.5 still read smaller than the Research Lab;
+        /// Patrick: the Marine building should be bigger than
+        /// the Lab.</summary>
         private bool TryAddKitMarineFoundry()
         {
             var prefab = Resources.Load<GameObject>("Models/MarineKit");
