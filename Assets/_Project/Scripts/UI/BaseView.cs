@@ -2258,7 +2258,14 @@ namespace LunarDominion.UI
                     // Accessing .material makes a per-renderer copy, so
                     // Highlight() never touches the shared kit materials.
                     // The kit paint is captured as-is (no treatment).
-                    partColors[rend] = rend.material.color;
+                    // The dome's bubble/smoke particle materials have
+                    // no _Color property: reading .color on them logs
+                    // an error per material (2026-11-20 Play check),
+                    // so they skip the capture and keep their own
+                    // look; Highlight() skips renderers with no
+                    // captured colour.
+                    if (rend.material.HasProperty("_Color"))
+                        partColors[rend] = rend.material.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
