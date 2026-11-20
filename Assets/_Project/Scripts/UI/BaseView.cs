@@ -1682,7 +1682,10 @@ namespace LunarDominion.UI
                     // Accessing .material makes a per-renderer copy, so
                     // Highlight() never touches the shared kit materials.
                     // The kit paint is captured as-is (no treatment).
-                    partColors[rend] = rend.material.color;
+                    // _Color-less particle materials skip the capture
+                    // (see the Nexus guard).
+                    if (rend.material.HasProperty("_Color"))
+                        partColors[rend] = rend.material.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -1823,7 +1826,10 @@ namespace LunarDominion.UI
                     // Accessing .material makes a per-renderer copy, so
                     // Highlight() never touches the shared kit materials.
                     // The kit paint is captured as-is (no treatment).
-                    partColors[rend] = rend.material.color;
+                    // _Color-less particle materials skip the capture
+                    // (see the Nexus guard).
+                    if (rend.material.HasProperty("_Color"))
+                        partColors[rend] = rend.material.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -1962,7 +1968,10 @@ namespace LunarDominion.UI
                     // Accessing .material makes a per-renderer copy, so
                     // Highlight() never touches the shared kit materials.
                     // The kit paint is captured as-is (no treatment).
-                    partColors[rend] = rend.material.color;
+                    // _Color-less particle materials skip the capture
+                    // (see the Nexus guard).
+                    if (rend.material.HasProperty("_Color"))
+                        partColors[rend] = rend.material.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2115,7 +2124,10 @@ namespace LunarDominion.UI
                     // Accessing .material makes a per-renderer copy, so
                     // Highlight() never touches the shared kit materials.
                     // The kit paint is captured as-is (no treatment).
-                    partColors[rend] = rend.material.color;
+                    // _Color-less particle materials skip the capture
+                    // (see the Nexus guard).
+                    if (rend.material.HasProperty("_Color"))
+                        partColors[rend] = rend.material.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2406,7 +2418,10 @@ namespace LunarDominion.UI
                     // Accessing .material makes a per-renderer copy, so
                     // Highlight() never touches the shared kit materials.
                     // The kit paint is captured as-is (no treatment).
-                    partColors[rend] = rend.material.color;
+                    // _Color-less particle materials skip the capture
+                    // (see the Nexus guard).
+                    if (rend.material.HasProperty("_Color"))
+                        partColors[rend] = rend.material.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2554,7 +2569,10 @@ namespace LunarDominion.UI
                     // Accessing .material makes a per-renderer copy, so
                     // Highlight() never touches the shared kit materials.
                     // The kit paint is captured as-is (no treatment).
-                    partColors[rend] = rend.material.color;
+                    // _Color-less particle materials skip the capture
+                    // (see the Nexus guard).
+                    if (rend.material.HasProperty("_Color"))
+                        partColors[rend] = rend.material.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2702,7 +2720,10 @@ namespace LunarDominion.UI
                     // Accessing .material makes a per-renderer copy, so
                     // Highlight() never touches the shared kit materials.
                     // The kit paint is captured as-is (no treatment).
-                    partColors[rend] = rend.material.color;
+                    // _Color-less particle materials skip the capture
+                    // (see the Nexus guard).
+                    if (rend.material.HasProperty("_Color"))
+                        partColors[rend] = rend.material.color;
                 }
 
                 // One tap collider wrapping the whole assembly, in the
