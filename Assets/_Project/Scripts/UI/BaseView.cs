@@ -74,6 +74,10 @@ namespace LunarDominion.UI
         private float _vehicleLegT;
         private float _vehicleLegDur = 1f;
         private float _vehicleDwell;
+        private bool _vehicleIsKit;
+        private readonly List<Transform> _vehicleWheels = new List<Transform>();
+        private float _vehicleWheelRadius = 0.35f;
+        private Vector3 _vehiclePrevPos;
 
         // Hospital alert (2026-11-09): a red pulsing sphere above the
         // Hospital when injured units are waiting to be healed. Created
@@ -3262,13 +3266,21 @@ namespace LunarDominion.UI
         };
         private static readonly float[] VehicleDwell = { 0f, 3f, 0f, 3f, 0f, 3f, 0f, 3f };
         private const float VehicleSpeed = 5f;
+        // The kit rover (Models/VehicleKit) is scaled so its
+        // longest side is KitVehicleLength; KitVehicleYaw corrects
+        // its authored facing against the +Z the steering expects
+        // (a Play-check dial, like the buildings' 180-degree yaws).
+        private const float KitVehicleLength = 2.6f;
+        private const float KitVehicleYaw = 0f;
 
-        /// <summary>Build the hover support vehicle from primitives
-        /// (Patrick, 2026-11-20): a utility-yellow hauler with a
-        /// glass cab, cargo block, light bar, four hover pads and a
-        /// cyan under-glow disc. Built facing +Z; AnimateVehicle
-        /// steers it. Every collider is stripped — it is scenery
-        /// and must never block a building tap.</summary>
+        /// <summary>Build the support vehicle (Patrick, 2026-11-20):
+        /// the kit rover (Models/VehicleKit) when Patrick has saved
+        /// it locally, otherwise a hover hauler built from
+        /// primitives — a utility-yellow body with a glass cab,
+        /// cargo block, light bar, four hover pads and a cyan
+        /// under-glow disc. Built facing +Z; AnimateVehicle steers
+        /// it. Every collider is stripped — it is scenery and must
+        /// never block a building tap.</summary>
         private void BuildSupportVehicle()
         {
             if (_layoutRoot == null) return;
@@ -3276,34 +3288,38 @@ namespace LunarDominion.UI
             var root = new GameObject("SupportVehicle");
             root.transform.SetParent(_layoutRoot.transform, false);
             _vehicle = root;
-
-            AddVehiclePart(root, "Body", PrimitiveType.Cube,
-                new Vector3(0f, 0.62f, 0f), new Vector3(1.5f, 0.5f, 2.4f),
-                new Color(0.85f, 0.60f, 0.12f));
-            AddVehiclePart(root, "Cab", PrimitiveType.Cube,
-                new Vector3(0f, 0.98f, 0.72f), new Vector3(1.2f, 0.36f, 0.8f),
-                new Color(0.12f, 0.17f, 0.22f));
-            AddVehiclePart(root, "Cargo", PrimitiveType.Cube,
-                new Vector3(0f, 1.08f, -0.55f), new Vector3(1.3f, 0.55f, 1.0f),
-                new Color(0.60f, 0.63f, 0.66f));
-            AddVehiclePart(root, "LightBar", PrimitiveType.Cube,
-                new Vector3(0f, 1.22f, 0.72f), new Vector3(0.9f, 0.12f, 0.14f),
-                new Color(1f, 0.93f, 0.75f));
-            AddVehiclePart(root, "PadFL", PrimitiveType.Cylinder,
-                new Vector3(-0.6f, 0.22f, 0.85f), new Vector3(0.52f, 0.08f, 0.52f),
-                new Color(0.20f, 0.21f, 0.23f));
-            AddVehiclePart(root, "PadFR", PrimitiveType.Cylinder,
-                new Vector3(0.6f, 0.22f, 0.85f), new Vector3(0.52f, 0.08f, 0.52f),
-                new Color(0.20f, 0.21f, 0.23f));
-            AddVehiclePart(root, "PadRL", PrimitiveType.Cylinder,
-                new Vector3(-0.6f, 0.22f, -0.85f), new Vector3(0.52f, 0.08f, 0.52f),
-                new Color(0.20f, 0.21f, 0.23f));
-            AddVehiclePart(root, "PadRR", PrimitiveType.Cylinder,
-                new Vector3(0.6f, 0.22f, -0.85f), new Vector3(0.52f, 0.08f, 0.52f),
-                new Color(0.20f, 0.21f, 0.23f));
-            AddVehiclePart(root, "Glow", PrimitiveType.Cylinder,
-                new Vector3(0f, 0.05f, 0f), new Vector3(1.7f, 0.025f, 1.7f),
-                new Color(0.40f, 0.90f, 1f));
+            _vehicleWheels.Clear();
+            _vehicleIsKit = TryBuildKitVehicle(root);
+            if (!_vehicleIsKit)
+            {
+                AddVehiclePart(root, "Body", PrimitiveType.Cube,
+                    new Vector3(0f, 0.62f, 0f), new Vector3(1.5f, 0.5f, 2.4f),
+                    new Color(0.85f, 0.60f, 0.12f));
+                AddVehiclePart(root, "Cab", PrimitiveType.Cube,
+                    new Vector3(0f, 0.98f, 0.72f), new Vector3(1.2f, 0.36f, 0.8f),
+                    new Color(0.12f, 0.17f, 0.22f));
+                AddVehiclePart(root, "Cargo", PrimitiveType.Cube,
+                    new Vector3(0f, 1.08f, -0.55f), new Vector3(1.3f, 0.55f, 1.0f),
+                    new Color(0.60f, 0.63f, 0.66f));
+                AddVehiclePart(root, "LightBar", PrimitiveType.Cube,
+                    new Vector3(0f, 1.22f, 0.72f), new Vector3(0.9f, 0.12f, 0.14f),
+                    new Color(1f, 0.93f, 0.75f));
+                AddVehiclePart(root, "PadFL", PrimitiveType.Cylinder,
+                    new Vector3(-0.6f, 0.22f, 0.85f), new Vector3(0.52f, 0.08f, 0.52f),
+                    new Color(0.20f, 0.21f, 0.23f));
+                AddVehiclePart(root, "PadFR", PrimitiveType.Cylinder,
+                    new Vector3(0.6f, 0.22f, 0.85f), new Vector3(0.52f, 0.08f, 0.52f),
+                    new Color(0.20f, 0.21f, 0.23f));
+                AddVehiclePart(root, "PadRL", PrimitiveType.Cylinder,
+                    new Vector3(-0.6f, 0.22f, -0.85f), new Vector3(0.52f, 0.08f, 0.52f),
+                    new Color(0.20f, 0.21f, 0.23f));
+                AddVehiclePart(root, "PadRR", PrimitiveType.Cylinder,
+                    new Vector3(0.6f, 0.22f, -0.85f), new Vector3(0.52f, 0.08f, 0.52f),
+                    new Color(0.20f, 0.21f, 0.23f));
+                AddVehiclePart(root, "Glow", PrimitiveType.Cylinder,
+                    new Vector3(0f, 0.05f, 0f), new Vector3(1.7f, 0.025f, 1.7f),
+                    new Color(0.40f, 0.90f, 1f));
+            }
 
             _vehicleTarget = 1;
             _vehicleFrom = VehicleRoute[0];
@@ -3312,8 +3328,101 @@ namespace LunarDominion.UI
             _vehicleLegDur = Vector3.Distance(_vehicleFrom, _vehicleTo) / VehicleSpeed;
             _vehicleDwell = 0f;
             root.transform.localPosition = _vehicleFrom;
+            _vehiclePrevPos = _vehicleFrom;
             root.transform.localRotation = Quaternion.LookRotation(
                 (_vehicleTo - _vehicleFrom).normalized, Vector3.up);
+        }
+
+        /// <summary>Try to dress the support vehicle in the kit
+        /// rover (Patrick, 2026-11-20): Models/VehicleKit is his
+        /// local copy of the Starter Kit's PropRover (local-only
+        /// like the other kit assets, so a repo build without it
+        /// falls back to the primitive hauler). The model is
+        /// measured like the kit buildings, scaled so its longest
+        /// side is KitVehicleLength, recentred and grounded on its
+        /// wheels inside a yaw wrapper — KitVehicleYaw corrects the
+        /// model's authored facing against the +Z the steering
+        /// expects. Wheel-named children are collected so
+        /// AnimateVehicle can roll them. False when the model is
+        /// missing or has no meshes.</summary>
+        private bool TryBuildKitVehicle(GameObject root)
+        {
+            var prefab = Resources.Load<GameObject>("Models/VehicleKit");
+            if (prefab == null) return false;
+            var go = Instantiate(prefab);
+            go.name = "VehicleKit";
+            go.transform.SetParent(root.transform, false);
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = Vector3.one;
+
+            // Strip any authored lights and colliders, the
+            // building loaders' way (the additional-light data
+            // before its Light).
+            foreach (var light in go.GetComponentsInChildren<Light>(true))
+            {
+                var extra = light.GetComponent<UniversalAdditionalLightData>();
+                if (extra != null) Destroy(extra);
+                Destroy(light);
+            }
+            foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                Destroy(col);
+
+            // Measure in the model's own space, the loaders'
+            // matrix way.
+            var meshFilters = go.GetComponentsInChildren<MeshFilter>(true);
+            Bounds bounds = new Bounds();
+            bool hasBounds = false;
+            var toLocal = go.transform.worldToLocalMatrix;
+            foreach (var mf in meshFilters)
+            {
+                if (mf.sharedMesh == null) continue;
+                var m = toLocal * mf.transform.localToWorldMatrix;
+                var mb = mf.sharedMesh.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = new Vector3(
+                        (i & 1) == 0 ? mb.min.x : mb.max.x,
+                        (i & 2) == 0 ? mb.min.y : mb.max.y,
+                        (i & 4) == 0 ? mb.min.z : mb.max.z);
+                    var p = m.MultiplyPoint3x4(corner);
+                    if (!hasBounds)
+                    {
+                        bounds = new Bounds(p, Vector3.zero);
+                        hasBounds = true;
+                    }
+                    else bounds.Encapsulate(p);
+                }
+            }
+            float longest = Mathf.Max(bounds.size.x, bounds.size.z);
+            if (!hasBounds || longest < 0.01f)
+            {
+                Destroy(go);
+                return false;
+            }
+            float scale = KitVehicleLength / longest;
+
+            var yaw = new GameObject("VehicleKitYaw");
+            yaw.transform.SetParent(root.transform, false);
+            yaw.transform.localRotation = Quaternion.Euler(0f, KitVehicleYaw, 0f);
+            go.transform.SetParent(yaw.transform, false);
+            go.transform.localPosition = new Vector3(
+                -bounds.center.x * scale, -bounds.min.y * scale,
+                -bounds.center.z * scale);
+            go.transform.localScale = Vector3.one * scale;
+
+            // The wheels, for the rolling animation; the roll rate
+            // comes from the first wheel's measured height.
+            foreach (var t in go.GetComponentsInChildren<Transform>(true))
+                if (t.name.Contains("Wheel")) _vehicleWheels.Add(t);
+            if (_vehicleWheels.Count > 0)
+            {
+                var wf = _vehicleWheels[0].GetComponent<MeshFilter>();
+                if (wf != null && wf.sharedMesh != null)
+                    _vehicleWheelRadius = Mathf.Max(0.05f,
+                        wf.sharedMesh.bounds.size.y * scale * 0.5f);
+            }
+            return true;
         }
 
         private static void AddVehiclePart(GameObject root, string name, PrimitiveType type,
@@ -3382,8 +3491,22 @@ namespace LunarDominion.UI
             }
             var pos = Vector3.Lerp(_vehicleFrom, _vehicleTo,
                 Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_vehicleLegT)));
-            pos.y = Mathf.Sin(Time.time * 2.3f) * 0.08f;
+            // The primitive hovers (bob); the wheeled kit rover
+            // rides on the road.
+            pos.y = _vehicleIsKit ? 0f : Mathf.Sin(Time.time * 2.3f) * 0.08f;
             _vehicle.transform.localPosition = pos;
+            if (_vehicleIsKit && _vehicleWheels.Count > 0)
+            {
+                float moved = Vector3.Distance(pos, _vehiclePrevPos);
+                if (moved > 0.0001f)
+                {
+                    float roll = moved / _vehicleWheelRadius * Mathf.Rad2Deg;
+                    foreach (var wheel in _vehicleWheels)
+                        if (wheel != null)
+                            wheel.Rotate(Vector3.right, roll, Space.Self);
+                }
+            }
+            _vehiclePrevPos = pos;
             if (_vehicleDwell <= 0f)
             {
                 var dir = _vehicleTo - _vehicleFrom;
