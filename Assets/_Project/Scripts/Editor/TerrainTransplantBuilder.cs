@@ -129,8 +129,13 @@ namespace LunarDominion.Editor
             var existing = GameObject.Find("LunarTerrain (Transplant Test)");
             if (existing != null) UnityEngine.Object.DestroyImmediate(existing);
 
-            var go = Terrain.CreateGameObject(data, true);
-            go.name = "LunarTerrain (Transplant Test)";
+            // Unity 6 removed Terrain.CreateGameObject — build it by hand.
+            var go = new GameObject("LunarTerrain (Transplant Test)");
+            var terrainComponent = go.AddComponent<Terrain>();
+            terrainComponent.terrainData = data;
+            terrainComponent.drawTreesAndFoliage = true;
+            var terrainCollider = go.AddComponent<TerrainCollider>();
+            terrainCollider.terrainData = data;
             go.transform.position = new Vector3(-NewHalfX, MinH, -NewHalfZ);
             Selection.activeGameObject = go;
 
