@@ -493,25 +493,46 @@ namespace LunarDominion.Editor
             // Pack's trees Patrick used in the playground were
             // Heather_A and Plant_D. Picks are logged, so a wrong
             // pick is visible in the Console before any Play check.
-            var treePrefabs = FindPrefabs(4,
-                new[] { "Heather", "Plant", "Tree", "Bush", "Shrub", "Fern" },
-                new[] { "Rock" });
+            // The pack (Assets/TerrainSampleAssets/Prefabs, surveyed
+            // from Patrick's Project window 2026-11-21) has NO
+            // trees — it is all ground cover: bushes, ferns,
+            // heather, plants, every one ~0.5-1.5 m. The first
+            // scatter placed 7,000 of them at true scale and they
+            // were invisible from map height — the scatter worked,
+            // the plants are just tiny. So the flora runs in two
+            // tiers at alien scale: the rounded bushes and heather
+            // at 4-6.5x read as canopy shrubs from the map camera
+            // (the old map's trees were mushroom-canopy blobs — the
+            // same read), and the plants and ferns at 1.8-3x make
+            // the mid layer. Exact names, no keyword fishing; the
+            // keyword search remains only as a fallback.
+            var canopyPrefabs = FindPrefabsExact("Bush_A", "Bush_B", "Heather_A", "Heather_B");
+            var shrubPrefabs = FindPrefabsExact("Plant_A", "Plant_B", "Plant_C", "Plant_D", "Fern_A", "Fern_B", "Fern_C");
+            if (canopyPrefabs.Count == 0 && shrubPrefabs.Count == 0)
+            {
+                shrubPrefabs = FindPrefabs(6,
+                    new[] { "Heather", "Plant", "Tree", "Bush", "Shrub", "Fern" },
+                    new[] { "Rock" });
+            }
             var rockPrefabs = FindPrefabs(3,
                 new[] { "Rock" },
                 new[] { "Heather", "Plant", "Tree", "Bush", "Shrub", "Fern" });
-            if (treePrefabs.Count == 0)
+            if (canopyPrefabs.Count == 0 && shrubPrefabs.Count == 0)
             {
                 EditorUtility.DisplayDialog("No vegetation prefabs found",
-                    "No prefabs matching Heather / Plant / Tree / Bush / Shrub / Fern were found in the project. " +
+                    "The TerrainSampleAssets prefabs (Bush_A, Heather_A, Plant_A, Fern_A, ...) were not found in the project. " +
                     "Check the Terrain Asset Pack import, then run item 5 again.", "OK");
                 return;
             }
-            Debug.Log("[TerrainTransplant] Flora prefabs: trees=" + string.Join(", ", treePrefabs.ConvertAll(p => p.name)) +
+            Debug.Log("[TerrainTransplant] Flora prefabs: canopy=" + string.Join(", ", canopyPrefabs.ConvertAll(p => p.name)) +
+                      " | shrubs=" + string.Join(", ", shrubPrefabs.ConvertAll(p => p.name)) +
                       " | rocks=" + (rockPrefabs.Count > 0 ? string.Join(", ", rockPrefabs.ConvertAll(p => p.name)) : "NONE"));
 
             var protos = new List<TreePrototype>();
-            foreach (var p in treePrefabs) protos.Add(new TreePrototype { prefab = p });
-            int treeProtoCount = protos.Count;
+            foreach (var p in canopyPrefabs) protos.Add(new TreePrototype { prefab = p });
+            int canopyProtoCount = protos.Count;
+            foreach (var p in shrubPrefabs) protos.Add(new TreePrototype { prefab = p });
+            int vegProtoCount = protos.Count;
             foreach (var p in rockPrefabs) protos.Add(new TreePrototype { prefab = p });
             data.treePrototypes = protos.ToArray();
             data.RefreshPrototypes();
@@ -551,14 +572,29 @@ namespace LunarDominion.Editor
                         float keep = Mathf.Clamp01(clump * 1.7f - 0.55f) * (1f - rockW);
                         if (rng.NextDouble() < keep)
                         {
-                            float s = 0.85f + (float)rng.NextDouble() * 0.6f;
+                            // Tier pick: about a third canopy
+                            // (4-6.5x), the rest mid shrubs
+                            // (1.8-3x) — see the discovery note.
+                            bool canopy = canopyProtoCount > 0 && rng.NextDouble() < 0.34;
+                            float s;
+                            int protoIndex;
+                            if (canopy || vegProtoCount <= canopyProtoCount)
+                            {
+                                s = 4.0f + (float)rng.NextDouble() * 2.5f;
+                                protoIndex = rng.Next(canopyProtoCount);
+                            }
+                            else
+                            {
+                                s = 1.8f + (float)rng.NextDouble() * 1.2f;
+                                protoIndex = canopyProtoCount + rng.Next(vegProtoCount - canopyProtoCount);
+                            }
                             instances.Add(new TreeInstance
                             {
                                 position = new Vector3(u, 0f, v),
                                 widthScale = s,
-                                heightScale = s * (0.9f + (float)rng.NextDouble() * 0.25f),
+                                heightScale = s * (0.85f + (float)rng.NextDouble() * 0.3f),
                                 rotation = (float)rng.NextDouble() * Mathf.PI * 2f,
-                                prototypeIndex = rng.Next(treeProtoCount),
+                                prototypeIndex = protoIndex,
                                 color = new Color32(255, 255, 255, 255),
                             });
                             trees++;
@@ -579,7 +615,7 @@ namespace LunarDominion.Editor
                                 widthScale = s,
                                 heightScale = s * (0.75f + (float)rng.NextDouble() * 0.4f),
                                 rotation = (float)rng.NextDouble() * Mathf.PI * 2f,
-                                prototypeIndex = treeProtoCount + rng.Next(rockPrefabs.Count),
+                                prototypeIndex = vegProtoCount + rng.Next(rockPrefabs.Count),
                                 color = new Color32(255, 255, 255, 255),
                             });
                             rocks++;
@@ -594,7 +630,7 @@ namespace LunarDominion.Editor
             data.treeInstances = instances.ToArray();
             EditorUtility.SetDirty(data);
             AssetDatabase.SaveAssets();
-            Debug.Log("[TerrainTransplant] Flora scattered: " + trees + " trees, " + rocks + " rocks " +
+            Debug.Log("[TerrainTransplant] Flora scattered: " + trees + " flora (canopy + shrubs), " + rocks + " rocks " +
                       "(targets " + FloraTreeTarget + " / " + FloraRockTarget + "). Run item 2 to preview, or Play.");
         }
 
@@ -633,6 +669,27 @@ namespace LunarDominion.Editor
                 if (!seen.Add(s.name)) continue;
                 var go = AssetDatabase.LoadAssetAtPath<GameObject>(s.path);
                 if (go != null) results.Add(go);
+            }
+            return results;
+        }
+
+        // Resolve prefabs by exact file name (first exact match
+        // wins). FindAssets matches substrings, so the file name
+        // is verified before loading.
+        private static List<GameObject> FindPrefabsExact(params string[] names)
+        {
+            var results = new List<GameObject>();
+            foreach (var name in names)
+            {
+                foreach (var g in AssetDatabase.FindAssets(name + " t:Prefab"))
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(g);
+                    int slash = path.LastIndexOf('/');
+                    string file = slash >= 0 ? path.Substring(slash + 1) : path;
+                    if (!file.Equals(name + ".prefab", StringComparison.OrdinalIgnoreCase)) continue;
+                    var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (go != null) { results.Add(go); break; }
+                }
             }
             return results;
         }
