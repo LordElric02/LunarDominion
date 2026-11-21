@@ -2310,6 +2310,34 @@ namespace LunarDominion.UI
             return result;
         }
 
+        // ---- Phase 4 paint access (terrain builder, Editor) ----
+        // The builder paints the road network and site clearings
+        // from these same tables, so the painted roads are the
+        // routes the marches actually walk - the visual network
+        // can never disagree with the pathing.
+        public static Vector2[] RoadJunctionTable => RoadJunctions;
+        public static int[,] RoadEdgeTable => RoadEdges;
+        public static List<Vector3> RoadPathForPaint(Vector3 from, Vector3 to) => RoadPath(from, to);
+
+        /// <summary>Every site that gets a painted clearing and a
+        /// painted road leg: (world XZ, clearing radius). Radii are
+        /// the baked flatten discs' outer radii (old radii x3):
+        /// nodes 51, lair 84, camp slots 90. The base clearing
+        /// (origin, r 180) is added by the builder itself.</summary>
+        public static List<(Vector2 pos, float radius)> PaintSites()
+        {
+            var sites = new List<(Vector2, float)>();
+            foreach (var def in NodeDefs)
+            {
+                if (def.Kind == MapPointKind.Camp) continue;
+                float r = def.Kind == MapPointKind.BossLair ? 84f : 51f;
+                sites.Add((new Vector2(def.Position.x, def.Position.z), r));
+            }
+            foreach (var pos in CampSlotPositions)
+                sites.Add((new Vector2(pos.x, pos.z), 90f));
+            return sites;
+        }
+
         // Start the march marker for an army slot at `from`, walking
         // to `to`, then fire `onArrive`. The marker rides 1 unit above
         // the ground so it never clips the terrain. The caller
