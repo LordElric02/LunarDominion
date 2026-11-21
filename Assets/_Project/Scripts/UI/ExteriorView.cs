@@ -147,7 +147,11 @@ namespace LunarDominion.UI
         // average, so trip times land about where they were. Halved
         // to 9 u/s (Patrick 2026-11-16): the march still read too
         // fast — a far-corner trip now takes ~1.5-2 minutes.
-        private static readonly float MarchSpeed = 9f; // units/second
+        // Doubled back to 18 u/s (Patrick 2026-11-21): in the x3
+        // terrain world the 9 u/s trips ran 4-5 minutes, too long;
+        // 18 restores roughly the old trip feel. "2X for now" — he
+        // may tune it again after living with it.
+        private static readonly float MarchSpeed = 18f; // units/second
 
         // Map Phase 2 (2026-11-12, Patrick's pick: real Blender mini
         // troops over code-built figures): each slot's marker root
