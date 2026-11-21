@@ -657,7 +657,10 @@ namespace LunarDominion.UI
                 Kind = MapPointKind.Camp,
                 Tier = tier,
                 Amount = 0,
-                Position = CampSlotPositions[slot],
+                // Terrain-height Y, matching the slot root (see
+                // BuildCampSlots): the raw table value is y=0,
+                // which only ever described the old flat discs.
+                Position = new Vector3(CampSlotPositions[slot].x, TerrainHeight(CampSlotPositions[slot].x, CampSlotPositions[slot].z), CampSlotPositions[slot].z),
                 Title = CampTitleForTier(tier),
                 Info = CampInfoForTier(tier)
             };
@@ -689,7 +692,19 @@ namespace LunarDominion.UI
                 _campSlotTier[slot] = 0;
                 _campSlotVisible[slot] = false;
                 var go = new GameObject("Empty Camp Slot");
-                go.transform.position = CampSlotPositions[slot];
+                // Sit the root ON the terrain (fix 2026-11-21):
+                // CampSlotPositions carries y=0 from the old
+                // world, where every slot disc was flattened to
+                // h=0 so y=0 WAS the ground. The baked Unity
+                // Terrain keeps each disc at its local height x6,
+                // so a y=0 root buried the far-out camps under
+                // their own pads - invisible, untappable (their
+                // tap box sat under the surface) and with their
+                // fights staged inside the hill (Patrick's Phase
+                // 3 Play checks: FIND landing on empty ground,
+                // unsendable camps, fight location off).
+                var slotPos = CampSlotPositions[slot];
+                go.transform.position = new Vector3(slotPos.x, TerrainHeight(slotPos.x, slotPos.z), slotPos.z);
                 var box = go.AddComponent<BoxCollider>();
                 box.center = new Vector3(0f, 4f, 0f);
                 box.size = new Vector3(14f, 9f, 14f);
