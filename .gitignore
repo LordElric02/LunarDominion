@@ -64,3 +64,46 @@ _Recovery.meta
 .utmp/
 *_BurstDebugInformation_DoNotShip/
 *_BackUpThisFolder_ButDontShipItWithYourGame/
+
+# ---- Local-only content (added 2026-11-20, terrain-transplant) ----
+# These live on Patrick's machine only BY DESIGN (Asset Store EULA
+# content, hand-copied Blender outputs, scratch scenes) and were
+# flooding `git status` with ~200 untracked lines. Ignoring them
+# changes nothing on disk and never untracks a tracked file — it
+# only stops git from listing the untracked ones.
+
+# Asset Store packages (local-only, see Open Issues item 15)
+/Assets/Creepy_Cat/
+/Assets/Creepy_Cat.meta
+/Assets/Mech_Constructor_Heavy/
+/Assets/Mech_Constructor_Heavy.meta
+/Assets/TerrainSampleAssets/
+/Assets/TerrainSampleAssets.meta
+
+# Scratch scenes at the Assets root (kit tests, candidates)
+/Assets/*.unity
+/Assets/*.unity.meta
+
+# Hand-copied binary assets: kit prefabs, Blender FBX/PNG outputs.
+# (Files already tracked here stay tracked and still show edits.)
+/Assets/_Project/Resources/Models/*.fbx
+/Assets/_Project/Resources/Models/*.fbx.meta
+/Assets/_Project/Resources/Models/*.png
+/Assets/_Project/Resources/Models/*.png.meta
+/Assets/_Project/Resources/Models/*.prefab
+/Assets/_Project/Resources/Models/*.prefab.meta
+/Assets/_Project/Resources/Textures/*.png
+/Assets/_Project/Resources/Textures/*.png.meta
+/Assets/_Project/Resources/Textures/*.webp
+/Assets/_Project/Resources/Textures/*.webp.meta
+
+# Blender folder: the .py scripts are tracked; their Unity .meta
+# files and the generated preview PNGs are local noise.
+/Assets/_Project/Models/Blender/*.py.meta
+/Assets/_Project/Models/Blender/ExteriorTerrainNormal.png
+/Assets/_Project/Models/Blender/ExteriorTerrainNormal.png.meta
+/Assets/_Project/Models/Blender/normal_hillshade.png
+/Assets/_Project/Models/Blender/normal_hillshade.png.meta
+
+# Unity-generated, never committed in this repo's workflow
+/ProjectSettings/TimelineSettings.asset
