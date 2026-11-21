@@ -460,7 +460,7 @@ namespace LunarDominion.Editor
         // transplant starts bare — these counts restore roughly
         // the old map's dressing density across the x9 area.
         // Tune here after a Play look.
-        private const int FloraTreeTarget = 7000;
+        private const int FloraTreeTarget = 11000;
         private const int FloraRockTarget = 650;
 
         [MenuItem("Lunar Dominion/Terrain Transplant/5. Scatter Flora (Phase 5)")]
@@ -501,13 +501,15 @@ namespace LunarDominion.Editor
             // were invisible from map height — the scatter worked,
             // the plants are just tiny. So the flora runs in two
             // tiers at alien scale: the rounded bushes and heather
-            // at 4-6.5x read as canopy shrubs from the map camera
+            // at 8-12x read as canopy shrubs from the map camera
+            // (4-6.5x in the first tune still read too small in
+            // Patrick's 2026-11-21 Play check)
             // (the old map's trees were mushroom-canopy blobs — the
             // same read), and the plants and ferns at 1.8-3x make
             // the mid layer. Exact names, no keyword fishing; the
             // keyword search remains only as a fallback.
             var canopyPrefabs = FindPrefabsExact("Bush_A", "Bush_B", "Heather_A", "Heather_B");
-            var shrubPrefabs = FindPrefabsExact("Plant_A", "Plant_B", "Plant_C", "Plant_D", "Fern_A", "Fern_B", "Fern_C");
+            var shrubPrefabs = FindPrefabsExact("Plant_A", "Plant_B", "Plant_C", "Plant_D", "Fern_A", "Fern_B", "Fern_C", "BushDry_A", "BushDry_B");
             if (canopyPrefabs.Count == 0 && shrubPrefabs.Count == 0)
             {
                 shrubPrefabs = FindPrefabs(6,
@@ -569,7 +571,7 @@ namespace LunarDominion.Editor
                         // Copses, not a uniform lawn: the same
                         // two-scale clumping the grass uses.
                         float clump = Mathf.PerlinNoise(wx * 0.004f + 40f, wz * 0.004f + 40f);
-                        float keep = Mathf.Clamp01(clump * 1.7f - 0.55f) * (1f - rockW);
+                        float keep = Mathf.Clamp01(clump * 1.45f - 0.28f) * (1f - rockW);
                         if (rng.NextDouble() < keep)
                         {
                             // Tier pick: about a third canopy
@@ -580,7 +582,7 @@ namespace LunarDominion.Editor
                             int protoIndex;
                             if (canopy || vegProtoCount <= canopyProtoCount)
                             {
-                                s = 4.0f + (float)rng.NextDouble() * 2.5f;
+                                s = 8.0f + (float)rng.NextDouble() * 4.0f;
                                 protoIndex = rng.Next(canopyProtoCount);
                             }
                             else
