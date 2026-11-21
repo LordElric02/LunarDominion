@@ -897,7 +897,7 @@ namespace LunarDominion.UI
                 var rocksMat = Resources.Load<Material>(TerrainRocksMaterialPath);
                 if (rocksMat != null) rocksRenderer.sharedMaterial = rocksMat;
                 rocksRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                rocksRenderer.receiveShadow = false;
+                rocksRenderer.receiveShadows = false;
             }
 
             // Start hidden — the Base tab is the default view.
