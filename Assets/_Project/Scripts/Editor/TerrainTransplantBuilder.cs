@@ -617,11 +617,17 @@ namespace LunarDominion.Editor
                         float keep = 0.18f + steep / 48f * 0.5f + rockW * 0.3f;
                         if (rng.NextDouble() < keep)
                         {
-                            float s = 0.7f + (float)rng.NextDouble() * 1.3f;
+                            // Desired size in metres; BakeRocks
+                            // normalizes by each prefab's native
+                            // size — the kit rocks are authored
+                            // huge, and at raw 0.7-2.0x they came
+                            // out as 30-100 m monuments in
+                            // Patrick's 2026-11-21 Play check.
+                            float s = 6f + (float)rng.NextDouble() * 10f;
                             rockPlacements.Add((
                                 new Vector3(u * data.size.x, data.GetInterpolatedHeight(u, v), v * data.size.z),
                                 (float)rng.NextDouble() * 360f,
-                                s, s * (0.75f + (float)rng.NextDouble() * 0.4f),
+                                s, 0.75f + (float)rng.NextDouble() * 0.4f,
                                 rng.Next(rockPrefabs.Count)));
                             rocks++;
                         }
@@ -663,6 +669,7 @@ namespace LunarDominion.Editor
             // relative to the prefab root, plus the first material
             // found (the runtime material is a copy of it).
             var perPrefab = new List<List<(Mesh mesh, Matrix4x4 rel)>>();
+            var nativeSizes = new List<float>();
             Material rockMat = null;
             foreach (var prefab in rockPrefabs)
             {
@@ -685,7 +692,29 @@ namespace LunarDominion.Editor
                     var mr = prefab.GetComponentInChildren<MeshRenderer>(true);
                     if (mr != null && mr.sharedMaterial != null) rockMat = mr.sharedMaterial;
                 }
-                Debug.Log("[TerrainTransplant] Rock prefab " + prefab.name + ": " + parts.Count + " mesh part(s).");
+                // Native size from the parts' bounds (all 8
+                // corners of each mesh bounds through its
+                // relative matrix) — placements are normalized
+                // against this, whatever the kit authored.
+                var bounds = new Bounds();
+                bool firstBound = true;
+                foreach (var part in parts)
+                {
+                    var b = part.mesh.bounds;
+                    for (int ci = 0; ci < 8; ci++)
+                    {
+                        var corner = new Vector3(
+                            (ci & 1) == 0 ? b.min.x : b.max.x,
+                            (ci & 2) == 0 ? b.min.y : b.max.y,
+                            (ci & 4) == 0 ? b.min.z : b.max.z);
+                        var wc = part.rel.MultiplyPoint3x4(corner);
+                        if (firstBound) { bounds = new Bounds(wc, Vector3.zero); firstBound = false; }
+                        else bounds.Encapsulate(wc);
+                    }
+                }
+                float nativeSize = Mathf.Max(bounds.size.x, bounds.size.z, 0.01f);
+                nativeSizes.Add(nativeSize);
+                Debug.Log("[TerrainTransplant] Rock prefab " + prefab.name + ": " + parts.Count + " mesh part(s), native ~" + nativeSize.ToString("0.0") + " m across.");
                 perPrefab.Add(parts);
             }
             var combines = new List<CombineInstance>();
@@ -696,7 +725,13 @@ namespace LunarDominion.Editor
                 int add = 0;
                 foreach (var p in parts) add += p.mesh.vertexCount;
                 if (add == 0 || verts + add > RockVertexBudget) continue;
-                var place = Matrix4x4.TRS(pl.pos, Quaternion.Euler(0f, pl.yawDeg, 0f), new Vector3(pl.scale, pl.scaleY, pl.scale));
+                // Normalize: the placement's scale is the DESIRED
+                // size in metres; divide by the prefab's native
+                // size. Seat the rock slightly into the ground so
+                // slope edges do not float.
+                float unit = pl.scale / nativeSizes[pl.prefab];
+                var seated = new Vector3(pl.pos.x, pl.pos.y - pl.scale * 0.08f, pl.pos.z);
+                var place = Matrix4x4.TRS(seated, Quaternion.Euler(0f, pl.yawDeg, 0f), new Vector3(unit, unit * pl.scaleY, unit));
                 foreach (var p in parts)
                     combines.Add(new CombineInstance { mesh = p.mesh, transform = place * p.rel });
                 verts += add;
