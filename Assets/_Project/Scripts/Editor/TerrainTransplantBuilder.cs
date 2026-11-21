@@ -39,6 +39,7 @@ namespace LunarDominion.Editor
         private const int HeightmapResolution = 2049;
         private const string TerrainFolder = "Assets/_Project/Terrain";
         private const string TerrainAssetPath = TerrainFolder + "/LunarTerrain.asset";
+        private const string MaterialPath = TerrainFolder + "/LunarTerrainMat.mat";
         private const string BaseLayerName = "Grass_Moss_TerrainLayer";
 
         private static float NewHalfX => OldHalfX * Scale;   // 1680
@@ -136,6 +137,13 @@ namespace LunarDominion.Editor
             terrainComponent.drawTreesAndFoliage = true;
             var terrainCollider = go.AddComponent<TerrainCollider>();
             terrainCollider.terrainData = data;
+
+            // An explicit URP terrain material is required: with no
+            // materialTemplate this project renders the terrain
+            // magenta (the built-in fallback shader fails under URP).
+            var mat = GetOrCreateTerrainMaterial();
+            if (mat != null) terrainComponent.materialTemplate = mat;
+
             go.transform.position = new Vector3(-NewHalfX, MinH, -NewHalfZ);
             Selection.activeGameObject = go;
 
@@ -143,6 +151,25 @@ namespace LunarDominion.Editor
             Debug.Log("[TerrainTransplant] Terrain placed in scene at " + go.transform.position +
                       ". Compare against the probes below (SampleHeight vs analytic):");
             LogProbes("sampleHeight", (wx, wz) => terrain.SampleHeight(new Vector3(wx, 0f, wz)) + MinH);
+        }
+
+        private static Material GetOrCreateTerrainMaterial()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
+            if (existing != null) return existing;
+
+            var shader = Shader.Find("Universal Render Pipeline/Terrain/Lit");
+            if (shader == null)
+            {
+                Debug.LogError("[TerrainTransplant] Shader 'Universal Render Pipeline/Terrain/Lit' not found — " +
+                               "URP terrain shader unavailable in this project; terrain will render magenta.");
+                return null;
+            }
+            var mat = new Material(shader) { name = "LunarTerrainMat" };
+            AssetDatabase.CreateAsset(mat, MaterialPath);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[TerrainTransplant] Terrain material created: " + MaterialPath + " (shader " + shader.name + ")");
+            return mat;
         }
 
         // Grass base coat, if the Terrain Asset Pack has been imported
