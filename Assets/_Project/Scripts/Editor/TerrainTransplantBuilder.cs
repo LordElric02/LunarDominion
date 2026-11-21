@@ -29,10 +29,11 @@ namespace LunarDominion.Editor
         private const float OldHalfZ = 480f;
 
         // Vertical scale for the replica's heights. Today's analytic
-        // heights are clamped to [-5.2, 8.0]; at HeightScale 3 the
-        // new terrain spans [-15.6, 24.0], keeping the landscape's
-        // proportions at the bigger footprint.
-        private const float HeightScale = 3f;
+        // heights are clamped to [-5.2, 8.0]. HeightScale 3 spanned
+        // [-15.6, 24.0] and read too flat at the x3 footprint
+        // (Patrick 2026-11-20), so 6: the terrain spans
+        // [-31.2, 48.0] with double the slope drama.
+        private const float HeightScale = 6f;
         private const float AnalyticMin = -5.2f;
         private const float AnalyticMax = 8.0f;
 
