@@ -516,9 +516,13 @@ namespace LunarDominion.Editor
                     new[] { "Heather", "Plant", "Tree", "Bush", "Shrub", "Fern" },
                     new[] { "Rock" });
             }
-            var rockPrefabs = FindPrefabs(3,
-                new[] { "Rock" },
-                new[] { "Heather", "Plant", "Tree", "Bush", "Shrub", "Fern" });
+            // Rocks are NOT terrain trees: Unity refused to
+            // instance Rock_01 / Rock_02 ("no valid mesh
+            // renderer"), and the old keyword search also matched
+            // Weapon_BigRocket_Missile ("BigRocket" contains
+            // "rock"). Exact names only, and the rock geometry is
+            // baked into one combined mesh below (BakeRocks).
+            var rockPrefabs = FindPrefabsExact("Rock_01", "Rock_02");
             if (canopyPrefabs.Count == 0 && shrubPrefabs.Count == 0)
             {
                 EditorUtility.DisplayDialog("No vegetation prefabs found",
@@ -535,7 +539,6 @@ namespace LunarDominion.Editor
             int canopyProtoCount = protos.Count;
             foreach (var p in shrubPrefabs) protos.Add(new TreePrototype { prefab = p });
             int vegProtoCount = protos.Count;
-            foreach (var p in rockPrefabs) protos.Add(new TreePrototype { prefab = p });
             data.treePrototypes = protos.ToArray();
             data.RefreshPrototypes();
 
@@ -543,6 +546,7 @@ namespace LunarDominion.Editor
             var alphas = data.GetAlphamaps(0, 0, ares, ares);
             var rng = new System.Random(20261121);
             var instances = new List<TreeInstance>();
+            var rockPlacements = new List<(Vector3 pos, float yawDeg, float scale, float scaleY, int prefab)>();
             int trees = 0, rocks = 0;
             const int maxAttempts = 300000;
             try
@@ -607,19 +611,18 @@ namespace LunarDominion.Editor
                     {
                         // Rocks favour the slopes and the rocky
                         // ground; a scatter also lives on the flats.
+                        // Placements are recorded (terrain-local
+                        // space) and baked by BakeRocks — the kit
+                        // rocks cannot be terrain instances.
                         float keep = 0.18f + steep / 48f * 0.5f + rockW * 0.3f;
                         if (rng.NextDouble() < keep)
                         {
                             float s = 0.7f + (float)rng.NextDouble() * 1.3f;
-                            instances.Add(new TreeInstance
-                            {
-                                position = new Vector3(u, 0f, v),
-                                widthScale = s,
-                                heightScale = s * (0.75f + (float)rng.NextDouble() * 0.4f),
-                                rotation = (float)rng.NextDouble() * Mathf.PI * 2f,
-                                prototypeIndex = vegProtoCount + rng.Next(rockPrefabs.Count),
-                                color = new Color32(255, 255, 255, 255),
-                            });
+                            rockPlacements.Add((
+                                new Vector3(u * data.size.x, data.GetInterpolatedHeight(u, v), v * data.size.z),
+                                (float)rng.NextDouble() * 360f,
+                                s, s * (0.75f + (float)rng.NextDouble() * 0.4f),
+                                rng.Next(rockPrefabs.Count)));
                             rocks++;
                         }
                     }
@@ -631,9 +634,88 @@ namespace LunarDominion.Editor
             }
             data.treeInstances = instances.ToArray();
             EditorUtility.SetDirty(data);
+            int rockVerts = BakeRocks(rockPrefabs, rockPlacements);
             AssetDatabase.SaveAssets();
-            Debug.Log("[TerrainTransplant] Flora scattered: " + trees + " flora (canopy + shrubs), " + rocks + " rocks " +
-                      "(targets " + FloraTreeTarget + " / " + FloraRockTarget + "). Run item 2 to preview, or Play.");
+            Debug.Log("[TerrainTransplant] Flora scattered: " + trees + " flora (canopy + shrubs); rocks baked: " + rocks +
+                      " (" + rockVerts + " verts). (Targets " + FloraTreeTarget + " / " + FloraRockTarget + ".) Play to see both.");
+        }
+
+        private const string RocksAssetPath = TerrainFolder + "/LunarRocks.asset";
+        private const string RocksMaterialPath = TerrainFolder + "/LunarRocksMat.mat";
+        private const int RockVertexBudget = 900000;
+
+        // The kit rock prefabs cannot be terrain-tree instanced
+        // (Unity: "no valid mesh renderer" for Rock_01/Rock_02),
+        // so their geometry is combined here into ONE static mesh
+        // in terrain-local space; ExteriorView draws it as a
+        // child of the terrain object. Re-run item 5 after any
+        // item 1 rebuild — the bake follows the heightfield like
+        // the paint does. Returns the baked vertex count
+        // (0 = nothing baked).
+        private static int BakeRocks(List<GameObject> rockPrefabs, List<(Vector3 pos, float yawDeg, float scale, float scaleY, int prefab)> placements)
+        {
+            if (rockPrefabs.Count == 0 || placements.Count == 0)
+            {
+                Debug.Log("[TerrainTransplant] Rocks skipped: " + (rockPrefabs.Count == 0 ? "no Rock_01 / Rock_02 prefabs found." : "no placements."));
+                return 0;
+            }
+            // Gather each prefab's meshes with their transforms
+            // relative to the prefab root, plus the first material
+            // found (the runtime material is a copy of it).
+            var perPrefab = new List<List<(Mesh mesh, Matrix4x4 rel)>>();
+            Material rockMat = null;
+            foreach (var prefab in rockPrefabs)
+            {
+                var parts = new List<(Mesh mesh, Matrix4x4 rel)>();
+                foreach (var mf in prefab.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (mf.sharedMesh == null) continue;
+                    Matrix4x4 rel = Matrix4x4.identity;
+                    var t = mf.transform;
+                    while (t != null)
+                    {
+                        rel = Matrix4x4.TRS(t.localPosition, t.localRotation, t.localScale) * rel;
+                        if (t == prefab.transform) break;
+                        t = t.parent;
+                    }
+                    parts.Add((mf.sharedMesh, rel));
+                }
+                if (rockMat == null)
+                {
+                    var mr = prefab.GetComponentInChildren<MeshRenderer>(true);
+                    if (mr != null && mr.sharedMaterial != null) rockMat = mr.sharedMaterial;
+                }
+                Debug.Log("[TerrainTransplant] Rock prefab " + prefab.name + ": " + parts.Count + " mesh part(s).");
+                perPrefab.Add(parts);
+            }
+            var combines = new List<CombineInstance>();
+            int verts = 0;
+            foreach (var pl in placements)
+            {
+                var parts = perPrefab[pl.prefab];
+                int add = 0;
+                foreach (var p in parts) add += p.mesh.vertexCount;
+                if (add == 0 || verts + add > RockVertexBudget) continue;
+                var place = Matrix4x4.TRS(pl.pos, Quaternion.Euler(0f, pl.yawDeg, 0f), new Vector3(pl.scale, pl.scaleY, pl.scale));
+                foreach (var p in parts)
+                    combines.Add(new CombineInstance { mesh = p.mesh, transform = place * p.rel });
+                verts += add;
+            }
+            if (combines.Count == 0)
+            {
+                Debug.Log("[TerrainTransplant] Rocks skipped: the prefabs carry no usable mesh geometry.");
+                return 0;
+            }
+            var combined = new Mesh { name = "LunarRocks", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            combined.CombineMeshes(combines.ToArray(), true, true);
+            if (AssetDatabase.LoadAssetAtPath<Mesh>(RocksAssetPath) != null) AssetDatabase.DeleteAsset(RocksAssetPath);
+            AssetDatabase.CreateAsset(combined, RocksAssetPath);
+            if (rockMat != null)
+            {
+                if (AssetDatabase.LoadAssetAtPath<Material>(RocksMaterialPath) != null) AssetDatabase.DeleteAsset(RocksMaterialPath);
+                AssetDatabase.CreateAsset(new Material(rockMat), RocksMaterialPath);
+            }
+            return verts;
         }
 
         // Find prefabs whose names match the keywords (earlier

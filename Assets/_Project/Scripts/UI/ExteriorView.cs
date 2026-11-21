@@ -542,6 +542,8 @@ namespace LunarDominion.UI
         private const float TerrainMinY = -5.2f * HeightScaleFactor; // -31.2
         private const string TerrainDataPath = "Terrain/LunarTerrain";
         private const string TerrainMaterialPath = "Terrain/LunarTerrainMat";
+        private const string TerrainRocksPath = "Terrain/LunarRocks";
+        private const string TerrainRocksMaterialPath = "Terrain/LunarRocksMat";
 
         private static TerrainData _terrainData;
         private static bool _terrainLoadTried;
@@ -877,6 +879,26 @@ namespace LunarDominion.UI
             terrainCollider.terrainData = terrainData;
             terrainGo.transform.position = new Vector3(-WorldHalfX, TerrainMinY, -WorldHalfZ);
             _terrain = terrainGo;
+
+            // Phase 5 rocks: builder item 5 bakes the kit rocks
+            // into one combined mesh in terrain-local space (the
+            // tree system refuses to instance those prefabs), so
+            // it is drawn here as a child of the terrain and
+            // follows the Map tab's visibility with it. Absent
+            // until item 5 has run with rocks found.
+            var rocksMesh = Resources.Load<Mesh>(TerrainRocksPath);
+            if (rocksMesh != null)
+            {
+                var rocksGo = new GameObject("ExteriorRocks");
+                rocksGo.transform.SetParent(terrainGo.transform, false);
+                var rocksFilter = rocksGo.AddComponent<MeshFilter>();
+                rocksFilter.sharedMesh = rocksMesh;
+                var rocksRenderer = rocksGo.AddComponent<MeshRenderer>();
+                var rocksMat = Resources.Load<Material>(TerrainRocksMaterialPath);
+                if (rocksMat != null) rocksRenderer.sharedMaterial = rocksMat;
+                rocksRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                rocksRenderer.receiveShadow = false;
+            }
 
             // Start hidden — the Base tab is the default view.
             _terrain.SetActive(false);
