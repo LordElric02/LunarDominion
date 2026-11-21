@@ -476,6 +476,13 @@ namespace LunarDominion.UI
             AddSceneryAt("Models/PropStorageTank", new Vector3(15.91f, 0f, -22.27f), 0f, "Prop");
             AddSceneryAt("Models/PropRover", new Vector3(-9.55f, 0f, 4.6f), -45f, "Prop");
             AddSceneryAt("Models/PropGate", new Vector3(38.18f, 0f, -38.18f), -45f, "Prop");
+            // 2026-11-20: the Vol 2 Spaceship_01, saved by Patrick
+            // as PropShip, parked as a landed ship OUTSIDE the east
+            // gate - layout (62, 0) -> world (43.84, -43.84), about
+            // 8 units past the gate on the sand. Yaw -45 aims the
+            // nose at the gate if the kit authored it +Z; if the
+            // Play check shows it tail-in, the flip is 135.
+            AddSceneryAt("Models/PropShip", new Vector3(43.84f, 0f, -43.84f), -45f, "Prop");
         }
 
         private void AddSceneryAt(string resourcePath, Vector3 position, float rotationY, string name)
