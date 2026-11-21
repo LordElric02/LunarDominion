@@ -2111,7 +2111,7 @@ namespace LunarDominion.UI
                     if (mat.HasProperty("_Color"))
                     {
                         mat.color = Color.Lerp(mat.color,
-                            new Color(0.23f, 0.24f, 0.27f, mat.color.a), 0.45f);
+                            new Color(0.30f, 0.32f, 0.36f, mat.color.a), 0.40f);
                         partColors[rend] = mat.color;
                     }
                     if (mat.HasProperty("_Metallic"))
