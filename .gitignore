@@ -107,3 +107,15 @@ _Recovery.meta
 
 # Unity-generated, never committed in this repo's workflow
 /ProjectSettings/TimelineSettings.asset
+
+# Round 2 (2026-11-20): the remaining untracked classes — the
+# Resources Audio/UI folders (binary/local) and the Scripts .meta
+# files. Script .meta files were never committed in this repo's
+# workflow (code arrives via text pushes without them); the files
+# stay on disk untouched, this only stops listing them.
+/Assets/_Project/Resources/Audio/
+/Assets/_Project/Resources/Audio.meta
+/Assets/_Project/Resources/UI/
+/Assets/_Project/Resources/UI.meta
+/Assets/_Project/Resources/Textures/s.meta
+/Assets/_Project/Scripts/**/*.meta
