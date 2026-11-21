@@ -4543,6 +4543,15 @@ namespace LunarDominion.UI
         {
             _visible = visible;
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
+            // The support vehicle hides with the buildings (fix
+            // 2026-11-20): it is in neither the building list nor
+            // the environment toggle, and this component's Update
+            // runs on an always-active host, so on the Map tab it
+            // kept driving its circuit around the castle in the
+            // open (Patrick: "the rover is visible outside the
+            // base"). SetVisible is called on every tab switch, so
+            // it is the single choke point.
+            if (_vehicle != null) _vehicle.SetActive(visible);
             // Becoming visible re-applies the base camera with the
             // pan recentred (2026-11-14): the camera is shared, and
             // the Map and lair leave it at their own poses, so the

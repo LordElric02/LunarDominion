@@ -1429,8 +1429,13 @@ namespace LunarDominion.UI
                 if (go.GetComponentInChildren<Collider>() == null)
                 {
                     var box = go.AddComponent<BoxCollider>();
-                    box.center = new Vector3(0f, 2f, 0f);
-                    box.size = new Vector3(4f, 4f, 4f);
+                    // Generous tap box (2026-11-20): at the x3
+                    // map zoom the old 4-unit box covered a few
+                    // screen pixels; sites sit hundreds of units
+                    // apart now, so a fat box cannot mis-tap a
+                    // neighbour.
+                    box.center = new Vector3(0f, 3f, 0f);
+                    box.size = new Vector3(12f, 6f, 12f);
                 }
                 go.SetActive(false);
                 // The creature IS its camp for tapping: it carries the
@@ -1560,8 +1565,13 @@ namespace LunarDominion.UI
                 if (go.GetComponentInChildren<Collider>() == null)
                 {
                     var box = go.AddComponent<BoxCollider>();
-                    box.center = new Vector3(0f, 2f, 0f);
-                    box.size = new Vector3(4f, 4f, 4f);
+                    // Generous tap box (2026-11-20): at the x3
+                    // map zoom the old 4-unit box covered a few
+                    // screen pixels; sites sit hundreds of units
+                    // apart now, so a fat box cannot mis-tap a
+                    // neighbour.
+                    box.center = new Vector3(0f, 3f, 0f);
+                    box.size = new Vector3(12f, 6f, 12f);
                 }
                 go.SetActive(false);
                 // Keep every renderer + its original colour: a depleted
@@ -1940,12 +1950,28 @@ namespace LunarDominion.UI
             // Tap on a node/camp shows its info; a tap anywhere else
             // on the map hides any info panel that is showing.
             bool hitPoint = false;
-            if (Physics.Raycast(ray, out var hit, 900f))
+            // RaycastAll, not a single Raycast (fix 2026-11-20):
+            // the Unity Terrain carries a TerrainCollider (the
+            // old FBX ground had none), so a single first-hit
+            // raycast stops at the ground whenever a slope or a
+            // crater rim sits in front of a point's small
+            // collider - some T1 nodes became untappable
+            // (Patrick). Take the closest hit that belongs to a
+            // point, with a small grace past the first hit overall
+            // so a point sunk in its flattened disc still counts,
+            // while a point hidden behind a ridge (a much longer
+            // gap) does not. Range up from 900: at the x3 zoom-out
+            // a far-edge tap can travel farther than that.
+            var hits = Physics.RaycastAll(ray, 3000f);
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            float firstDist = hits.Length > 0 ? hits[0].distance : 0f;
+            for (int h = 0; h < hits.Length && !hitPoint; h++)
             {
+                if (hits[h].distance > firstDist + 15f) break;
                 foreach (var point in _mapPoints)
                 {
                     if (point.Go == null || point.Data == null) continue;
-                    if (hit.transform == point.Go.transform || hit.transform.IsChildOf(point.Go.transform))
+                    if (hits[h].transform == point.Go.transform || hits[h].transform.IsChildOf(point.Go.transform))
                     {
                         OnMapPointSelected?.Invoke(point.Data);
                         hitPoint = true;
@@ -2655,11 +2681,25 @@ namespace LunarDominion.UI
             for (int k = 0; k < enemyFalls && k < enemyOrder.Count; k++)
                 eFallStart[enemyOrder[k]] = clashTime * (k + 0.5f) / Mathf.Max(1, enemyFalls);
 
-            // Camera bookkeeping for the swap.
+            // Camera bookkeeping. The arena swap owns the camera;
+            // since the x3 transplant the simulated fight (tiers
+            // with no arena creature, e.g. T3) takes it too - at
+            // map distances its 4.2-radius scuffle read as a few
+            // pixels near the camp (Patrick, 2026-11-20: "the
+            // fight was kind of small").
             Vector3 savedPan = _panOffset;
             float savedDist = _camDist;
             float savedTarget = _camDistTarget;
-            if (arena)
+            Vector3 fightFocus = arenaFocus;
+            if (!arena && root != null)
+            {
+                var rp = root.transform.position;
+                fightFocus = new Vector3(
+                    Mathf.Clamp(rp.x, -PanLimitX, PanLimitX), 0f,
+                    Mathf.Clamp(rp.z, -PanLimitZ, PanLimitZ));
+            }
+            bool cameraOwned = arena || root != null;
+            if (cameraOwned)
             {
                 _gliding = false;
                 _arenaCameraActive = true;
@@ -2710,9 +2750,13 @@ namespace LunarDominion.UI
             }
             else
             {
-                // Face-off (~0.6s): the enemy figures rise.
+                // Face-off (~0.6s): the enemy figures rise while
+                // the camera glides in (simulated fights only -
+                // the arena swap does its own glide above).
                 float faceTime = 0.6f;
                 float t = 0f;
+                Vector3 panFrom = _panOffset;
+                float distFrom = _camDist;
                 while (t < faceTime)
                 {
                     while (!_visible) yield return null;
@@ -2726,6 +2770,13 @@ namespace LunarDominion.UI
                         var pos = enemyBase[i];
                         pos.y = enemyBase[i].y - 3f * (1f - rise);
                         fig.transform.localPosition = pos;
+                    }
+                    if (cameraOwned)
+                    {
+                        _panOffset = Vector3.Lerp(panFrom, fightFocus, rise);
+                        _camDist = Mathf.Lerp(distFrom, ArenaCamDist, rise);
+                        _camDistTarget = _camDist;
+                        ApplyCamera();
                     }
                     yield return null;
                 }
@@ -2909,6 +2960,29 @@ namespace LunarDominion.UI
                         fig.transform.localRotation = Quaternion.Slerp(figBaseRot[f], figOrigRot[f], e);
                         fig.transform.localScale = Vector3.Lerp(figBaseScale[f], figOrigScale[f], e);
                     }
+                    _panOffset = Vector3.Lerp(panFrom, savedPan, e);
+                    _camDist = Mathf.Lerp(distFrom, savedDist, e);
+                    _camDistTarget = _camDist;
+                    ApplyCamera();
+                    yield return null;
+                }
+                _camDistTarget = savedTarget;
+                _arenaCameraActive = false;
+            }
+            else if (cameraOwned)
+            {
+                // Simulated fight: glide the camera back to the
+                // pre-fight pose (the figures restore below).
+                float backTime = 0.6f;
+                float t = 0f;
+                Vector3 panFrom = _panOffset;
+                float distFrom = _camDist;
+                while (t < backTime)
+                {
+                    while (!_visible) yield return null;
+                    t += Time.deltaTime;
+                    float p = Mathf.Clamp01(t / backTime);
+                    float e = p * p * (3f - 2f * p);
                     _panOffset = Vector3.Lerp(panFrom, savedPan, e);
                     _camDist = Mathf.Lerp(distFrom, savedDist, e);
                     _camDistTarget = _camDist;
