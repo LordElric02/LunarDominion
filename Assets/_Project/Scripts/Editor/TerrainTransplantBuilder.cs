@@ -455,6 +455,188 @@ namespace LunarDominion.Editor
                       "wind speed 0.85 / size 0.65 / bending 0.8, detail distance 160). Zoom in close in Play to judge the sway.");
         }
 
+        // Phase 5 flora targets: the old Blender exterior carried
+        // its trees and rocks modelled into the mesh, so the
+        // transplant starts bare — these counts restore roughly
+        // the old map's dressing density across the x9 area.
+        // Tune here after a Play look.
+        private const int FloraTreeTarget = 7000;
+        private const int FloraRockTarget = 650;
+
+        [MenuItem("Lunar Dominion/Terrain Transplant/5. Scatter Flora (Phase 5)")]
+        public static void ScatterFlora()
+        {
+            var data = AssetDatabase.LoadAssetAtPath<TerrainData>(TerrainAssetPath);
+            if (data == null)
+            {
+                EditorUtility.DisplayDialog("No terrain data yet",
+                    "Run 'Lunar Dominion/Terrain Transplant/1. Build Terrain Data' first.", "OK");
+                return;
+            }
+            int dirtCh = -1, rockCh = -1;
+            var tls = data.terrainLayers;
+            for (int i = 0; i < tls.Length; i++)
+            {
+                if (tls[i] == null) continue;
+                if (dirtCh < 0 && LayerNameMatches(tls[i].name, "Dirt", "Path", "Ground", "Sand", "Soil")) dirtCh = i;
+                if (rockCh < 0 && tls[i].name.IndexOf("Rock", StringComparison.OrdinalIgnoreCase) >= 0) rockCh = i;
+            }
+            if (dirtCh < 0)
+            {
+                EditorUtility.DisplayDialog("Paint first",
+                    "No dirt layer on the terrain yet - run '3. Paint Splat Map (Phase 4)' first, so the flora keeps off the roads and pads.", "OK");
+                return;
+            }
+
+            // Discover the pack's vegetation and rock prefabs by
+            // name (the paint item's approach): the Terrain Asset
+            // Pack's trees Patrick used in the playground were
+            // Heather_A and Plant_D. Picks are logged, so a wrong
+            // pick is visible in the Console before any Play check.
+            var treePrefabs = FindPrefabs(4,
+                new[] { "Heather", "Plant", "Tree", "Bush", "Shrub", "Fern" },
+                new[] { "Rock" });
+            var rockPrefabs = FindPrefabs(3,
+                new[] { "Rock" },
+                new[] { "Heather", "Plant", "Tree", "Bush", "Shrub", "Fern" });
+            if (treePrefabs.Count == 0)
+            {
+                EditorUtility.DisplayDialog("No vegetation prefabs found",
+                    "No prefabs matching Heather / Plant / Tree / Bush / Shrub / Fern were found in the project. " +
+                    "Check the Terrain Asset Pack import, then run item 5 again.", "OK");
+                return;
+            }
+            Debug.Log("[TerrainTransplant] Flora prefabs: trees=" + string.Join(", ", treePrefabs.ConvertAll(p => p.name)) +
+                      " | rocks=" + (rockPrefabs.Count > 0 ? string.Join(", ", rockPrefabs.ConvertAll(p => p.name)) : "NONE"));
+
+            var protos = new List<TreePrototype>();
+            foreach (var p in treePrefabs) protos.Add(new TreePrototype { prefab = p });
+            int treeProtoCount = protos.Count;
+            foreach (var p in rockPrefabs) protos.Add(new TreePrototype { prefab = p });
+            data.treePrototypes = protos.ToArray();
+            data.RefreshPrototypes();
+
+            int ares = data.alphamapResolution;
+            var alphas = data.GetAlphamaps(0, 0, ares, ares);
+            var rng = new System.Random(20261121);
+            var instances = new List<TreeInstance>();
+            int trees = 0, rocks = 0;
+            const int maxAttempts = 300000;
+            try
+            {
+                for (int attempt = 0; attempt < maxAttempts && (trees < FloraTreeTarget || rocks < FloraRockTarget); attempt++)
+                {
+                    if (attempt % 20000 == 0)
+                        EditorUtility.DisplayProgressBar("Terrain Transplant",
+                            "Scattering flora...", attempt / (float)maxAttempts);
+                    float u = (float)rng.NextDouble();
+                    float v = (float)rng.NextDouble();
+                    float wx = -NewHalfX + u * NewHalfX * 2f;
+                    float wz = -NewHalfZ + v * NewHalfZ * 2f;
+                    // The base compound stays clear (its dirt disc
+                    // already excludes most of this; make it certain).
+                    if (wx * wx + wz * wz < 215f * 215f) continue;
+                    int ax = Mathf.Min(ares - 1, Mathf.RoundToInt(u * (ares - 1)));
+                    int ay = Mathf.Min(ares - 1, Mathf.RoundToInt(v * (ares - 1)));
+                    float dirtW = alphas[ay, ax, dirtCh];
+                    if (dirtW > 0.25f) continue; // roads + clearings stay bare
+                    float rockW = rockCh >= 0 ? alphas[ay, ax, rockCh] : 0f;
+                    float steep = data.GetSteepness(u, v);
+
+                    if (trees < FloraTreeTarget && steep <= 22f && rockW <= 0.55f)
+                    {
+                        // Copses, not a uniform lawn: the same
+                        // two-scale clumping the grass uses.
+                        float clump = Mathf.PerlinNoise(wx * 0.004f + 40f, wz * 0.004f + 40f);
+                        float keep = Mathf.Clamp01(clump * 1.7f - 0.55f) * (1f - rockW);
+                        if (rng.NextDouble() < keep)
+                        {
+                            float s = 0.85f + (float)rng.NextDouble() * 0.6f;
+                            instances.Add(new TreeInstance
+                            {
+                                position = new Vector3(u, 0f, v),
+                                widthScale = s,
+                                heightScale = s * (0.9f + (float)rng.NextDouble() * 0.25f),
+                                rotation = (float)rng.NextDouble() * Mathf.PI * 2f,
+                                prototypeIndex = rng.Next(treeProtoCount),
+                                color = new Color32(255, 255, 255, 255),
+                            });
+                            trees++;
+                            continue;
+                        }
+                    }
+                    if (rocks < FloraRockTarget && rockPrefabs.Count > 0 && steep <= 48f)
+                    {
+                        // Rocks favour the slopes and the rocky
+                        // ground; a scatter also lives on the flats.
+                        float keep = 0.18f + steep / 48f * 0.5f + rockW * 0.3f;
+                        if (rng.NextDouble() < keep)
+                        {
+                            float s = 0.7f + (float)rng.NextDouble() * 1.3f;
+                            instances.Add(new TreeInstance
+                            {
+                                position = new Vector3(u, 0f, v),
+                                widthScale = s,
+                                heightScale = s * (0.75f + (float)rng.NextDouble() * 0.4f),
+                                rotation = (float)rng.NextDouble() * Mathf.PI * 2f,
+                                prototypeIndex = treeProtoCount + rng.Next(rockPrefabs.Count),
+                                color = new Color32(255, 255, 255, 255),
+                            });
+                            rocks++;
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+            data.treeInstances = instances.ToArray();
+            EditorUtility.SetDirty(data);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[TerrainTransplant] Flora scattered: " + trees + " trees, " + rocks + " rocks " +
+                      "(targets " + FloraTreeTarget + " / " + FloraRockTarget + "). Run item 2 to preview, or Play.");
+        }
+
+        // Find prefabs whose names match the keywords (earlier
+        // keyword = stronger pick), preferring paths that look
+        // like a terrain/nature pack. Names in `exclude` are
+        // skipped. At most `max` distinct prefabs, best first.
+        private static List<GameObject> FindPrefabs(int max, string[] keywords, string[] exclude)
+        {
+            var scored = new List<(int score, string name, string path)>();
+            foreach (var g in AssetDatabase.FindAssets("t:Prefab"))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(g);
+                int slash = path.LastIndexOf('/');
+                string name = slash >= 0 ? path.Substring(slash + 1) : path;
+                if (name.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                    name = name.Substring(0, name.Length - ".prefab".Length);
+                if (exclude != null && LayerNameMatches(name, exclude)) continue;
+                int kw = -1;
+                for (int i = 0; i < keywords.Length; i++)
+                {
+                    if (name.IndexOf(keywords[i], StringComparison.OrdinalIgnoreCase) >= 0) { kw = i; break; }
+                }
+                if (kw < 0) continue;
+                int score = kw * 10;
+                if (path.IndexOf("Terrain", StringComparison.OrdinalIgnoreCase) >= 0) score -= 2;
+                if (path.IndexOf("Nature", StringComparison.OrdinalIgnoreCase) >= 0) score -= 1;
+                scored.Add((score, name, path));
+            }
+            scored.Sort((a, b) => a.score != b.score ? a.score.CompareTo(b.score) : string.Compare(a.name, b.name, StringComparison.Ordinal));
+            var results = new List<GameObject>();
+            var seen = new HashSet<string>();
+            foreach (var s in scored)
+            {
+                if (results.Count >= max) break;
+                if (!seen.Add(s.name)) continue;
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(s.path);
+                if (go != null) results.Add(go);
+            }
+            return results;
+        }
+
         // Code-drawn grass tuft sprite (the image tools available
         // to Ember cannot emit transparency, and billboard grass
         // needs a real alpha channel). ~150 tapered blades with
