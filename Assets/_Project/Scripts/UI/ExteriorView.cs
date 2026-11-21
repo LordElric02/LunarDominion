@@ -1588,7 +1588,30 @@ namespace LunarDominion.UI
             for (int slot = 0; slot < _marchMarkers.Length; slot++)
             {
                 if (!_marching[slot] || _marchMarkers[slot] == null) continue;
-                Vector3 next = Vector3.MoveTowards(_marchMarkers[slot].transform.position, _marchTargets[slot], MarchSpeed * Time.deltaTime);
+                // Planar step at full MarchSpeed (2026-11-20 fix):
+                // the waypoints carry Y=0, so a 3D MoveTowards
+                // spent part of every step on the vertical leg
+                // toward y=0 - at HeightScale 6 (heights to +/-48)
+                // the ground speed collapsed near each waypoint,
+                // reading as the army slowing down at every turn.
+                // Move on the ground plane only; the ride height
+                // below is presentation, as before.
+                Vector3 curPos = _marchMarkers[slot].transform.position;
+                Vector3 tgtPos = _marchTargets[slot];
+                float stepX = tgtPos.x - curPos.x;
+                float stepZ = tgtPos.z - curPos.z;
+                float distSq = stepX * stepX + stepZ * stepZ;
+                float stepLen = MarchSpeed * Time.deltaTime;
+                Vector3 next;
+                if (distSq <= stepLen * stepLen)
+                {
+                    next = new Vector3(tgtPos.x, curPos.y, tgtPos.z);
+                }
+                else
+                {
+                    float inv = stepLen / Mathf.Sqrt(distSq);
+                    next = new Vector3(curPos.x + stepX * inv, curPos.y, curPos.z + stepZ * inv);
+                }
                 // Ride the sculpted terrain (2026-11-12): the
                 // marker follows the heightfield so it climbs the
                 // dunes and dips through the craters instead of
