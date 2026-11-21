@@ -1949,12 +1949,25 @@ namespace LunarDominion.UI
                 : Mathf.Lerp(CamPitchClose, CamPitchDefault, (_camDist - CamDistMin) / (CamDistDefault - CamDistMin));
             float pitch = pitchDeg * Mathf.Deg2Rad;
             float horiz = _camDist * Mathf.Cos(pitch);
+            // Ride the ground under the pan target (fix
+            // 2026-11-21): the rig used to position and aim at
+            // y=0, which was the ground everywhere in the old
+            // world (sites flattened to h=0, nothing above 8).
+            // At HeightScale 6 a camp pad can sit at +30 - the
+            // arena camera at distance 50 ended up below the pad,
+            // inside the hill, for the whole fight (Patrick's
+            // Phase 3 retest video: ~3 s of full-screen grass at
+            // the T2 fight). Position and LookAt now both take
+            // the target's terrain height; at the base (h=0) and
+            // in flat country this changes nothing.
+            float groundY = TerrainHeight(_panOffset.x, _panOffset.z);
             Vector3 pos = new Vector3(horiz * 0.70710678f, _camDist * Mathf.Sin(pitch), horiz * 0.70710678f) + _panOffset;
+            pos.y += groundY;
             // Never sink the camera into a highland or a geyser cone.
             float floorY = TerrainHeight(pos.x, pos.z) + 5f;
             if (pos.y < floorY) pos.y = floorY;
             cam.transform.position = pos;
-            cam.transform.LookAt(Vector3.zero + _panOffset);
+            cam.transform.LookAt(new Vector3(_panOffset.x, groundY, _panOffset.z));
         }
 
         private void HandleTap(Vector2 screenPos)
