@@ -38,8 +38,9 @@ namespace LunarDominion.UI
     }
 
     /// <summary>Exterior map view (Phase 1 of the exterior base mode).
-    /// A large sculpted terrain (1120x960 — 16x the area of the original
-    /// 280x240 map, doubled 2026-11-12) with a sci-fi
+    /// A large sculpted terrain (3360x2880 since the 2026-11-20
+    /// terrain transplant — the 1120x960 landscape at x3, itself
+    /// 16x the area of the original 280x240 map) with a sci-fi
     /// castle standing in for the base (like the castle on the world
     /// map in Age of Empires Mobile), plus resource nodes and enemy
     /// camps scattered across it. The Map tab swaps the camera
@@ -81,9 +82,12 @@ namespace LunarDominion.UI
         // the way out it steepens slightly for a wider command
         // view. The Base view's camera is separate and keeps its
         // locked framing (see PanLimitX/Z for the pan bounds).
-        private const float CamDistDefault = 106.77f; // |(50, 80, 50)|
-        private const float CamDistMin = 34f;
-        private const float CamDistMax = 150f;
+        // Terrain transplant (2026-11-20): the world is x3, so the
+        // camera distances scale x3 with it — the framing Patrick
+        // tuned reads the same, the map is just three times bigger.
+        private const float CamDistDefault = 320.31f; // 106.77 x3
+        private const float CamDistMin = 102f;
+        private const float CamDistMax = 450f;
         private const float CamPitchDefault = 48.54f;
         private const float CamPitchClose = 21f;
         private const float CamPitchFar = 53f;
@@ -205,7 +209,7 @@ namespace LunarDominion.UI
         // base, so the camera can be panned across it — arrow keys on
         // PC, touch/mouse drag on the phone (and in the Editor). The
         // pan offset moves both the camera position and its look-at
-        // point. Clamped so the view stays on the 1120x960 map.
+        // point. Clamped so the view stays on the 3360x2880 map.
         private Vector3 _panOffset = Vector3.zero;
 
         // Zoom state (Round 3 prototype): the current distance
@@ -238,9 +242,9 @@ namespace LunarDominion.UI
         private float _ambPrevSunIntensity, _ambPrevFillIntensity;
         private Color _ambPrevCamBg;
         private Light _ambSun, _ambFill;
-        private static readonly float PanSpeed = 40f; // units/second, arrow keys
-        private static readonly float PanLimitX = 480f;
-        private static readonly float PanLimitZ = 420f;
+        private static readonly float PanSpeed = 120f; // units/second, arrow keys (x3 with the world)
+        private static readonly float PanLimitX = 1440f;
+        private static readonly float PanLimitZ = 1260f;
         private static readonly float DragTapThresholdPx = 15f; // below this, a press is a tap, not a drag
 
         // Drag state: a press that moves past the threshold becomes a
@@ -266,6 +270,9 @@ namespace LunarDominion.UI
         // map quadrupled to 1120x960 for the higher-tier grind -
         // original positions doubled, far nodes appended so old
         // indices 0-8 keep their meaning in existing saves).
+        // Transplant 2026-11-20: every position below scaled x3
+        // again for the 3360x2880 terrain — indices unchanged, so
+        // existing saves are unaffected.
         private struct NodeDef
         {
             public string ResourcePath; // Resources/Models/<name>
@@ -278,31 +285,31 @@ namespace LunarDominion.UI
         }
         private static readonly NodeDef[] NodeDefs =
         {
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 500, Title = "Biomass Node", Info = "Biomass: 500", Position = new Vector3(140f, 0f, 100f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 1000, Title = "Biomass Node", Info = "Biomass: 1000", Position = new Vector3(-220f, 0f, 180f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 2000, Title = "Biomass Node", Info = "Biomass: 2000", Position = new Vector3(380f, 0f, -220f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 500, Title = "Alloy Node", Info = "Alloy: 500", Position = new Vector3(-120f, 0f, -140f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 1000, Title = "Alloy Node", Info = "Alloy: 1000", Position = new Vector3(260f, 0f, 220f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 2000, Title = "Alloy Node", Info = "Alloy: 2000", Position = new Vector3(-420f, 0f, -260f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 500, Title = "Helium-3 Node", Info = "Helium-3: 500", Position = new Vector3(180f, 0f, -160f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 1000, Title = "Helium-3 Node", Info = "Helium-3: 1000", Position = new Vector3(-280f, 0f, -80f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 2000, Title = "Helium-3 Node", Info = "Helium-3: 2000", Position = new Vector3(440f, 0f, 300f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 3500, Title = "Biomass Node", Info = "Biomass: 3500", Position = new Vector3(-380f, 0f, 320f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 5000, Title = "Biomass Node", Info = "Biomass: 5000", Position = new Vector3(300f, 0f, 380f) },
-            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 8000, Title = "Biomass Node", Info = "Biomass: 8000", Position = new Vector3(-180f, 0f, -420f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 3500, Title = "Alloy Node", Info = "Alloy: 3500", Position = new Vector3(480f, 0f, -60f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 5000, Title = "Alloy Node", Info = "Alloy: 5000", Position = new Vector3(-480f, 0f, 60f) },
-            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 8000, Title = "Alloy Node", Info = "Alloy: 8000", Position = new Vector3(120f, 0f, 430f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 3500, Title = "Helium-3 Node", Info = "Helium-3: 3500", Position = new Vector3(-460f, 0f, -340f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 5000, Title = "Helium-3 Node", Info = "Helium-3: 5000", Position = new Vector3(500f, 0f, 240f) },
-            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 8000, Title = "Helium-3 Node", Info = "Helium-3: 8000", Position = new Vector3(60f, 0f, -440f) },
-            new NodeDef { ResourcePath = "Models/EnemyCampT1", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 \u2014 Spore Crawlers\nExpedition enemy", Position = new Vector3(220f, 0f, 60f) },
-            new NodeDef { ResourcePath = "Models/EnemyCampT2", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 \u2014 Void Stalkers\nExpedition enemy", Position = new Vector3(-340f, 0f, 240f) },
-            new NodeDef { ResourcePath = "Models/EnemyCampT3", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 \u2014 Brood Tyrant\nExpedition enemy", Position = new Vector3(480f, 0f, -320f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 500, Title = "Biomass Node", Info = "Biomass: 500", Position = new Vector3(420f, 0f, 300f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 1000, Title = "Biomass Node", Info = "Biomass: 1000", Position = new Vector3(-660f, 0f, 540f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 2000, Title = "Biomass Node", Info = "Biomass: 2000", Position = new Vector3(1140f, 0f, -660f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 500, Title = "Alloy Node", Info = "Alloy: 500", Position = new Vector3(-360f, 0f, -420f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 1000, Title = "Alloy Node", Info = "Alloy: 1000", Position = new Vector3(780f, 0f, 660f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 2000, Title = "Alloy Node", Info = "Alloy: 2000", Position = new Vector3(-1260f, 0f, -780f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 500, Title = "Helium-3 Node", Info = "Helium-3: 500", Position = new Vector3(540f, 0f, -480f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 1000, Title = "Helium-3 Node", Info = "Helium-3: 1000", Position = new Vector3(-840f, 0f, -240f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 2000, Title = "Helium-3 Node", Info = "Helium-3: 2000", Position = new Vector3(1320f, 0f, 900f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 3500, Title = "Biomass Node", Info = "Biomass: 3500", Position = new Vector3(-1140f, 0f, 960f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 5000, Title = "Biomass Node", Info = "Biomass: 5000", Position = new Vector3(900f, 0f, 1140f) },
+            new NodeDef { ResourcePath = "Models/BiomassNode", Kind = MapPointKind.Biomass, Amount = 8000, Title = "Biomass Node", Info = "Biomass: 8000", Position = new Vector3(-540f, 0f, -1260f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 3500, Title = "Alloy Node", Info = "Alloy: 3500", Position = new Vector3(1440f, 0f, -180f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 5000, Title = "Alloy Node", Info = "Alloy: 5000", Position = new Vector3(-1440f, 0f, 180f) },
+            new NodeDef { ResourcePath = "Models/AlloyNode", Kind = MapPointKind.Alloy, Amount = 8000, Title = "Alloy Node", Info = "Alloy: 8000", Position = new Vector3(360f, 0f, 1290f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 3500, Title = "Helium-3 Node", Info = "Helium-3: 3500", Position = new Vector3(-1380f, 0f, -1020f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 5000, Title = "Helium-3 Node", Info = "Helium-3: 5000", Position = new Vector3(1500f, 0f, 720f) },
+            new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 8000, Title = "Helium-3 Node", Info = "Helium-3: 8000", Position = new Vector3(180f, 0f, -1320f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT1", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 \u2014 Spore Crawlers\nExpedition enemy", Position = new Vector3(660f, 0f, 180f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT2", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 \u2014 Void Stalkers\nExpedition enemy", Position = new Vector3(-1020f, 0f, 720f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT3", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 \u2014 Brood Tyrant\nExpedition enemy", Position = new Vector3(1440f, 0f, -960f) },
             // Boss lair: the War Robot lives here, far southwest
             // corner of the map. Index 21. The lair does not move
             // on respawn (unlike camps) - it is a fixed place.
-            new NodeDef { ResourcePath = "Models/BossLair", Kind = MapPointKind.BossLair, Title = "Morbius 3 Lair", Info = "BOSS \u2014 Morbius 3\nGiant Mechanized enemy\nUnlocks at Nexus 10", Position = new Vector3(-480f, 0f, -400f) },
+            new NodeDef { ResourcePath = "Models/BossLair", Kind = MapPointKind.BossLair, Title = "Morbius 3 Lair", Info = "BOSS \u2014 Morbius 3\nGiant Mechanized enemy\nUnlocks at Nexus 10", Position = new Vector3(-1440f, 0f, -1200f) },
         };
 
         // Enemy camp field (2026-11-10, replaces the 3 fixed camps and
@@ -319,18 +326,18 @@ namespace LunarDominion.UI
         public const int CampSlotIndexBase = 100;
         private static readonly Vector3[] CampSlotPositions =
         {
-            new Vector3(220f, 0f, 60f), new Vector3(-160f, 0f, 320f), new Vector3(400f, 0f, 160f),
-            new Vector3(-340f, 0f, 240f), new Vector3(80f, 0f, -360f), new Vector3(-480f, 0f, -40f),
-            new Vector3(480f, 0f, -320f), new Vector3(0f, 0f, 400f), new Vector3(240f, 0f, -400f),
-            new Vector3(340f, 0f, 40f), new Vector3(-380f, 0f, 60f), new Vector3(60f, 0f, 240f),
-            new Vector3(-60f, 0f, -380f), new Vector3(500f, 0f, 120f), new Vector3(-240f, 0f, -340f),
-            new Vector3(150f, 0f, -60f), new Vector3(-150f, 0f, -220f), new Vector3(-260f, 0f, 20f),
-            new Vector3(90f, 0f, 300f), new Vector3(-320f, 0f, -180f), new Vector3(420f, 0f, -380f),
-            new Vector3(-440f, 0f, 380f), new Vector3(520f, 0f, 340f), new Vector3(200f, 0f, -260f),
-            new Vector3(-80f, 0f, 120f), new Vector3(-400f, 0f, -420f), new Vector3(-180f, 0f, 430f),
-            new Vector3(500f, 0f, 430f), new Vector3(280f, 0f, -80f), new Vector3(-520f, 0f, -180f),
-            new Vector3(40f, 0f, -160f), new Vector3(-40f, 0f, 260f), new Vector3(430f, 0f, 60f),
-            new Vector3(-520f, 0f, 200f), new Vector3(170f, 0f, 190f), new Vector3(-300f, 0f, -450f),
+            new Vector3(660f, 0f, 180f), new Vector3(-480f, 0f, 960f), new Vector3(1200f, 0f, 480f),
+            new Vector3(-1020f, 0f, 720f), new Vector3(240f, 0f, -1080f), new Vector3(-1440f, 0f, -120f),
+            new Vector3(1440f, 0f, -960f), new Vector3(0f, 0f, 1200f), new Vector3(720f, 0f, -1200f),
+            new Vector3(1020f, 0f, 120f), new Vector3(-1140f, 0f, 180f), new Vector3(180f, 0f, 720f),
+            new Vector3(-180f, 0f, -1140f), new Vector3(1500f, 0f, 360f), new Vector3(-720f, 0f, -1020f),
+            new Vector3(450f, 0f, -180f), new Vector3(-450f, 0f, -660f), new Vector3(-780f, 0f, 60f),
+            new Vector3(270f, 0f, 900f), new Vector3(-960f, 0f, -540f), new Vector3(1260f, 0f, -1140f),
+            new Vector3(-1320f, 0f, 1140f), new Vector3(1560f, 0f, 1020f), new Vector3(600f, 0f, -780f),
+            new Vector3(-240f, 0f, 360f), new Vector3(-1200f, 0f, -1260f), new Vector3(-540f, 0f, 1290f),
+            new Vector3(1500f, 0f, 1290f), new Vector3(840f, 0f, -240f), new Vector3(-1560f, 0f, -540f),
+            new Vector3(120f, 0f, -480f), new Vector3(-120f, 0f, 780f), new Vector3(1290f, 0f, 180f),
+            new Vector3(-1560f, 0f, 600f), new Vector3(510f, 0f, 570f), new Vector3(-900f, 0f, -1350f),
         };
         // What each slot currently shows: the tier built (0 = empty)
         // and whether it should be visible (the service owns the state;
@@ -515,10 +522,62 @@ namespace LunarDominion.UI
             return 0f;
         }
 
-        /// <summary>The sculpted terrain's height at (x, z), in
-        /// world units (before the mesh's -0.05 offset). Mirrors
-        /// BuildExteriorTerrainV7.py — change both together.</summary>
+        // ---- Terrain transplant (2026-11-20, Phase 3) ----
+        // The world is the old 1120x960 landscape at WorldScale x3
+        // footprint and HeightScaleFactor x6 height, baked by
+        // TerrainTransplantBuilder into a Unity TerrainData
+        // (Resources/Terrain/LunarTerrain). TerrainHeight samples
+        // that data, so hand-sculpting the terrain later moves the
+        // gameplay ground truth with it. If the data asset is
+        // missing (e.g. a fresh clone), the analytic replica below
+        // reproduces the identical shape mathematically.
+        private const float WorldScale = 3f;
+        private const float HeightScaleFactor = 6f;
+        private const float WorldHalfX = 560f * WorldScale; // 1680
+        private const float WorldHalfZ = 480f * WorldScale; // 1440
+        private const float TerrainMinY = -5.2f * HeightScaleFactor; // -31.2
+        private const string TerrainDataPath = "Terrain/LunarTerrain";
+        private const string TerrainMaterialPath = "Terrain/LunarTerrainMat";
+
+        private static TerrainData _terrainData;
+        private static bool _terrainLoadTried;
+
+        private static TerrainData LoadTerrainData()
+        {
+            if (!_terrainLoadTried)
+            {
+                _terrainLoadTried = true;
+                try { _terrainData = Resources.Load<TerrainData>(TerrainDataPath); }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[ExteriorView] Terrain data failed to load (" + TerrainDataPath + "): " + e.Message);
+                }
+            }
+            return _terrainData;
+        }
+
+        /// <summary>The terrain's height at (x, z) in world units:
+        /// sampled from the transplant TerrainData when present,
+        /// else the analytic replica of the same landscape.</summary>
         public static float TerrainHeight(float x, float z)
+        {
+            var data = LoadTerrainData();
+            if (data != null)
+            {
+                float u = Mathf.Clamp01((x + WorldHalfX) / (WorldHalfX * 2f));
+                float v = Mathf.Clamp01((z + WorldHalfZ) / (WorldHalfZ * 2f));
+                return TerrainMinY + data.GetInterpolatedHeight(u, v);
+            }
+            return AnalyticHeight(x / WorldScale, z / WorldScale) * HeightScaleFactor;
+        }
+
+        /// <summary>The ORIGINAL pre-transplant analytic height, in
+        /// OLD world coordinates — the TerrainTransplantBuilder bake
+        /// sampled exactly this function. Kept as the fallback shape;
+        /// mirrors BuildExteriorTerrainV7.py. The site tables now
+        /// hold NEW coordinates, so the flatten discs below divide
+        /// them back by WorldScale.</summary>
+        private static float AnalyticHeight(float x, float z)
         {
             float d = 2.4f * Mathf.Sin(0.021f * x + 1.7f) * Mathf.Sin(0.017f * z - 0.6f)
                     + 1.75f * Mathf.Sin(0.043f * x - 2.1f) * Mathf.Sin(0.052f * z + 1.2f)
@@ -548,15 +607,15 @@ namespace LunarDominion.UI
                 if (def.Kind == MapPointKind.Camp) continue;
                 float rIn = def.Kind == MapPointKind.BossLair ? 19f : 10f;
                 float rOut = def.Kind == MapPointKind.BossLair ? 28f : 17f;
-                float dx = x - def.Position.x;
-                float dz = z - def.Position.z;
+                float dx = x - def.Position.x / WorldScale;
+                float dz = z - def.Position.z / WorldScale;
                 m = Mathf.Min(m, TerrainSmoothstep(rIn, rOut, Mathf.Sqrt(dx * dx + dz * dz)));
             }
             // Camp slot discs.
             foreach (var pos in CampSlotPositions)
             {
-                float dx = x - pos.x;
-                float dz = z - pos.z;
+                float dx = x - pos.x / WorldScale;
+                float dz = z - pos.z / WorldScale;
                 m = Mathf.Min(m, TerrainSmoothstep(21f, 30f, Mathf.Sqrt(dx * dx + dz * dz)));
             }
             m *= 1f - TerrainSmoothstep(516f, 560f, Mathf.Abs(x));
@@ -755,96 +814,42 @@ namespace LunarDominion.UI
 
         public void Build()
         {
-            // The x4 map (2026-11-14) pushes sightlines past the
-            // default 1000 far plane when panned into a corner -
-            // raise it so the far side of the world never clips.
+            // The x3 transplant world pushes sightlines past the
+            // old 3000 far plane when panned into a corner — raise
+            // it so the far side of the world never clips.
             var mainCam = Camera.main;
-            if (mainCam != null && mainCam.farClipPlane < 3000f) mainCam.farClipPlane = 3000f;
+            if (mainCam != null && mainCam.farClipPlane < 6000f) mainCam.farClipPlane = 6000f;
             BuildAmbience();
-            GameObject terrainPrefab = null;
-            try
-            {
-                terrainPrefab = Resources.Load<GameObject>("Models/ExteriorTerrain");
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning("[ExteriorView] Exterior terrain failed to load (Models/ExteriorTerrain): " + e.Message);
-            }
 
-            if (terrainPrefab == null)
+            // Terrain transplant (2026-11-20, Phase 3): the ground
+            // is a Unity Terrain built from the baked TerrainData
+            // (TerrainTransplantBuilder), replacing the
+            // ExteriorTerrain FBX heightfield and its tint/regolith
+            // material code — the TerrainData carries its own splat
+            // painting (Grass_Moss base coat for now; roads and
+            // clearings arrive with the Phase 4 bake). The terrain
+            // sits with its corner at (-WorldHalfX, TerrainMinY,
+            // -WorldHalfZ), the same placement the builder's probes
+            // verified.
+            var terrainData = LoadTerrainData();
+            if (terrainData == null)
             {
-                Debug.LogWarning("[ExteriorView] ExteriorTerrain.fbx is missing — the Map tab will show the base ground only. Copy ExteriorTerrain.fbx into Assets/_Project/Resources/Models/ (do not rename it).");
+                Debug.LogWarning("[ExteriorView] LunarTerrain data is missing — the Map tab will show the base ground only. Run 'Lunar Dominion/Terrain Transplant/1. Build Terrain Data' in the Editor (the asset lives in Assets/_Project/Resources/Terrain).");
                 return;
             }
 
-            _terrain = Instantiate(terrainPrefab);
-            _terrain.name = "ExteriorGround";
-            // Slightly below the base ground (y 0) so the two meshes
-            // never z-fight where they overlap: the exterior mesh is
-            // flat (h 0) across the central 56x48 base footprint, and
-            // the base ground sits 0.05 above it. The step is invisible
-            // from the exterior camera. Do NOT set the rotation here —
-            // same Bake Axis Conversion lesson as the base terrain
-            // (see BaseView.BuildGround): the FBX carries a -90 deg X
-            // axis conversion, and forcing identity would render the
-            // heightfield as a vertical slab.
-            _terrain.transform.position = new Vector3(0f, -0.05f, 0f);
-            _terrain.transform.localScale = Vector3.one;
-
-            // Regolith texture, same density as the base ground: the
-            // base tiles (8,7) across 56x48 (1 tile per 7 units), so
-            // the 1120x960 map tiles (160,137). Wrap Mode Repeat. The
-            // colour is darkened to 0.7 (Patrick 2026-11-09: the map
-            // terrain read almost white/snowy at (40,34) from the far
-            // camera — the fine texture averages out to light grey, so
-            // the material colour pulls it back toward lunar grey).
-            var renderer = _terrain.GetComponentInChildren<Renderer>();
-            // Terrain V3 (2026-11-12): when the baked tint texture
-            // is installed (BuildExteriorTerrainV3.py writes
-            // ExteriorTerrainTint.png into Resources/Textures), it
-            // replaces the tiling regolith on the terrain — it
-            // carries the soft crater shading and mottling the
-            // mockup look needs, authored at the regolith palette,
-            // so the material colour stays white and the UVs map
-            // 1:1. Without it, the tiling regolith below applies
-            // exactly as before.
-            var tint = Resources.Load<Texture2D>("Textures/ExteriorTerrainTint");
-            if (tint != null && renderer != null)
-            {
-                tint.wrapMode = TextureWrapMode.Clamp;
-                renderer.material.mainTexture = tint;
-                renderer.material.mainTextureScale = new Vector2(1f, 1f);
-                renderer.material.color = Color.white;
-                // Terrain normal map (graphics step 3,
-                // 2026-11-16): ExteriorTerrainNormal.png in
-                // Resources/Textures — grain relief on the
-                // fields plus domed relief under the tint's
-                // cobblestones, world-mapped 1:1 like the
-                // tint. Its import type must be Normal Map
-                // (a one-time Inspector setting) or the
-                // encoding reads wrong. Absent = flat tint,
-                // exactly as before.
-                var normal = Resources.Load<Texture2D>("Textures/ExteriorTerrainNormal");
-                if (normal != null)
-                {
-                    normal.wrapMode = TextureWrapMode.Clamp;
-                    renderer.material.SetTexture("_BumpMap", normal);
-                    renderer.material.SetTextureScale("_BumpMap", new Vector2(1f, 1f));
-                    renderer.material.SetFloat("_BumpScale", 0.6f);
-                    renderer.material.EnableKeyword("_NORMALMAP");
-                }
-            }
-            else
-            {
-                var regolith = Resources.Load<Texture2D>("Textures/GroundRegolith");
-                if (regolith != null && renderer != null)
-                {
-                    regolith.wrapMode = TextureWrapMode.Repeat;
-                    renderer.material.mainTexture = regolith;
-                    renderer.material.mainTextureScale = new Vector2(160f, 137f);
-                    renderer.material.color = new Color(0.7f, 0.7f, 0.7f);
-                }
-            }
+            var terrainGo = new GameObject("ExteriorGround");
+            var terrain = terrainGo.AddComponent<Terrain>();
+            terrain.terrainData = terrainData;
+            terrain.drawTreesAndFoliage = true;
+            terrain.heightmapPixelError = 5f;
+            terrain.detailObjectDistance = 160f;
+            var terrainMat = Resources.Load<Material>(TerrainMaterialPath);
+            if (terrainMat != null) terrain.materialTemplate = terrainMat;
+            var terrainCollider = terrainGo.AddComponent<TerrainCollider>();
+            terrainCollider.terrainData = terrainData;
+            terrainGo.transform.position = new Vector3(-WorldHalfX, TerrainMinY, -WorldHalfZ);
+            _terrain = terrainGo;
 
             // Start hidden — the Base tab is the default view.
             _terrain.SetActive(false);
@@ -1387,11 +1392,11 @@ namespace LunarDominion.UI
         }
         private static readonly CreatureDef[] CreatureDefs =
         {
-            // Boss — War Robot at its lair (-480, -400), lair index 21.
+            // Boss — War Robot at its lair (-1440, -1200), lair index 21.
             // Scale 4x: a GIANT war robot, twice the size of the Brood
-            // Tyrant. Stands 12 units north of the lair structure so the
+            // Tyrant. Stands 36 units north of the lair structure so the
             // two do not overlap. Tapping it selects the lair.
-            new CreatureDef { ResourcePath = "Models/WarRobot", CampIndex = 21, Position = new Vector3(-480f, 0f, -388f), Scale = 4f },
+            new CreatureDef { ResourcePath = "Models/WarRobot", CampIndex = 21, Position = new Vector3(-1440f, 0f, -1164f), Scale = 4f },
         };
 
         private void BuildCreatures()
@@ -1965,58 +1970,58 @@ namespace LunarDominion.UI
         private static readonly Vector2[] RoadJunctions =
         {
             new Vector2(0.0f, 0.0f),
-            new Vector2(160.0f, 0.0f),
-            new Vector2(320.0f, 0.0f),
-            new Vector2(470.0f, 0.0f),
-            new Vector2(147.8f, 61.2f),
-            new Vector2(295.6f, 122.5f),
-            new Vector2(434.2f, 179.9f),
-            new Vector2(113.1f, 113.1f),
-            new Vector2(226.3f, 226.3f),
-            new Vector2(320.5f, 343.7f),
-            new Vector2(61.2f, 147.8f),
-            new Vector2(132.7f, 291.2f),
-            new Vector2(171.3f, 413.6f),
-            new Vector2(0.0f, 160.0f),
-            new Vector2(0.0f, 320.0f),
-            new Vector2(-50.4f, 410.5f),
-            new Vector2(-56.0f, 149.9f),
-            new Vector2(-122.5f, 295.6f),
-            new Vector2(-142.1f, 424.5f),
-            new Vector2(-117.0f, 109.1f),
-            new Vector2(-226.3f, 226.3f),
-            new Vector2(-332.3f, 332.3f),
-            new Vector2(-147.8f, 61.2f),
-            new Vector2(-295.6f, 122.5f),
-            new Vector2(-427.7f, 194.9f),
-            new Vector2(-160.0f, 0.0f),
-            new Vector2(-320.0f, 0.0f),
-            new Vector2(-470.0f, 0.0f),
-            new Vector2(-147.8f, -61.2f),
-            new Vector2(-295.6f, -122.5f),
-            new Vector2(-434.2f, -179.9f),
-            new Vector2(-89.5f, -132.6f),
-            new Vector2(-226.3f, -226.3f),
-            new Vector2(-332.3f, -332.3f),
-            new Vector2(-61.2f, -147.8f),
-            new Vector2(-122.5f, -295.6f),
-            new Vector2(-142.1f, -424.5f),
-            new Vector2(-0.0f, -160.0f),
-            new Vector2(-22.3f, -319.2f),
-            new Vector2(-0.0f, -413.6f),
-            new Vector2(78.8f, -139.3f),
-            new Vector2(122.5f, -295.6f),
-            new Vector2(171.3f, -413.6f),
-            new Vector2(113.1f, -113.1f),
-            new Vector2(226.3f, -226.3f),
-            new Vector2(332.3f, -332.3f),
-            new Vector2(159.0f, -18.1f),
-            new Vector2(278.5f, -157.6f),
-            new Vector2(434.2f, -179.9f),
-            new Vector2(452.0f, 379.2f),
-            new Vector2(-477.3f, 346.8f),
-            new Vector2(-438.5f, -394.8f),
-            new Vector2(464.9f, -363.2f),
+            new Vector2(480.0f, 0.0f),
+            new Vector2(960.0f, 0.0f),
+            new Vector2(1410.0f, 0.0f),
+            new Vector2(443.4f, 183.6f),
+            new Vector2(886.8f, 367.5f),
+            new Vector2(1302.6f, 539.7f),
+            new Vector2(339.3f, 339.3f),
+            new Vector2(678.9f, 678.9f),
+            new Vector2(961.5f, 1031.1f),
+            new Vector2(183.6f, 443.4f),
+            new Vector2(398.1f, 873.6f),
+            new Vector2(513.9f, 1240.8f),
+            new Vector2(0.0f, 480.0f),
+            new Vector2(0.0f, 960.0f),
+            new Vector2(-151.2f, 1231.5f),
+            new Vector2(-168.0f, 449.7f),
+            new Vector2(-367.5f, 886.8f),
+            new Vector2(-426.3f, 1273.5f),
+            new Vector2(-351.0f, 327.3f),
+            new Vector2(-678.9f, 678.9f),
+            new Vector2(-996.9f, 996.9f),
+            new Vector2(-443.4f, 183.6f),
+            new Vector2(-886.8f, 367.5f),
+            new Vector2(-1283.1f, 584.7f),
+            new Vector2(-480.0f, 0.0f),
+            new Vector2(-960.0f, 0.0f),
+            new Vector2(-1410.0f, 0.0f),
+            new Vector2(-443.4f, -183.6f),
+            new Vector2(-886.8f, -367.5f),
+            new Vector2(-1302.6f, -539.7f),
+            new Vector2(-268.5f, -397.8f),
+            new Vector2(-678.9f, -678.9f),
+            new Vector2(-996.9f, -996.9f),
+            new Vector2(-183.6f, -443.4f),
+            new Vector2(-367.5f, -886.8f),
+            new Vector2(-426.3f, -1273.5f),
+            new Vector2(-0.0f, -480.0f),
+            new Vector2(-66.9f, -957.6f),
+            new Vector2(-0.0f, -1240.8f),
+            new Vector2(236.4f, -417.9f),
+            new Vector2(367.5f, -886.8f),
+            new Vector2(513.9f, -1240.8f),
+            new Vector2(339.3f, -339.3f),
+            new Vector2(678.9f, -678.9f),
+            new Vector2(996.9f, -996.9f),
+            new Vector2(477.0f, -54.3f),
+            new Vector2(835.5f, -472.8f),
+            new Vector2(1302.6f, -539.7f),
+            new Vector2(1356.0f, 1137.6f),
+            new Vector2(-1431.9f, 1040.4f),
+            new Vector2(-1315.5f, -1184.4f),
+            new Vector2(1394.7f, -1089.6f),
         };
         private static readonly int[,] RoadEdges =
         {
@@ -3411,14 +3416,15 @@ namespace LunarDominion.UI
             _ambienceRoot = new GameObject("ExteriorAmbience");
             _ambienceRoot.SetActive(false);
 
-            // Sky dome: a code-built sphere (radius 1350, inside
+            // Sky dome: a code-built sphere (radius 4050 — x3 with
+            // the transplant world, was 1350, inside
             // the 3000 far plane) with its triangles wound so the
             // inside faces the camera, textured with a runtime
             // gradient — bright azure day sky since Round 3
             // Phase 4 (was the Alien Twilight gradient).
             var dome = new GameObject("TwilightSky");
             dome.transform.SetParent(_ambienceRoot.transform, false);
-            dome.AddComponent<MeshFilter>().sharedMesh = BuildSkyDomeMesh(1350f, 32, 16);
+            dome.AddComponent<MeshFilter>().sharedMesh = BuildSkyDomeMesh(4050f, 32, 16);
             var domeRenderer = dome.AddComponent<MeshRenderer>();
             var skyShader = Shader.Find("Universal Render Pipeline/Unlit");
             if (skyShader != null)
@@ -3599,7 +3605,7 @@ namespace LunarDominion.UI
             // geometric horizon, so the planet sits past the map's
             // NW corner (partly occluded by the terrain edge when
             // panned fully NW) instead of up in the unseen sky.
-            group.transform.position = new Vector3(-880f, -210f, -820f);
+            group.transform.position = new Vector3(-2640f, -630f, -2460f);
             group.transform.LookAt(new Vector3(0f, 30f, 0f));
             group.transform.Rotate(0f, 0f, -14f, Space.Self);
 
@@ -3609,7 +3615,7 @@ namespace LunarDominion.UI
             // Disc with gas-giant bands.
             var disc = new GameObject("PlanetDisc");
             disc.transform.SetParent(group.transform, false);
-            disc.AddComponent<MeshFilter>().sharedMesh = BuildDiscMesh(95f, 40);
+            disc.AddComponent<MeshFilter>().sharedMesh = BuildDiscMesh(285f, 40);
             var discRenderer = disc.AddComponent<MeshRenderer>();
             var discMat = new Material(unlit);
             discMat.SetFloat("_Cull", 0f); // double-sided: visible however the group tilts
@@ -3632,7 +3638,7 @@ namespace LunarDominion.UI
             // Ring: a flat translucent annulus in the same plane.
             var ring = new GameObject("PlanetRing");
             ring.transform.SetParent(group.transform, false);
-            ring.AddComponent<MeshFilter>().sharedMesh = BuildRingMesh(128f, 208f, 48);
+            ring.AddComponent<MeshFilter>().sharedMesh = BuildRingMesh(384f, 624f, 48);
             var ringRenderer = ring.AddComponent<MeshRenderer>();
             var ringMat = new Material(unlit);
             ringMat.SetFloat("_Cull", 0f);
@@ -3809,8 +3815,8 @@ namespace LunarDominion.UI
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = new Color(0.62f, 0.76f, 0.88f);
-            RenderSettings.fogStartDistance = 700f;
-            RenderSettings.fogEndDistance = 2600f;
+            RenderSettings.fogStartDistance = 2100f;
+            RenderSettings.fogEndDistance = 7800f;
             if (_ambSun != null) { _ambSun.color = new Color(1.0f, 0.98f, 0.94f); _ambSun.intensity = 1.6f; }
             if (_ambFill != null) { _ambFill.color = new Color(0.50f, 0.62f, 0.80f); _ambFill.intensity = 0.35f; }
             if (cam != null) cam.backgroundColor = new Color(0.35f, 0.58f, 0.85f);

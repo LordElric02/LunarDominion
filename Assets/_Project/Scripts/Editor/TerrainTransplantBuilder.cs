@@ -38,7 +38,9 @@ namespace LunarDominion.Editor
         private const float AnalyticMax = 8.0f;
 
         private const int HeightmapResolution = 2049;
-        private const string TerrainFolder = "Assets/_Project/Terrain";
+        // Resources/ so the runtime (ExteriorView) can load the
+        // TerrainData + material with Resources.Load — Phase 3.
+        private const string TerrainFolder = "Assets/_Project/Resources/Terrain";
         private const string TerrainAssetPath = TerrainFolder + "/LunarTerrain.asset";
         private const string MaterialPath = TerrainFolder + "/LunarTerrainMat.mat";
         private const string GrassTexturePath = TerrainFolder + "/GrassBlades.png";
@@ -65,7 +67,7 @@ namespace LunarDominion.Editor
 
             if (!AssetDatabase.IsValidFolder(TerrainFolder))
             {
-                AssetDatabase.CreateFolder("Assets/_Project", "Terrain");
+                AssetDatabase.CreateFolder("Assets/_Project/Resources", "Terrain");
             }
 
             var data = new TerrainData();
