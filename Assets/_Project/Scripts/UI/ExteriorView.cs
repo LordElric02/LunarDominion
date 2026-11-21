@@ -1598,7 +1598,15 @@ namespace LunarDominion.UI
                 }
                 var go = Instantiate(prefab);
                 go.name = def.Title;
-                go.transform.position = def.Position;
+                // Grounded (2026-11-21): NodeDefs positions carry
+                // y=0 from the old flat world; at HeightScale 6
+                // the surface here is TerrainHeight, so an
+                // ungrounded node floats or sinks (Patrick
+                // spotted a Biomass node hovering). Camp slots
+                // got this grounding in Phase 3; the nodes and
+                // the lair were missed.
+                var dp = def.Position;
+                go.transform.position = new Vector3(dp.x, TerrainHeight(dp.x, dp.z), dp.z);
                 // Same rotation rule as the terrain: leave the imported
                 // rotation alone (Bake Axis Conversion). Scaled 2x
                 // (Patrick 2026-11-09): at 1x the nodes/camps read as
@@ -3125,7 +3133,8 @@ namespace LunarDominion.UI
         {
             position = Vector3.zero;
             if (index < 0 || index >= NodeDefs.Length) return false;
-            position = NodeDefs[index].Position;
+            var p = NodeDefs[index].Position;
+            position = new Vector3(p.x, TerrainHeight(p.x, p.z), p.z);
             return true;
         }
 
