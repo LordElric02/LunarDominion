@@ -29,7 +29,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 # CONFIG - edit the source path if your project lives somewhere else.
 # ---------------------------------------------------------------------------
-SOURCE_FBX = r"F:\Unity\Projects\LunarDominion\LunarDominion\Assets\_Project\Resources\Models\EnemyBase.fbx"
+SOURCE_FBX = r"F:\Unity\Projects\LunarDominion\Assets\_Project\Resources\Models\EnemyBase.fbx"
 OUT_FBX = r"F:\EnemyBase_Clean.fbx"
 OUT_REPORT = r"F:\EnemyBase_Clean_Report.txt"
 
