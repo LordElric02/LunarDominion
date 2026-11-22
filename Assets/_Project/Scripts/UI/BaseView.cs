@@ -86,6 +86,24 @@ namespace LunarDominion.UI
         private GameObject _hospitalAlert;
         private Vector3 _hospitalAlertBaseScale = new Vector3(0.5f, 0.5f, 0.5f);
 
+        // Hospital sign (2026-11-21, Patrick): the old Blender
+        // hospital model carried red crosses; the Vol 2 kit room
+        // does not, so the cross is code-built on the roof — a
+        // white pad with a standing red cross — sized and placed
+        // from the building's measured bounds, so it fits whichever
+        // hospital visual is installed. The alert sphere anchors to
+        // the same measurement: its old fixed offsets were tuned
+        // for the FBX model's height (top ~2.24) and ended up
+        // buried inside the taller kit building, which is why the
+        // alert vanished when the kit hospital landed.
+        private GameObject _hospitalSign;
+        private bool _hospitalRoofMeasured;
+        private Vector3 _hospitalRoofCenter;
+        private float _hospitalRoofTopY;
+        // Pad (0.14) + cross bar height (2.3): the alert floats
+        // this far above the roof, plus its own clearance.
+        private const float HospitalCrossTop = 2.44f;
+
         // Base camera pan (2026-11-09, expanded base): the base is now
         // wider than the screen, so the camera can be panned across it
         // — arrow keys on PC, touch/mouse drag on the phone (and in the
@@ -3424,20 +3442,98 @@ namespace LunarDominion.UI
             }
         }
 
+        /// <summary>Hospital roof sign (2026-11-21, Patrick): a white
+        /// pad and a standing red cross on the Hospital roof — the
+        /// old Blender hospital model had red crosses modelled in;
+        /// the Vol 2 kit room does not. Built once, as a child of the
+        /// building root (so it hides with the building), from the
+        /// building's measured world bounds: the group is anchored at
+        /// the roof centre and counter-scaled against the root's
+        /// lossy scale, so the cross comes out at the same world
+        /// size on the kit, model and primitive hospitals alike.
+        /// Also records the roof anchor the alert sphere uses.</summary>
+        private void EnsureHospitalSign(GameObject hospital)
+        {
+            if (_hospitalSign != null) return;
+            // Measure BEFORE the sign exists, so it never measures
+            // itself. The hospital root's own renderers (if any) and
+            // its children's all count.
+            var renderers = hospital.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return;
+            var bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            _hospitalRoofCenter = new Vector3(bounds.center.x, 0f, bounds.center.z);
+            _hospitalRoofTopY = bounds.max.y;
+            _hospitalRoofMeasured = true;
+
+            var lossy = hospital.transform.lossyScale;
+            var group = new GameObject("HospitalSign");
+            group.transform.SetParent(hospital.transform, false);
+            group.transform.position = new Vector3(bounds.center.x, bounds.max.y, bounds.center.z);
+            group.transform.localScale = new Vector3(
+                1f / Mathf.Max(0.01f, lossy.x),
+                1f / Mathf.Max(0.01f, lossy.y),
+                1f / Mathf.Max(0.01f, lossy.z));
+            // The group inherits the root's yaw; the cross is
+            // symmetric, so the yaw is invisible.
+
+            // White pad on the roof (the cylinder primitive is 2
+            // units tall and 2 across, hence the half scales).
+            var pad = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pad.name = "HospitalSignPad";
+            pad.transform.SetParent(group.transform, false);
+            pad.transform.localPosition = new Vector3(0f, 0.07f, 0f);
+            pad.transform.localScale = new Vector3(1.15f, 0.07f, 1.15f);
+            var padCol = pad.GetComponent<Collider>();
+            if (padCol != null) Destroy(padCol);
+            SetPrimitiveColor(pad.GetComponent<Renderer>(), new Color(0.95f, 0.95f, 0.97f));
+
+            // Standing red cross: two boxes with real depth, so it
+            // reads as a cross from every camera angle.
+            var vBar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            vBar.name = "HospitalSignCrossV";
+            vBar.transform.SetParent(group.transform, false);
+            vBar.transform.localPosition = new Vector3(0f, 0.14f + 1.15f, 0f);
+            vBar.transform.localScale = new Vector3(0.55f, 2.3f, 0.55f);
+            var vCol = vBar.GetComponent<Collider>();
+            if (vCol != null) Destroy(vCol);
+            var vRend = vBar.GetComponent<Renderer>();
+            SetPrimitiveColor(vRend, new Color(0.92f, 0.08f, 0.08f));
+            var vMat = vRend != null ? vRend.material : null;
+            if (vMat != null && vMat.HasProperty("_EmissionColor"))
+                vMat.SetColor("_EmissionColor", new Color(0.55f, 0.03f, 0.03f));
+
+            var hBar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            hBar.name = "HospitalSignCrossH";
+            hBar.transform.SetParent(group.transform, false);
+            hBar.transform.localPosition = new Vector3(0f, 0.14f + 1.55f, 0f);
+            hBar.transform.localScale = new Vector3(1.55f, 0.55f, 0.55f);
+            var hCol = hBar.GetComponent<Collider>();
+            if (hCol != null) Destroy(hCol);
+            var hRend = hBar.GetComponent<Renderer>();
+            SetPrimitiveColor(hRend, new Color(0.92f, 0.08f, 0.08f));
+            var hMat = hRend != null ? hRend.material : null;
+            if (hMat != null && hMat.HasProperty("_EmissionColor"))
+                hMat.SetColor("_EmissionColor", new Color(0.55f, 0.03f, 0.03f));
+
+            _hospitalSign = group;
+        }
+
         /// <summary>Hospital alert (2026-11-09): when injured units are
         /// waiting to be healed, a red sphere above the Hospital pulses
         /// (the hospital "lights up"); when none are injured it is
         /// hidden. Created lazily as a child of the Hospital building
-        /// object, so it sits above the building whether the building is
-        /// the FBX model (scale 1, top ~2.24) or the primitive fallback
-        /// (scale 2/1.8/2, top 1.8). Runs every frame, like AnimateReactor.</summary>
+        /// object and anchored to the measured roof (EnsureHospitalSign),
+        /// so it floats above the roof cross on any hospital visual.
+        /// Runs every frame, like AnimateReactor.</summary>
         private void UpdateHospitalAlert()
         {
             if (_controller == null || _controller.Hospital == null) return;
             bool hasInjured = _controller.Hospital.HasInjured;
-            if (_hospitalAlert == null)
+            if (!_buildingObjects.TryGetValue(BuildingId.Hospital, out var hospital) || hospital == null) return;
+            EnsureHospitalSign(hospital);
+            if (_hospitalAlert == null && _hospitalRoofMeasured)
             {
-                if (!_buildingObjects.TryGetValue(BuildingId.Hospital, out var hospital) || hospital == null) return;
                 _hospitalAlert = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 _hospitalAlert.name = "HospitalAlert";
                 _hospitalAlert.transform.SetParent(hospital.transform, false);
@@ -3445,20 +3541,19 @@ namespace LunarDominion.UI
                 // is visual only and must never block a building tap.
                 var col = _hospitalAlert.GetComponent<Collider>();
                 if (col != null) Destroy(col);
-                bool isModel = _modelRenderers.ContainsKey(BuildingId.Hospital);
-                if (isModel)
-                {
-                    _hospitalAlert.transform.localPosition = new Vector3(0f, 3.3f, 0f);
-                    _hospitalAlertBaseScale = new Vector3(0.5f, 0.5f, 0.5f);
-                }
-                else
-                {
-                    // Primitive fallback: the parent is scaled (2, 1.8, 2),
-                    // so the local position/scale are divided to land at the
-                    // same world spot/size as the model case (y 2.97, 0.5 wide).
-                    _hospitalAlert.transform.localPosition = new Vector3(0f, 1.15f, 0f);
-                    _hospitalAlertBaseScale = new Vector3(0.25f, 0.28f, 0.25f);
-                }
+                // Anchor from the measured roof (EnsureHospitalSign):
+                // the sphere floats above the roof cross at a fixed
+                // WORLD size, whatever the building root's scale is.
+                // (The fixed local offsets this replaces were tuned
+                // for the old FBX hospital and buried the sphere
+                // inside the taller kit building.)
+                var lossy = hospital.transform.lossyScale;
+                _hospitalAlert.transform.position = new Vector3(
+                    _hospitalRoofCenter.x, _hospitalRoofTopY + HospitalCrossTop + 0.85f, _hospitalRoofCenter.z);
+                _hospitalAlertBaseScale = new Vector3(
+                    0.9f / Mathf.Max(0.01f, lossy.x),
+                    0.9f / Mathf.Max(0.01f, lossy.y),
+                    0.9f / Mathf.Max(0.01f, lossy.z));
                 _hospitalAlert.transform.localScale = _hospitalAlertBaseScale;
                 var rend = _hospitalAlert.GetComponent<Renderer>();
                 SetPrimitiveColor(rend, new Color(1f, 0.15f, 0.15f));
@@ -3469,11 +3564,14 @@ namespace LunarDominion.UI
                 if (mat != null && mat.HasProperty("_EmissionColor"))
                     mat.SetColor("_EmissionColor", new Color(1f, 0.1f, 0.1f));
             }
-            _hospitalAlert.SetActive(hasInjured);
-            if (hasInjured)
+            if (_hospitalAlert != null)
             {
-                float pulse = 1f + 0.35f * Mathf.Sin(Time.time * 4f);
-                _hospitalAlert.transform.localScale = _hospitalAlertBaseScale * pulse;
+                _hospitalAlert.SetActive(hasInjured);
+                if (hasInjured)
+                {
+                    float pulse = 1f + 0.35f * Mathf.Sin(Time.time * 4f);
+                    _hospitalAlert.transform.localScale = _hospitalAlertBaseScale * pulse;
+                }
             }
         }
 
@@ -4543,6 +4641,15 @@ namespace LunarDominion.UI
         {
             _visible = visible;
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
+            // The support vehicle hides with the buildings (fix
+            // 2026-11-20): it is in neither the building list nor
+            // the environment toggle, and this component's Update
+            // runs on an always-active host, so on the Map tab it
+            // kept driving its circuit around the castle in the
+            // open (Patrick: "the rover is visible outside the
+            // base"). SetVisible is called on every tab switch, so
+            // it is the single choke point.
+            if (_vehicle != null) _vehicle.SetActive(visible);
             // Becoming visible re-applies the base camera with the
             // pan recentred (2026-11-14): the camera is shared, and
             // the Map and lair leave it at their own poses, so the
