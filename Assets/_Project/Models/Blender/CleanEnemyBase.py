@@ -1,4 +1,4 @@
-# CleanEnemyBase.py  (v2 - join + decimate)
+# CleanEnemyBase.py  (v3 - join + decimate via modifier)
 # Cleans the CGTrader "building space - base" FBX (tony-feijo) for Lunar Dominion.
 #
 # What it does:
@@ -24,14 +24,14 @@
 # RuntimeError instead, which the Text Editor reports without closing.
 #
 # House rules honoured: no bpy.context.active_object / selected_objects reads,
-# no transform_apply (transforms are baked into mesh data directly), joining
-# and decimation are done with plain data APIs (no ops that need a selection).
+# no transform_apply (transforms are baked into mesh data directly). The join
+# is a plain data-API concatenation; decimation uses the Decimate modifier,
+# which needs the object made active by WRITE (safe headless - run headless).
 
 import os
 
 try:
     import bpy
-    import bmesh
     from mathutils import Matrix, Vector
 except Exception as exc:
     raise RuntimeError("CleanEnemyBase.py must be run inside Blender.") from exc
@@ -147,23 +147,30 @@ def join_meshes(meshes):
     return joined
 
 
-def decimate_to(mesh, target_tris):
-    """Collapse-decimate the mesh toward target_tris. Returns final tris."""
+def decimate_object(obj, target_tris):
+    """Collapse-decimate the object's mesh toward target_tris via the
+    Decimate modifier. (bmesh.ops has no decimate operator - learned the
+    hard way in v2.) Runs headless: the object is made active by WRITE,
+    which is safe; the house rule only bans READING context.active_object
+    / selected_objects in the GUI Text Editor. Returns final tris."""
+    mesh = obj.data
     current = tri_count(mesh)
     print("Decimate: %d tris, target %d." % (current, target_tris))
     for attempt in range(2):
         if current <= target_tris:
             break
-        factor = max(0.02, min(0.95, target_tris / float(current)))
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-        geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
-        bmesh.ops.decimate(bm, geom=geom, factor=factor)
-        bm.to_mesh(mesh)
-        bm.free()
+        ratio = max(0.02, min(0.95, target_tris / float(current)))
+        mod = obj.modifiers.new(name="Decimate", type="DECIMATE")
+        mod.decimate_type = "COLLAPSE"
+        mod.ratio = ratio
+        mod.use_collapse_triangulate = True
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        obj.select_set(False)
         mesh.update()
         new = tri_count(mesh)
-        print("  pass %d: factor %.3f -> %d tris." % (attempt + 1, factor, new))
+        print("  pass %d: ratio %.3f -> %d tris." % (attempt + 1, ratio, new))
         if new >= current:  # no progress - stop rather than loop forever
             current = new
             break
@@ -237,10 +244,10 @@ def main():
     joined = join_meshes([o.data for o in meshes])
     for obj in meshes:
         remove_object(obj)
-    tris_after = decimate_to(joined, TARGET_TRIS)
 
     base_obj = bpy.data.objects.new("EnemyBase", joined)
     bpy.context.scene.collection.objects.link(base_obj)
+    tris_after = decimate_object(base_obj, TARGET_TRIS)
 
     # -- 7. Export (scene holds ONLY the building, so export everything). ---
     bpy.ops.export_scene.fbx(
