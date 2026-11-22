@@ -357,22 +357,46 @@ namespace LunarDominion.UI
         // Patrick: "just one structure that stands out"). Loaded
         // once in BuildCampSlots; SetCampSlot swaps the slot's
         // child to the current tier's model.
+        // Enemy fortress (2026-11-22, Patrick's pick): ALL tiers
+        // now use the one cleaned CGTrader fortress
+        // (Models/EnemyBase_Clean - 641 C4D parts joined and
+        // decimated to ~80k tris by CleanEnemyBase.py; a
+        // local-only asset, see Open Issues item 15). The tiers
+        // are SKINS of the one mesh: CampStructureFootprints sets
+        // each tier's size and CampStructureTints its colour,
+        // with a faint emissive in the tier hue at tiers 4-6.
+        // The old Blender-era EnemyCampT1/T2/T3 models are
+        // retired from this table (their files stay in
+        // Resources, unused).
         private static readonly string[] CampStructurePaths =
         {
             null, // tier 0 = empty slot, no structure
-            "Models/EnemyCampT1",
-            "Models/EnemyCampT2",
-            "Models/EnemyCampT3",
-            // Tiers 4-6 (2026-11-16) reuse the three structures at
-            // larger scales (CampStructureScales) until they get
-            // models of their own: T4 = a grown Spore Nest,
-            // T5 = taller Stalker Spires, T6 = a giant Tyrant Maw.
-            "Models/EnemyCampT1",
-            "Models/EnemyCampT2",
-            "Models/EnemyCampT3",
+            "Models/EnemyBase_Clean",
+            "Models/EnemyBase_Clean",
+            "Models/EnemyBase_Clean",
+            "Models/EnemyBase_Clean",
+            "Models/EnemyBase_Clean",
+            "Models/EnemyBase_Clean",
         };
-        private static readonly float[] CampStructureScales =
-            { 0f, 1f, 1f, 1f, 1.45f, 1.4f, 1.45f };
+        // Desired footprint per tier: the longest horizontal
+        // side of the placed structure, in world units.
+        // BuildSlotStructure measures the instantiated bounds
+        // and normalises to this, so the FBX's authored scale
+        // never matters.
+        private static readonly float[] CampStructureFootprints =
+            { 0f, 46f, 52f, 58f, 64f, 71f, 78f };
+        // Per-tier skin: the fortress ships untextured clay, so
+        // the tint IS the albedo colour.
+        private static readonly Color[] CampStructureTints =
+        {
+            Color.white, // tier 0 = no camp
+            new Color(0.62f, 0.66f, 0.60f), // T1 weathered grey-green
+            new Color(0.66f, 0.60f, 0.50f), // T2 dusty tan
+            new Color(0.52f, 0.58f, 0.66f), // T3 slate blue-grey
+            new Color(0.68f, 0.50f, 0.36f), // T4 rust ochre
+            new Color(0.50f, 0.36f, 0.32f), // T5 dark iron red
+            new Color(0.36f, 0.32f, 0.44f), // T6 near-black violet
+        };
         private readonly GameObject[] _campPrefabs = new GameObject[7];
 
         // Arena swap (Patrick 2026-11-16: the simulated camp
@@ -794,11 +818,18 @@ namespace LunarDominion.UI
         }
 
         // Swap in the tier's structure as the slot root's child
-        // (tiers 1-3 are authored at final size, so scale 1;
-        // tiers 4-6 scale a reused model up — the imported
-        // rotation is left alone, per the FBX rule) and refresh
-        // the marker's renderer cache so the per-renderer tinting
-        // in Update keeps working with the new model.
+        // and refresh the marker's renderer cache so the
+        // per-renderer tinting in Update keeps working with the
+        // new model. Fortress skin (2026-11-22): yaw the
+        // structure by a per-slot angle so the camps do not all
+        // face the same way (composed over the prefab's authored
+        // rotation, never replacing it), normalise its scale
+        // from the MEASURED bounds to the tier's footprint, seat
+        // it on the slot root from those same bounds, then apply
+        // the tier tint (plus a faint emissive at tiers 4-6)
+        // BEFORE capturing the marker colours, so selection
+        // tinting treats the skin as the original colour (the
+        // BaseView kit pattern).
         private void BuildSlotStructure(int slot, int tier)
         {
             var marker = _campSlotMarkers[slot];
@@ -809,15 +840,68 @@ namespace LunarDominion.UI
             go.name = CampTitleForTier(tier) + " Structure";
             go.transform.SetParent(marker.Go.transform, false);
             go.transform.localPosition = Vector3.zero;
-            float structureScale = CampStructureScales[tier];
-            if (structureScale > 0f && structureScale != 1f)
-                go.transform.localScale = new Vector3(structureScale, structureScale, structureScale);
+            var yaw = Quaternion.Euler(0f, (slot * 137) % 360, 0f);
+            go.transform.localRotation = yaw * go.transform.localRotation;
+            go.transform.localScale = Vector3.one;
             _campSlotStructures[slot] = go;
             var renderers = go.GetComponentsInChildren<Renderer>();
+
+            // Measure, normalise to the tier footprint, then
+            // re-measure and seat on the ground. Bounds are
+            // world-space; the slot root is unrotated and
+            // unscaled, so world and local Y line up 1:1.
+            Bounds bounds;
+            if (TryMeasureBounds(renderers, out bounds))
+            {
+                float footprint = Mathf.Max(bounds.size.x, bounds.size.z);
+                float target = CampStructureFootprints[tier];
+                if (footprint > 0.01f && target > 0f)
+                {
+                    float factor = target / footprint;
+                    go.transform.localScale = new Vector3(factor, factor, factor);
+                }
+                if (TryMeasureBounds(renderers, out bounds))
+                {
+                    float lift = marker.Go.transform.position.y - bounds.min.y;
+                    go.transform.localPosition = new Vector3(0f, go.transform.localPosition.y + lift, 0f);
+                }
+            }
+
+            // Skin: tint (and high-tier emissive) on each
+            // renderer's own material instance, then capture
+            // the result as the marker's original colours.
             var colors = new Color[renderers.Length];
-            for (int r = 0; r < renderers.Length; r++) colors[r] = renderers[r].material.color;
+            for (int r = 0; r < renderers.Length; r++)
+            {
+                var mat = renderers[r].material;
+                if (mat != null)
+                {
+                    if (mat.HasProperty("_Color")) mat.color = CampStructureTints[tier];
+                    if (tier >= 4 && mat.HasProperty("_EmissionColor"))
+                    {
+                        mat.SetColor("_EmissionColor", CampStructureTints[tier] * 0.35f);
+                        mat.EnableKeyword("_EMISSION");
+                    }
+                }
+                colors[r] = mat != null ? mat.color : Color.white;
+            }
             marker.Renderers = renderers;
             marker.OriginalColors = colors;
+        }
+
+        // Combined world bounds of a renderer set. Returns
+        // false when the set is empty.
+        private static bool TryMeasureBounds(Renderer[] renderers, out Bounds bounds)
+        {
+            bounds = default(Bounds);
+            bool any = false;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] == null) continue;
+                if (!any) { bounds = renderers[i].bounds; any = true; }
+                else bounds.Encapsulate(renderers[i].bounds);
+            }
+            return any;
         }
 
         private void DestroySlotStructure(int slot)
