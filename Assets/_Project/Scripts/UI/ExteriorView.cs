@@ -399,6 +399,73 @@ namespace LunarDominion.UI
         };
         private readonly GameObject[] _campPrefabs = new GameObject[7];
 
+        // Resource node visuals (2026-11-23): the Blender-era
+        // BiomassNode / AlloyNode / HeliumNode models retire from
+        // NodeDefs duty (files stay in Resources, unused) in
+        // favour of the CGTrader packs Patrick pulled on his
+        // Essentials plan (all local-only, Open Issues item 15).
+        // Helium-3 = Resources Pack crystal deposits (colour sets
+        // built in code from Textures/Crystals - the FBX materials
+        // are locked inside the file) plus two Low Poly Crystal
+        // Pack shapes in their baked colours. Biomass = Alien
+        // Planet Environment Pack plants and stumps plus one
+        // Alien Flora plant (native materials). Alloy = the
+        // pack's Standing Stones with a metallic stone skin.
+        // Pieces inside alien-assets are children of the one FBX
+        // root: the pack is instantiated whole and pruned to the
+        // named child, which keeps the authored orientation
+        // exact. A node's ordinal is its index within its
+        // resource (0-5, NodeDefs order = amount ascending). Node
+        // size grows with Amount (NodeFootprintForAmount),
+        // mirroring the camp footprint ladder. Any failure falls
+        // back to the legacy NodeDef model, so a node is never
+        // an empty spot.
+        private static readonly string[] HeliumPackPieces =
+        {
+            "Models/Crystal", "Models/SM_Crystal_Type5", "Models/Crystals",
+            "Models/Crystal", "Models/SM_Crystal_Type2", "Models/Crystals",
+        };
+        // Colour set per Helium ordinal; null = the model's own
+        // baked colours (the Low Poly Crystal Pack shapes).
+        private static readonly string[] HeliumPackSets =
+        {
+            "Ice", null, "Blue", "Blue", null, "Ice",
+        };
+        // alien-assets child per Biomass ordinal; null = the
+        // Alien Flora plant instead.
+        private static readonly string[] BiomassPackPieces =
+        {
+            "Alien Plants", "Alien Plants.004", "Alien Tree Stumps.010",
+            null, "Alien Plants.007", "Alien Tree Stumps.042",
+        };
+        private static readonly string[] AlloyPackPieces =
+        {
+            "Standing Stones.005", "Standing Stones.021", "Standing Stones.037",
+            "Standing Stones.052", "Standing Stones.066", "Standing Stones.079",
+        };
+        private const string AlienPackPath = "Models/alien-assets";
+        private const string AlienFloraPath = "Models/AlienFlora";
+        private static readonly Dictionary<string, GameObject> NodePackCache =
+            new Dictionary<string, GameObject>();
+        private static readonly Dictionary<string, Material> NodeMaterialCache =
+            new Dictionary<string, Material>();
+
+        // Desired footprint per node amount: the longest
+        // horizontal side of the placed visual, in world units.
+        private static float NodeFootprintForAmount(int amount)
+        {
+            switch (amount)
+            {
+                case 500: return 16f;
+                case 1000: return 20f;
+                case 2000: return 24f;
+                case 3500: return 28f;
+                case 5000: return 32f;
+                case 8000: return 38f;
+                default: return 20f;
+            }
+        }
+
         // Arena swap (Patrick 2026-11-16: the simulated camp
         // fight "needs more work" - he picked the full arena
         // version): for the duration of a camp fight the camp
@@ -1656,8 +1723,206 @@ namespace LunarDominion.UI
             };
         }
 
+        // Load (once) a node-pack prefab from Resources.
+        private static GameObject LoadNodePack(string path)
+        {
+            GameObject prefab;
+            if (NodePackCache.TryGetValue(path, out prefab) && prefab != null) return prefab;
+            try
+            {
+                prefab = Resources.Load<GameObject>(path);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[ExteriorView] Node pack failed to load (" + path + "): " + e.Message);
+                prefab = null;
+            }
+            NodePackCache[path] = prefab;
+            return prefab;
+        }
+
+        private static GameObject InstantiateNodeModel(string path)
+        {
+            var prefab = LoadNodePack(path);
+            return prefab != null ? Instantiate(prefab) : null;
+        }
+
+        // Instantiate a whole pack FBX and prune it to one named
+        // direct child. Keeping the pack root preserves the
+        // authored axis conversion, so the piece stands exactly
+        // as it does when the pack is dragged into a scene.
+        private static GameObject InstantiatePackPiece(string packPath, string childName)
+        {
+            var root = InstantiateNodeModel(packPath);
+            if (root == null) return null;
+            Transform keep = null;
+            for (int i = 0; i < root.transform.childCount; i++)
+            {
+                if (root.transform.GetChild(i).name == childName)
+                {
+                    keep = root.transform.GetChild(i);
+                    break;
+                }
+            }
+            if (keep == null)
+            {
+                Debug.LogWarning("[ExteriorView] " + packPath + " has no child named " + childName + ".");
+                Destroy(root);
+                return null;
+            }
+            PrunePackRoot(root, keep);
+            return root;
+        }
+
+        // Same, keeping the n-th direct child that carries a
+        // renderer (AlienFlora's plant names are unknown, so its
+        // pieces are picked by position). A pack with no such
+        // children is returned whole.
+        private static GameObject InstantiatePackChildByIndex(string packPath, int index)
+        {
+            var root = InstantiateNodeModel(packPath);
+            if (root == null) return null;
+            var carriers = new List<Transform>();
+            for (int i = 0; i < root.transform.childCount; i++)
+            {
+                var child = root.transform.GetChild(i);
+                if (child.GetComponentInChildren<Renderer>() != null) carriers.Add(child);
+            }
+            if (carriers.Count == 0) return root;
+            if (index < 0 || index >= carriers.Count) index = 0;
+            PrunePackRoot(root, carriers[index]);
+            return root;
+        }
+
+        private static void PrunePackRoot(GameObject root, Transform keep)
+        {
+            var kill = new List<GameObject>();
+            for (int i = 0; i < root.transform.childCount; i++)
+            {
+                var child = root.transform.GetChild(i);
+                if (child != keep) kill.Add(child.gameObject);
+            }
+            for (int i = 0; i < kill.Count; i++) DestroyImmediate(kill[i]);
+        }
+
+        // URP Lit material with a Resources texture as its base
+        // map, cached by key. The crystal recipe mirrors the
+        // verified KitTest check: base colour map only, white
+        // tint (the pack normal PNGs import as plain textures,
+        // and the base map alone read correctly).
+        private static Material NodeTexturedMaterial(string key, string baseMapPath, Color tint, float metallic, float smoothness)
+        {
+            Material mat;
+            if (NodeMaterialCache.TryGetValue(key, out mat) && mat != null) return mat;
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null) return null;
+            mat = new Material(lit);
+            var tex = Resources.Load<Texture2D>(baseMapPath);
+            if (tex != null) mat.SetTexture("_BaseMap", tex);
+            mat.SetColor("_BaseColor", tint);
+            mat.SetFloat("_Metallic", metallic);
+            mat.SetFloat("_Smoothness", smoothness);
+            NodeMaterialCache[key] = mat;
+            return mat;
+        }
+
+        private static void ApplySharedMaterial(GameObject go, Material mat)
+        {
+            if (go == null || mat == null) return;
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            for (int i = 0; i < renderers.Length; i++) renderers[i].sharedMaterial = mat;
+        }
+
+        // Build and place the pack visual for one resource node
+        // (ordinal = its index within its resource, 0-5). Returns
+        // the placed root, or null to fall back to the legacy
+        // NodeDef model.
+        private GameObject BuildNodeVisual(NodeDef def, int ordinal, int index)
+        {
+            GameObject go = null;
+            try
+            {
+                if (def.Kind == MapPointKind.Helium3)
+                {
+                    go = InstantiateNodeModel(HeliumPackPieces[ordinal]);
+                    string set = HeliumPackSets[ordinal];
+                    if (go != null && set != null)
+                    {
+                        var mat = NodeTexturedMaterial("crystal:" + set,
+                            "Textures/Crystals/Crystal_" + set + "_BaseColor",
+                            Color.white, 0f, 0.55f);
+                        ApplySharedMaterial(go, mat);
+                    }
+                }
+                else if (def.Kind == MapPointKind.Biomass)
+                {
+                    string piece = BiomassPackPieces[ordinal];
+                    if (piece == null)
+                    {
+                        // Alien Flora plant, native materials.
+                        go = InstantiatePackChildByIndex(AlienFloraPath, 0);
+                    }
+                    else
+                    {
+                        go = InstantiatePackPiece(AlienPackPath, piece);
+                        if (go != null)
+                        {
+                            var mat = piece.StartsWith("Alien Tree Stumps")
+                                ? NodeTexturedMaterial("stone:stump", "Textures/AlienPlanet/stone-diffuse", new Color(0.62f, 0.68f, 0.44f), 0f, 0.35f)
+                                : NodeTexturedMaterial("stone:plant", "Textures/AlienPlanet/stone-diffuse", new Color(0.55f, 0.75f, 0.45f), 0f, 0.35f);
+                            ApplySharedMaterial(go, mat);
+                        }
+                    }
+                }
+                else if (def.Kind == MapPointKind.Alloy)
+                {
+                    go = InstantiatePackPiece(AlienPackPath, AlloyPackPieces[ordinal]);
+                    if (go != null)
+                    {
+                        var mat = NodeTexturedMaterial("stone:alloy", "Textures/AlienPlanet/stone-diffuse", new Color(0.66f, 0.70f, 0.78f), 0.55f, 0.45f);
+                        ApplySharedMaterial(go, mat);
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[ExteriorView] Node visual failed (" + def.Kind + " #" + ordinal + "): " + e.Message);
+                if (go != null) Destroy(go);
+                go = null;
+            }
+            if (go == null) return null;
+
+            // Place: ground at the node point, a deterministic
+            // yaw for variety, then the camp pattern - measure,
+            // normalise to the amount footprint, re-measure and
+            // seat on the surface.
+            var dp = def.Position;
+            float ground = TerrainHeight(dp.x, dp.z);
+            go.transform.position = new Vector3(dp.x, ground, dp.z);
+            go.transform.rotation = Quaternion.Euler(0f, (index * 137) % 360, 0f) * go.transform.rotation;
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            Bounds bounds;
+            if (TryMeasureBounds(renderers, out bounds))
+            {
+                float footprint = Mathf.Max(bounds.size.x, bounds.size.z);
+                float target = NodeFootprintForAmount(def.Amount);
+                if (footprint > 0.01f && target > 0f)
+                {
+                    float factor = target / footprint;
+                    go.transform.localScale = go.transform.localScale * factor;
+                }
+                if (TryMeasureBounds(renderers, out bounds))
+                {
+                    float lift = ground - bounds.min.y;
+                    go.transform.position = new Vector3(dp.x, go.transform.position.y + lift, dp.z);
+                }
+            }
+            return go;
+        }
+
         private void BuildMapPoints()
         {
+            int biomassOrdinal = 0, alloyOrdinal = 0, heliumOrdinal = 0;
             for (int i = 0; i < NodeDefs.Length; i++)
             {
                 var def = NodeDefs[i];
@@ -1666,39 +1931,61 @@ namespace LunarDominion.UI
                 // instead (BuildCampSlots). The NodeDefs camp entries
                 // remain only as the original layout record.
                 if (def.Kind == MapPointKind.Camp) continue;
-                GameObject prefab = null;
-                try
+                // Ordinal within the node's resource (0-5 in
+                // NodeDefs order) picks its pack visual. Resource
+                // nodes try the 2026-11-23 pack visual first and
+                // fall back to the legacy NodeDef model below; the
+                // boss lair always takes the legacy path.
+                int ordinal = -1;
+                if (def.Kind == MapPointKind.Biomass) ordinal = biomassOrdinal++;
+                else if (def.Kind == MapPointKind.Alloy) ordinal = alloyOrdinal++;
+                else if (def.Kind == MapPointKind.Helium3) ordinal = heliumOrdinal++;
+                var go = ordinal >= 0 ? BuildNodeVisual(def, ordinal, i) : null;
+                bool packPlaced = go != null;
+                if (!packPlaced)
                 {
-                    prefab = Resources.Load<GameObject>(def.ResourcePath);
+                    GameObject prefab = null;
+                    try
+                    {
+                        prefab = Resources.Load<GameObject>(def.ResourcePath);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning("[ExteriorView] Map point failed to load (" + def.ResourcePath + "): " + e.Message);
+                    }
+                    if (prefab == null)
+                    {
+                        Debug.LogWarning("[ExteriorView] " + def.ResourcePath + " is missing — that map point will be an empty spot. Copy the FBX into Assets/_Project/Resources/Models/ (do not rename it).");
+                        continue;
+                    }
+                    go = Instantiate(prefab);
                 }
-                catch (System.Exception e)
-                {
-                    Debug.LogWarning("[ExteriorView] Map point failed to load (" + def.ResourcePath + "): " + e.Message);
-                }
-                if (prefab == null)
-                {
-                    Debug.LogWarning("[ExteriorView] " + def.ResourcePath + " is missing — that map point will be an empty spot. Copy the FBX into Assets/_Project/Resources/Models/ (do not rename it).");
-                    continue;
-                }
-                var go = Instantiate(prefab);
                 go.name = def.Title;
-                // Grounded (2026-11-21): NodeDefs positions carry
-                // y=0 from the old flat world; at HeightScale 6
-                // the surface here is TerrainHeight, so an
-                // ungrounded node floats or sinks (Patrick
-                // spotted a Biomass node hovering). Camp slots
-                // got this grounding in Phase 3; the nodes and
-                // the lair were missed.
-                var dp = def.Position;
-                go.transform.position = new Vector3(dp.x, TerrainHeight(dp.x, dp.z), dp.z);
-                // Same rotation rule as the terrain: leave the imported
-                // rotation alone (Bake Axis Conversion). Scaled 2x
-                // (Patrick 2026-11-09): at 1x the nodes/camps read as
-                // tiny dots from the far camera; 2x makes them ~4-8
-                // units across, visible and tappable. The BoxCollider
-                // below scales with the object, so the tap target grows
-                // too.
-                go.transform.localScale = Vector3.one * 2f;
+                // Legacy placement (the boss lair, and any node
+                // whose pack visual failed): grounded on the
+                // terrain height at the node point, authored
+                // rotation left alone, flat 2x scale. Pack visuals
+                // were already placed by BuildNodeVisual.
+                if (!packPlaced)
+                {
+                    // Grounded (2026-11-21): NodeDefs positions carry
+                    // y=0 from the old flat world; at HeightScale 6
+                    // the surface here is TerrainHeight, so an
+                    // ungrounded node floats or sinks (Patrick
+                    // spotted a Biomass node hovering). Camp slots
+                    // got this grounding in Phase 3; the nodes and
+                    // the lair were missed.
+                    var dp = def.Position;
+                    go.transform.position = new Vector3(dp.x, TerrainHeight(dp.x, dp.z), dp.z);
+                    // Same rotation rule as the terrain: leave the imported
+                    // rotation alone (Bake Axis Conversion). Scaled 2x
+                    // (Patrick 2026-11-09): at 1x the nodes/camps read as
+                    // tiny dots from the far camera; 2x makes them ~4-8
+                    // units across, visible and tappable. The BoxCollider
+                    // below scales with the object, so the tap target grows
+                    // too.
+                    go.transform.localScale = Vector3.one * 2f;
+                }
                 // The FBX has no collider, and tapping raycasts against
                 // colliders — give each point a generous one (4x4x4,
                 // centred at y 2) so it is easy to tap from the far
@@ -1713,6 +2000,20 @@ namespace LunarDominion.UI
                     // neighbour.
                     box.center = new Vector3(0f, 3f, 0f);
                     box.size = new Vector3(12f, 6f, 12f);
+                    if (packPlaced)
+                    {
+                        // The box lives in the root's local space,
+                        // and a pack visual's root scale is whatever
+                        // the footprint normalisation needed -
+                        // compensate so the world-space tap target
+                        // stays generous for every piece.
+                        float s = Mathf.Abs(go.transform.localScale.x);
+                        if (s > 0.001f)
+                        {
+                            box.center = new Vector3(0f, 4f / s, 0f);
+                            box.size = new Vector3(16f / s, 10f / s, 16f / s);
+                        }
+                    }
                 }
                 go.SetActive(false);
                 // Keep every renderer + its original colour: a depleted
