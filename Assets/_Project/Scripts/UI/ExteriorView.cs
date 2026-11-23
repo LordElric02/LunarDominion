@@ -1771,6 +1771,12 @@ namespace LunarDominion.UI
                 return null;
             }
             PrunePackRoot(root, keep);
+            // The piece keeps its parked grid position inside
+            // the pack scene - zero it, or the visual renders
+            // displaced from its node (the first Play check's
+            // wandering Alloy stones). Rotation and scale are
+            // authored and stay.
+            keep.localPosition = Vector3.zero;
             return root;
         }
 
@@ -1791,6 +1797,7 @@ namespace LunarDominion.UI
             if (carriers.Count == 0) return root;
             if (index < 0 || index >= carriers.Count) index = 0;
             PrunePackRoot(root, carriers[index]);
+            carriers[index].localPosition = Vector3.zero;
             return root;
         }
 
@@ -1892,15 +1899,25 @@ namespace LunarDominion.UI
             }
             if (go == null) return null;
 
+            // Wrap the visual in a clean root: some pack FBX
+            // roots carry a negative authored scale, which makes
+            // Unity force-correct any BoxCollider placed on them
+            // (the first Play check's build warnings). Placement,
+            // yaw, footprint scale and the tap collider all live
+            // on the wrapper, whose scale stays positive; the
+            // visual keeps its authored transform inside.
+            var wrapper = new GameObject("NodeVisual");
+            go.transform.SetParent(wrapper.transform, false);
+
             // Place: ground at the node point, a deterministic
             // yaw for variety, then the camp pattern - measure,
             // normalise to the amount footprint, re-measure and
             // seat on the surface.
             var dp = def.Position;
             float ground = TerrainHeight(dp.x, dp.z);
-            go.transform.position = new Vector3(dp.x, ground, dp.z);
-            go.transform.rotation = Quaternion.Euler(0f, (index * 137) % 360, 0f) * go.transform.rotation;
-            var renderers = go.GetComponentsInChildren<Renderer>();
+            wrapper.transform.position = new Vector3(dp.x, ground, dp.z);
+            wrapper.transform.rotation = Quaternion.Euler(0f, (index * 137) % 360, 0f);
+            var renderers = wrapper.GetComponentsInChildren<Renderer>();
             Bounds bounds;
             if (TryMeasureBounds(renderers, out bounds))
             {
@@ -1909,15 +1926,15 @@ namespace LunarDominion.UI
                 if (footprint > 0.01f && target > 0f)
                 {
                     float factor = target / footprint;
-                    go.transform.localScale = go.transform.localScale * factor;
+                    wrapper.transform.localScale = Vector3.one * factor;
                 }
                 if (TryMeasureBounds(renderers, out bounds))
                 {
                     float lift = ground - bounds.min.y;
-                    go.transform.position = new Vector3(dp.x, go.transform.position.y + lift, dp.z);
+                    wrapper.transform.position = new Vector3(dp.x, wrapper.transform.position.y + lift, dp.z);
                 }
             }
-            return go;
+            return wrapper;
         }
 
         private void BuildMapPoints()
