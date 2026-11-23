@@ -1890,7 +1890,7 @@ namespace LunarDominion.UI
                     go = InstantiatePackPiece(AlienPackPath, AlloyPackPieces[ordinal]);
                     if (go != null)
                     {
-                        var mat = NodeTexturedMaterial("stone:alloy", "Textures/AlienPlanet/stone-diffuse", new Color(0.66f, 0.70f, 0.78f), 0.55f, 0.45f);
+                        var mat = NodeTexturedMaterial("stone:alloy", "Textures/AlienPlanet/stone-diffuse", new Color(0.88f, 0.90f, 0.96f), 0.25f, 0.45f);
                         ApplySharedMaterial(go, mat);
                     }
                 }
