@@ -1016,14 +1016,18 @@ namespace LunarDominion.UI
             terrain.drawTreesAndFoliage = true;
             terrain.heightmapPixelError = 5f;
             terrain.detailObjectDistance = 160f;
-            // Phase 5 flora draw settings: trees/rocks (Terrain
-            // tree instances scattered by builder item 5) draw to
-            // 900, billboard from 120, and at most 250 render as
-            // full meshes at once — the mobile-sane caps; Phase 6
-            // measures the real cost on the S24 Ultra.
-            terrain.treeDistance = 900f;
-            terrain.treeBillboardDistance = 120f;
-            terrain.treeMaximumFullLODCount = 250;
+            // Phase 5 flora draw settings, raised 2026-11-23 at
+            // Patrick's direction: the original caps (draw to 900,
+            // billboard from 120, 250 full meshes) made whole
+            // patches of flora pop out while flying/panning the
+            // map at height. Now trees draw to 2400 (into the fog
+            // band), billboard from 250, and up to 500 render as
+            // full meshes; the S24 Ultra perf re-check with these
+            // numbers is still owed (Phase 6 passed on the old
+            // caps).
+            terrain.treeDistance = 2400f;
+            terrain.treeBillboardDistance = 250f;
+            terrain.treeMaximumFullLODCount = 500;
             var terrainMat = Resources.Load<Material>(TerrainMaterialPath);
             if (terrainMat != null) terrain.materialTemplate = terrainMat;
             var terrainCollider = terrainGo.AddComponent<TerrainCollider>();
