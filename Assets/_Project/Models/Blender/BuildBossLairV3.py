@@ -629,19 +629,35 @@ def verify(objects):
     else:
         check(False, "no ground disc")
     lowest_name, lowest_z = None, None
-    burial_ok = True
+    offenders = []
     for o in objects:
         if o.type != "MESH":
             continue
         oz = min(p.z for p in world_pts(o))
         if lowest_z is None or oz < lowest_z:
             lowest_name, lowest_z = o.name, oz
-        limit = -1.15 if o.name.startswith("Lair_Spike_") else -0.05
+        # Per-class bounds, each from the part's authored
+        # geometry: tilted spike rims reach -(0.08*depth +
+        # 1.5*sin25) = -1.08 worst case; the rotated
+        # half-buried plates' lowest corners reach ~-0.35
+        # (second run caught them at that class's -0.05 —
+        # also deliberate burial, missed in the first fix);
+        # everything else sits on the base plane. Every
+        # offender is printed — the first fix printed only
+        # the lowest part, which hid the actual offender.
+        if o.name.startswith("Lair_Spike_"):
+            limit = -1.15
+        elif o.name.startswith("Lair_BrokenPlate"):
+            limit = -0.55
+        else:
+            limit = -0.05
         if oz < limit:
-            burial_ok = False
-    check(burial_ok,
-          "burial within per-class bounds (lowest: %s at %.3f)"
-          % (lowest_name, lowest_z if lowest_z is not None else 0.0))
+            offenders.append("%s at %.3f (bound %.2f)"
+                             % (o.name, oz, limit))
+    check(not offenders,
+          "burial within per-class bounds (lowest: %s at %.3f%s)"
+          % (lowest_name, lowest_z if lowest_z is not None else 0.0,
+             ("; offenders: " + "; ".join(offenders)) if offenders else ""))
     check(max(zs) <= MAX_HEIGHT + 0.01,
           "height %.2f (spec <= %.1f)" % (max(zs), MAX_HEIGHT))
     check(max(zs) >= 7.5, "height %.2f (spec >= 7.5, reads from far)"
