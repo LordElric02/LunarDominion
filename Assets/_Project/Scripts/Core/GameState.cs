@@ -13,6 +13,15 @@ namespace LunarDominion.Core
         public int Helium3;
         public int Energy;
 
+        // The player's chosen name (2026-11-24, ahead of the
+        // Firebase account work — this becomes the account
+        // display name). Empty until the player sets one from
+        // the TopBar; EffectiveUsername is what the UI shows.
+        public string Username = "";
+
+        public string EffectiveUsername =>
+            string.IsNullOrWhiteSpace(Username) ? "Commander" : Username.Trim();
+
         // Indexed by (int)BuildingId. All buildings start at level 1 once unlocked;
         // locked buildings are stored as 0 and shown as locked in the UI.
         // Research Lab (2026-11-01) is index 7; Hospital (2026-11-09) is

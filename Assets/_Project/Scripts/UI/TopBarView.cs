@@ -10,7 +10,11 @@ namespace LunarDominion.UI
     /// computes costs, production, or energy rules.</summary>
     public class TopBarView : MonoBehaviour
     {
+        private Text _nameText;
         private Text _levelText;
+        private GameObject _editorRoot;
+        private InputField _nameInput;
+        private Text _editorHint;
         private Text _biomassText;
         private Text _alloyText;
         private Text _heliumText;
@@ -40,11 +44,27 @@ namespace LunarDominion.UI
             var barImage = bar.GetComponent<Image>();
             if (barImage != null) barImage.raycastTarget = false;
 
-            // 2026-11-07: the title is the player level ("Level:XX"),
-            // derived from progression — see PlayerLevelService. The
-            // old "LUNAR DOMINION" title is gone.
-            _levelText = UIHelpers.LabelInRect(bar, "Level", "Level:0", 30,
-                Color.white, new Rect(0.01f, 0.05f, 0.24f, 0.95f), TextAnchor.MiddleCenter);
+            // Left block (2026-11-07; username 2026-11-24): the
+            // player's name over the player level ("Level:XX",
+            // derived from progression — see PlayerLevelService).
+            // A transparent tap target under both labels opens
+            // the name editor; the labels themselves don't
+            // raycast, so taps land on the button. The name is
+            // the local half of the coming Firebase account (its
+            // display name).
+            var nameTap = UIHelpers.Panel(bar, "NameTap", new Color(0f, 0f, 0f, 0f),
+                new Vector2(0.005f, 0.02f), new Vector2(0.245f, 0.98f),
+                Vector2.zero, Vector2.zero);
+            var nameBtn = nameTap.AddComponent<Button>();
+            nameBtn.targetGraphic = nameTap.GetComponent<Image>();
+            nameBtn.onClick.AddListener(OpenNameEditor);
+            _nameText = UIHelpers.LabelInRect(bar, "Username", "", 28,
+                Color.white, new Rect(0.01f, 0.52f, 0.24f, 0.97f), TextAnchor.MiddleCenter);
+            _nameText.fontStyle = FontStyle.Bold;
+            _nameText.raycastTarget = false;
+            _levelText = UIHelpers.LabelInRect(bar, "Level", "Level:0", 26,
+                Color.white, new Rect(0.01f, 0.03f, 0.24f, 0.50f), TextAnchor.MiddleCenter);
+            _levelText.raycastTarget = false;
 
             // Four chips share the remaining 75% in one row (18.75%
             // each, ~360px per chip — the longest chip, "ALLOY
@@ -70,6 +90,119 @@ namespace LunarDominion.UI
             inboxRt.offsetMin = Vector2.zero;
             inboxRt.offsetMax = Vector2.zero;
             _inboxButton.onClick.AddListener(() => OnInboxClicked?.Invoke());
+            BuildNameEditor(canvas);
+            Refresh();
+        }
+
+        // The name editor: a centred card over a dim backdrop,
+        // built once and toggled. It lives on the canvas (not the
+        // bar), so it overlays every tab the bar shows on.
+        private void BuildNameEditor(Canvas canvas)
+        {
+            _editorRoot = UIHelpers.Panel(canvas.gameObject, "UsernameEditor",
+                new Color(0f, 0f, 0f, 0.55f), new Vector2(0, 0), new Vector2(1, 1),
+                Vector2.zero, Vector2.zero);
+            var card = UIHelpers.Panel(_editorRoot, "Card", UIHelpers.Hex("#1D2A3D"),
+                new Vector2(0.32f, 0.36f), new Vector2(0.68f, 0.64f),
+                Vector2.zero, Vector2.zero);
+            UIHelpers.LabelInRect(card, "Title", "USERNAME", 30, Color.white,
+                new Rect(0.05f, 0.68f, 0.95f, 0.95f), TextAnchor.MiddleCenter);
+
+            var inputGo = new GameObject("NameInput");
+            inputGo.transform.SetParent(card.transform, false);
+            var inputImg = inputGo.AddComponent<Image>();
+            inputImg.color = UIHelpers.Hex("#101A29");
+            var inputRt = inputGo.GetComponent<RectTransform>();
+            inputRt.anchorMin = new Vector2(0.08f, 0.42f);
+            inputRt.anchorMax = new Vector2(0.92f, 0.64f);
+            inputRt.offsetMin = Vector2.zero;
+            inputRt.offsetMax = Vector2.zero;
+
+            var textGo = new GameObject("Text");
+            textGo.transform.SetParent(inputGo.transform, false);
+            var inputText = textGo.AddComponent<Text>();
+            inputText.font = UIHelpers.DefaultFont;
+            inputText.fontSize = 28;
+            inputText.color = Color.white;
+            inputText.alignment = TextAnchor.MiddleLeft;
+            var textRt = textGo.GetComponent<RectTransform>();
+            textRt.anchorMin = Vector2.zero;
+            textRt.anchorMax = Vector2.one;
+            textRt.offsetMin = new Vector2(12, 0);
+            textRt.offsetMax = new Vector2(-12, 0);
+
+            var phGo = new GameObject("Placeholder");
+            phGo.transform.SetParent(inputGo.transform, false);
+            var phText = phGo.AddComponent<Text>();
+            phText.font = UIHelpers.DefaultFont;
+            phText.fontSize = 28;
+            phText.color = new Color(1f, 1f, 1f, 0.35f);
+            phText.alignment = TextAnchor.MiddleLeft;
+            phText.text = "Commander";
+            var phRt = phGo.GetComponent<RectTransform>();
+            phRt.anchorMin = Vector2.zero;
+            phRt.anchorMax = Vector2.one;
+            phRt.offsetMin = new Vector2(12, 0);
+            phRt.offsetMax = new Vector2(-12, 0);
+
+            _nameInput = inputGo.AddComponent<InputField>();
+            _nameInput.textComponent = inputText;
+            _nameInput.placeholder = phText;
+            _nameInput.targetGraphic = inputImg;
+            _nameInput.characterLimit = 16;
+
+            _editorHint = UIHelpers.LabelInRect(card, "Hint", "", 20,
+                new Color(1f, 0.62f, 0.62f), new Rect(0.05f, 0.29f, 0.95f, 0.41f),
+                TextAnchor.MiddleCenter);
+            _editorHint.raycastTarget = false;
+
+            var cancelBtn = UIHelpers.Button(card, "CancelName", "CANCEL", 26,
+                UIHelpers.Hex("#2A3B52"), Color.white);
+            var cancelRt = cancelBtn.GetComponent<RectTransform>();
+            cancelRt.anchorMin = new Vector2(0.05f, 0.06f);
+            cancelRt.anchorMax = new Vector2(0.48f, 0.26f);
+            cancelRt.offsetMin = Vector2.zero;
+            cancelRt.offsetMax = Vector2.zero;
+            cancelBtn.onClick.AddListener(CloseNameEditor);
+
+            var saveBtn = UIHelpers.Button(card, "SaveName", "SAVE", 26,
+                UIHelpers.Hex("#2A3B52"), Color.white);
+            var saveRt = saveBtn.GetComponent<RectTransform>();
+            saveRt.anchorMin = new Vector2(0.52f, 0.06f);
+            saveRt.anchorMax = new Vector2(0.95f, 0.26f);
+            saveRt.offsetMin = Vector2.zero;
+            saveRt.offsetMax = Vector2.zero;
+            saveBtn.onClick.AddListener(SaveNameEditor);
+
+            _editorRoot.SetActive(false);
+        }
+
+        private void OpenNameEditor()
+        {
+            if (_editorRoot == null || _controller == null) return;
+            _editorHint.text = "";
+            _nameInput.text = _controller.State.Username ?? "";
+            _editorRoot.SetActive(true);
+            _nameInput.ActivateInputField();
+        }
+
+        private void CloseNameEditor()
+        {
+            if (_editorRoot != null) _editorRoot.SetActive(false);
+        }
+
+        private void SaveNameEditor()
+        {
+            var name = (_nameInput.text ?? "").Trim();
+            if (name.Length == 0)
+            {
+                _editorHint.text = "Name can't be empty.";
+                return;
+            }
+            _controller.State.Username = name;
+            _controller.SaveGame();
+            _controller.NotifyChanged();
+            CloseNameEditor();
             Refresh();
         }
 
@@ -85,6 +218,7 @@ namespace LunarDominion.UI
             // RefreshAll, once a second plus every NotifyChanged), so
             // the level updates after upgrades and research
             // completions with no new event.
+            if (_nameText != null) _nameText.text = s.EffectiveUsername;
             if (_levelText != null)
             {
                 int level = _controller.PlayerLevel != null ? _controller.PlayerLevel.Level() : 0;

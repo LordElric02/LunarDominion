@@ -18,6 +18,9 @@ namespace LunarDominion.Save
         public int Alloy;
         public int Helium3;
         public int Energy;
+        // Player's chosen name (2026-11-24). Old saves without
+        // it load empty and show the default.
+        public string Username = "";
         public int[] BuildingLevels = new int[9];
         // Research (2026-11-01). Old saves without these fields load
         // as unresearched with no research in progress, which is correct.
@@ -142,6 +145,7 @@ namespace LunarDominion.Save
                 Heroes = ValidateArmy(state.Heroes),
                 LastEnergyDate = state.LastEnergyDate,
                 LastSaveTimeUtc = state.LastSaveTimeUtc,
+                Username = state.Username ?? "",
                 ProductionCarryBiomass = state.ProductionCarryBiomass,
                 ProductionCarryAlloy = state.ProductionCarryAlloy,
                 ProductionCarryHelium3 = state.ProductionCarryHelium3,
@@ -196,6 +200,7 @@ namespace LunarDominion.Save
                     Heroes = ValidateArmy(data.Heroes),
                     LastEnergyDate = data.LastEnergyDate ?? "",
                     LastSaveTimeUtc = data.LastSaveTimeUtc ?? "",
+                    Username = data.Username ?? "",
                     ProductionCarryBiomass = Math.Max(0f, data.ProductionCarryBiomass),
                     ProductionCarryAlloy = Math.Max(0f, data.ProductionCarryAlloy),
                     ProductionCarryHelium3 = Math.Max(0f, data.ProductionCarryHelium3),
