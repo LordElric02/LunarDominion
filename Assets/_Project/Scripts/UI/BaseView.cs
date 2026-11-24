@@ -3483,10 +3483,12 @@ namespace LunarDominion.UI
 
             // The pad and cross sit shifted toward the north end
             // of the roof (Patrick, 2026-11-23): in the sign group's
-            // local frame north is -Z (the alert panel at -1.75 Z
-            // stands at the roof's far side), so the pad/cross take
-            // a -0.7 Z offset and stay clear of the panel post.
-            const float signZ = -0.7f;
+            // local frame north is +Z. (First attempt used -0.7 and
+            // the cross went south — Patrick's Play check caught it;
+            // the alert panel at -1.75 Z therefore stands at the
+            // roof's south side.) +0.9 puts the pad in the roof's
+            // north half, well clear of the panel post.
+            const float signZ = 0.9f;
 
             // White pad on the roof (the cylinder primitive is 2
             // units tall and 2 across, hence the half scales).
