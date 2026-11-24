@@ -818,6 +818,18 @@ namespace LunarDominion.UI
             }
         }
 
+        /// <summary>The highest camp tier the FIND dropdown
+        /// offers. Camps of a tier only spawn once the Nexus
+        /// reaches that tier's gate (MapExcursionService.
+        /// CampTierUnlockNexus: T2 at 10, T3 at 15, T4 at 20,
+        /// T5 at 25, T6 at 29), so the dropdown grows with the
+        /// player and never advertises tiers they cannot meet
+        /// yet (Patrick 2026-11-23). Fed by SyncCamps.</summary>
+        public void SetCampFindMaxTier(int tier)
+        {
+            _campFindMaxTier = Mathf.Clamp(tier, 1, 6);
+        }
+
         /// <summary>Show a camp slot as the given tier (0 = empty):
         /// swaps the slot's structure for the tier and updates the
         /// marker's data in place (so a panel already showing this camp
@@ -3623,11 +3635,11 @@ namespace LunarDominion.UI
         // farmed, and camp slots currently holding creatures.
         private enum SearchCategory { None, Biomass, Alloy, Helium, Tier1, Tier2, Tier3, Tier4, Tier5, Tier6, Lair }
 
+        // Direct chips only: the camp tiers moved into the CAMP
+        // dropdown (2026-11-23, Patrick) and are not chips.
         private static readonly SearchCategory[] ChipCategories =
         {
             SearchCategory.Biomass, SearchCategory.Alloy, SearchCategory.Helium,
-            SearchCategory.Tier1, SearchCategory.Tier2, SearchCategory.Tier3,
-            SearchCategory.Tier4, SearchCategory.Tier5, SearchCategory.Tier6,
             SearchCategory.Lair
         };
 
@@ -3638,6 +3650,9 @@ namespace LunarDominion.UI
         private GameObject _findBar;
         private Text _findStatus;
         private readonly Button[] _findChips = new Button[ChipCategories.Length];
+        private Button _campChip;
+        private GameObject _campMenu;
+        private int _campFindMaxTier = 1;
         private bool _findBarOpen;
         private SearchCategory _searchCategory = SearchCategory.None;
         private readonly List<Vector3> _searchMatches = new List<Vector3>();
@@ -3753,32 +3768,50 @@ namespace LunarDominion.UI
                 new Rect(0.02f, 0.55f, 0.98f, 0.97f), TextAnchor.MiddleCenter);
             _findStatus.verticalOverflow = VerticalWrapMode.Overflow;
 
-            // T4-T6 chips added 2026-11-23 (Patrick): camps of
-            // those tiers spawn from Nexus 20/25/29 but the bar
-            // only knew T1-T3. 11 chips now, so the step/width
-            // shrank from 0.1235/0.111 to fit the same bar.
-            string[] chipLabels = { "BIO", "ALLOY", "HE-3", "T1", "T2", "T3", "T4", "T5", "T6", "LAIR", "\u00D7" };
+            // Camp tiers live in a dropdown (2026-11-23,
+            // Patrick): one CAMP chip opens a menu of the tiers
+            // the player's Nexus has unlocked (SetCampFindMaxTier),
+            // instead of six tier chips crowding the bar — and a
+            // low-Nexus player never sees tiers that cannot spawn
+            // for them yet. Six wide chips again.
+            string[] chipLabels = { "BIO", "ALLOY", "HE-3", "CAMP", "LAIR", "\u00D7" };
+            int catIdx = 0;
             for (int i = 0; i < chipLabels.Length; i++)
             {
                 bool isClear = i == chipLabels.Length - 1;
+                bool isCamp = i == 3;
                 var chip = UIHelpers.Button(_findBar, "FindChip" + i, chipLabels[i], 26,
                     UIHelpers.Hex("#1A2436"), Color.white);
                 var rt = chip.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0.012f + i * 0.0891f, 0.07f);
-                rt.anchorMax = new Vector2(0.012f + i * 0.0891f + 0.085f, 0.47f);
+                rt.anchorMin = new Vector2(0.012f + i * 0.1648f, 0.07f);
+                rt.anchorMax = new Vector2(0.012f + i * 0.1648f + 0.152f, 0.47f);
                 rt.offsetMin = Vector2.zero;
                 rt.offsetMax = Vector2.zero;
                 if (isClear)
                 {
                     chip.onClick.AddListener(() => SetFindBarOpen(false));
                 }
+                else if (isCamp)
+                {
+                    _campChip = chip;
+                    chip.onClick.AddListener(ToggleCampMenu);
+                }
                 else
                 {
-                    int idx = i;
+                    int idx = catIdx++;
                     chip.onClick.AddListener(() => OnSearchChip(ChipCategories[idx]));
-                    _findChips[i] = chip;
+                    _findChips[idx] = chip;
                 }
             }
+
+            // The dropdown itself: a panel rising above the bar,
+            // aligned over the CAMP chip (chip 3 spans x
+            // 0.5064-0.6584 of the bar). Rows are (re)built each
+            // time it opens, so tiers and camp counts are current.
+            _campMenu = UIHelpers.Panel(_findBar, "CampMenu", barColor,
+                new Vector2(0.5064f, 1f), new Vector2(0.5064f, 1f),
+                new Vector2(0f, 8f), new Vector2(200f, 74f));
+            _campMenu.SetActive(false);
 
             _searchRoot = new GameObject("SearchHighlights");
             _searchRoot.SetActive(false);
@@ -3791,14 +3824,71 @@ namespace LunarDominion.UI
         private void SetFindBarOpen(bool open)
         {
             _findBarOpen = open;
-            if (!open) ClearSearch();
+            if (!open) { ClearSearch(); SetCampMenuOpen(false); }
             if (_findRoot != null) _findRoot.SetActive(_visible && !open);
             if (_baseBtnRoot != null) _baseBtnRoot.SetActive(_visible && !open);
             if (_findBar != null) _findBar.SetActive(_visible && open);
         }
 
+        private static SearchCategory TierCategory(int tier)
+        {
+            switch (tier)
+            {
+                case 2: return SearchCategory.Tier2;
+                case 3: return SearchCategory.Tier3;
+                case 4: return SearchCategory.Tier4;
+                case 5: return SearchCategory.Tier5;
+                case 6: return SearchCategory.Tier6;
+                default: return SearchCategory.Tier1;
+            }
+        }
+
+        private void ToggleCampMenu()
+        {
+            bool open = _campMenu != null && !_campMenu.activeSelf;
+            if (open) RebuildCampMenu();
+            SetCampMenuOpen(open);
+        }
+
+        private void SetCampMenuOpen(bool open)
+        {
+            if (_campMenu != null) _campMenu.SetActive(open && _findBarOpen);
+        }
+
+        /// <summary>(Re)build the camp dropdown rows: one per
+        /// unlocked tier (T1 at the bottom, highest tier at the
+        /// top), labelled with how many camps of that tier are on
+        /// the map right now. Called each time the menu opens, so
+        /// it never shows stale tiers or counts.</summary>
+        private void RebuildCampMenu()
+        {
+            if (_campMenu == null) return;
+            for (int i = _campMenu.transform.childCount - 1; i >= 0; i--)
+                Destroy(_campMenu.transform.GetChild(i).gameObject);
+            int maxTier = Mathf.Clamp(_campFindMaxTier, 1, 6);
+            var mrt = _campMenu.GetComponent<RectTransform>();
+            mrt.offsetMax = new Vector2(200f, 8f + maxTier * 54f + 12f);
+            for (int t = 1; t <= maxTier; t++)
+            {
+                int count = 0;
+                for (int slot = 0; slot < CampSlotCount; slot++)
+                    if (_campSlotTier[slot] == t) count++;
+                int tier = t;
+                var row = UIHelpers.Button(_campMenu, "CampTier" + t,
+                    SearchSingular(TierCategory(t)) + (count > 0 ? $" ({count})" : ""), 24,
+                    UIHelpers.Hex("#1A2436"), Color.white);
+                var rt = row.GetComponent<RectTransform>();
+                rt.anchorMin = Vector2.zero;
+                rt.anchorMax = Vector2.zero;
+                rt.offsetMin = new Vector2(4f, 6f + (t - 1) * 54f);
+                rt.offsetMax = new Vector2(196f, 6f + (t - 1) * 54f + 50f);
+                row.onClick.AddListener(() => { SetCampMenuOpen(false); OnSearchChip(TierCategory(tier)); });
+            }
+        }
+
         private void OnSearchChip(SearchCategory cat)
         {
+            SetCampMenuOpen(false);
             bool sameCategory = cat == _searchCategory;
             Vector3 previousFocus = Vector3.zero;
             bool hadFocus = sameCategory && _searchIndex >= 0 && _searchIndex < _searchMatches.Count;
@@ -3971,6 +4061,17 @@ namespace LunarDominion.UI
                 img.color = ChipCategories[i] == _searchCategory
                     ? SearchColor(_searchCategory)
                     : UIHelpers.Hex("#1A2436");
+            }
+            // The CAMP chip stands in for every tier category.
+            if (_campChip != null)
+            {
+                var cimg = _campChip.GetComponent<Image>();
+                if (cimg != null)
+                {
+                    bool tierActive = _searchCategory >= SearchCategory.Tier1
+                        && _searchCategory <= SearchCategory.Tier6;
+                    cimg.color = tierActive ? SearchColor(_searchCategory) : UIHelpers.Hex("#1A2436");
+                }
             }
         }
 

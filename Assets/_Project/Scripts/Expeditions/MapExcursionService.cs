@@ -799,6 +799,34 @@ namespace LunarDominion.Expeditions
             return roll < 0.10f ? 1 : (roll < 0.30f ? 2 : (roll < 0.55f ? 3 : (roll < 0.75f ? 4 : (roll < 0.90f ? 5 : 6))));
         }
 
+        /// <summary>Nexus level at which camps of a tier join the
+        /// field — the gates inside RollCampTier, tabled so the
+        /// FIND camp dropdown can offer exactly the tiers a player
+        /// can meet (Patrick 2026-11-23: don't show all camp
+        /// levels to all users).</summary>
+        public static int CampTierUnlockNexus(int tier)
+        {
+            switch (tier)
+            {
+                case 2: return 10;
+                case 3: return 15;
+                case 4: return 20;
+                case 5: return 25;
+                case 6: return 29;
+                default: return 1;
+            }
+        }
+
+        /// <summary>Highest camp tier that can spawn at a Nexus
+        /// level — the FIND dropdown's row count.</summary>
+        public static int MaxCampTierForNexus(int nexus)
+        {
+            int max = 1;
+            for (int t = 2; t <= 6; t++)
+                if (nexus >= CampTierUnlockNexus(t)) max = t;
+            return max;
+        }
+
         // Resource node levels (2026-11-16, Patrick: the resource
         // nodes need levels too). GameState.NodeLevel[i] is node
         // i's CURRENT level: rolled when the node regenerates
@@ -944,6 +972,7 @@ namespace LunarDominion.Expeditions
         {
             if (_view == null) return;
             EnsureCampSlots();
+            _view.SetCampFindMaxTier(MaxCampTierForNexus(_state.NexusLevel));
             for (int slot = 0; slot < ExteriorView.CampSlotCount; slot++)
             {
                 int tier = _state.CampSlotTier[slot];
