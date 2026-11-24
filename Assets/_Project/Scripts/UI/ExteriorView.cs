@@ -3850,7 +3850,6 @@ namespace LunarDominion.UI
 
         private GameObject _findRoot;
         private GameObject _baseBtnRoot;
-        private GameObject _topBarGo;
         private BottomNavView _bottomNav;
         private GameObject _findBar;
         private Text _findStatus;
@@ -4975,17 +4974,14 @@ namespace LunarDominion.UI
             if (_baseBtnRoot != null) _baseBtnRoot.SetActive(visible && !_findBarOpen);
             if (_homeBtnRoot != null) _homeBtnRoot.SetActive(visible);
             RefreshMarchPanel();
-            // Full-screen Map (Patrick 2026-11-13): the TopBar
-            // and BottomNav panels hide while the Map is up —
-            // the same canvas panels the boss fight's chrome
-            // hides (the *View objects are empty hosts; the
-            // panels are canvas children found by name).
-            // SetVisible is the single choke point — tab
-            // switches, entering the lair and closing the lair
-            // all pass through here — so the bars always match
-            // the screen on top.
-            if (_topBarGo == null) _topBarGo = GameObject.Find("TopBar");
-            if (_topBarGo != null) _topBarGo.SetActive(!visible);
+            // The TopBar (level + resources) stays UP on the Map
+            // (Patrick 2026-11-24): it is shared chrome refreshed
+            // on every state change, so the player sees level and
+            // resources outside exactly as in the Base view. This
+            // supersedes the 2026-11-13 full-screen Map choice,
+            // which hid it here; the boss fight still hides it
+            // through BossLairView's own pass. Only the BottomNav
+            // below remains Map-suppressed.
             // The BottomNav routes through its own view (2026-11-18):
             // the bar is player-toggled now, so the Map only
             // SUPPRESSES it (and its MENU button) while up — the
