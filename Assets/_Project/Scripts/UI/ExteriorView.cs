@@ -307,9 +307,9 @@ namespace LunarDominion.UI
             new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 3500, Title = "Helium-3 Node", Info = "Helium-3: 3500", Position = new Vector3(-1380f, 0f, -1020f) },
             new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 5000, Title = "Helium-3 Node", Info = "Helium-3: 5000", Position = new Vector3(1500f, 0f, 720f) },
             new NodeDef { ResourcePath = "Models/HeliumNode", Kind = MapPointKind.Helium3, Amount = 8000, Title = "Helium-3 Node", Info = "Helium-3: 8000", Position = new Vector3(180f, 0f, -1320f) },
-            new NodeDef { ResourcePath = "Models/EnemyCampT1", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 \u2014 Spore Crawlers\nExpedition enemy", Position = new Vector3(660f, 0f, 180f) },
-            new NodeDef { ResourcePath = "Models/EnemyCampT2", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 \u2014 Void Stalkers\nExpedition enemy", Position = new Vector3(-1020f, 0f, 720f) },
-            new NodeDef { ResourcePath = "Models/EnemyCampT3", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 \u2014 Brood Tyrant\nExpedition enemy", Position = new Vector3(1440f, 0f, -960f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT1", Kind = MapPointKind.Camp, Tier = 1, Title = "Spore Crawler Camp", Info = "Tier 1 \u2014 Spore Crawlers\nExpedition enemy\nWeak to: Ranged units", Position = new Vector3(660f, 0f, 180f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT2", Kind = MapPointKind.Camp, Tier = 2, Title = "Void Stalker Camp", Info = "Tier 2 \u2014 Void Stalkers\nExpedition enemy\nWeak to: Mechanized units", Position = new Vector3(-1020f, 0f, 720f) },
+            new NodeDef { ResourcePath = "Models/EnemyCampT3", Kind = MapPointKind.Camp, Tier = 3, Title = "Brood Tyrant Camp", Info = "Tier 3 \u2014 Brood Tyrant\nExpedition enemy\nWeak to: Infantry units", Position = new Vector3(1440f, 0f, -960f) },
             // Boss lair: the War Robot lives here, far southwest
             // corner of the map. Index 21. The lair does not move
             // on respawn (unlike camps) - it is a fixed place.
@@ -735,14 +735,23 @@ namespace LunarDominion.UI
 
         public static string CampInfoForTier(int tier)
         {
+            // The "Weak to" line (Patrick, 2026-11-23) names the unit
+            // CLASS that counters the camp's headline enemy in
+            // EncounterCatalog — class only, no levels: Ranged beats
+            // Infantry, Infantry beats Mechanized, Mechanized beats
+            // Ranged. Headline classes: T1 Spore Crawler Infantry,
+            // T2 Void Stalker Ranged, T3 Brood Tyrant Mechanized,
+            // T4 Ashen Ravager Infantry, T5 Dread Stalker Mechanized,
+            // T6 Void Tyrant Mechanized. If a headline class changes
+            // in the catalog, change its line here.
             switch (tier)
             {
-                case 2: return "Tier 2 — Void Stalkers\nExpedition enemy";
-                case 3: return "Tier 3 — Brood Tyrant\nExpedition enemy";
-                case 4: return "Tier 4 — Ashen Ravagers\nExpedition enemy";
-                case 5: return "Tier 5 — Dread Stalkers\nExpedition enemy";
-                case 6: return "Tier 6 — Void Tyrant\nExpedition enemy";
-                default: return "Tier 1 — Spore Crawlers\nExpedition enemy";
+                case 2: return "Tier 2 — Void Stalkers\nExpedition enemy\nWeak to: Mechanized units";
+                case 3: return "Tier 3 — Brood Tyrant\nExpedition enemy\nWeak to: Infantry units";
+                case 4: return "Tier 4 — Ashen Ravagers\nExpedition enemy\nWeak to: Ranged units";
+                case 5: return "Tier 5 — Dread Stalkers\nExpedition enemy\nWeak to: Infantry units";
+                case 6: return "Tier 6 — Void Tyrant\nExpedition enemy\nWeak to: Infantry units";
+                default: return "Tier 1 — Spore Crawlers\nExpedition enemy\nWeak to: Ranged units";
             }
         }
 
