@@ -11,7 +11,6 @@ namespace LunarDominion.UI
     public class TopBarView : MonoBehaviour
     {
         private Text _nameText;
-        private Text _levelText;
         private GameObject _editorRoot;
         private InputField _nameInput;
         private Text _editorHint;
@@ -44,14 +43,14 @@ namespace LunarDominion.UI
             var barImage = bar.GetComponent<Image>();
             if (barImage != null) barImage.raycastTarget = false;
 
-            // Left block (2026-11-07; username 2026-11-24): the
-            // player's name over the player level ("Level:XX",
-            // derived from progression — see PlayerLevelService).
-            // A transparent tap target under both labels opens
-            // the name editor; the labels themselves don't
-            // raycast, so taps land on the button. The name is
-            // the local half of the coming Firebase account (its
-            // display name).
+            // Left block (2026-11-07; username 2026-11-24): one
+            // line, "Username (Level)" — Patrick's format. The
+            // level is derived from progression (see
+            // PlayerLevelService). A transparent tap target under
+            // the label opens the name editor; the label itself
+            // doesn't raycast, so taps land on the button. The
+            // name is the local half of the coming Firebase
+            // account (its display name).
             var nameTap = UIHelpers.Panel(bar, "NameTap", new Color(0f, 0f, 0f, 0f),
                 new Vector2(0.005f, 0.02f), new Vector2(0.245f, 0.98f),
                 Vector2.zero, Vector2.zero);
@@ -59,12 +58,9 @@ namespace LunarDominion.UI
             nameBtn.targetGraphic = nameTap.GetComponent<Image>();
             nameBtn.onClick.AddListener(OpenNameEditor);
             _nameText = UIHelpers.LabelInRect(bar, "Username", "", 28,
-                Color.white, new Rect(0.01f, 0.52f, 0.24f, 0.97f), TextAnchor.MiddleCenter);
+                Color.white, new Rect(0.01f, 0.05f, 0.24f, 0.95f), TextAnchor.MiddleCenter);
             _nameText.fontStyle = FontStyle.Bold;
             _nameText.raycastTarget = false;
-            _levelText = UIHelpers.LabelInRect(bar, "Level", "Level:0", 26,
-                Color.white, new Rect(0.01f, 0.03f, 0.24f, 0.50f), TextAnchor.MiddleCenter);
-            _levelText.raycastTarget = false;
 
             // Four chips share the remaining 75% in one row (18.75%
             // each, ~360px per chip — the longest chip, "ALLOY
@@ -218,11 +214,10 @@ namespace LunarDominion.UI
             // RefreshAll, once a second plus every NotifyChanged), so
             // the level updates after upgrades and research
             // completions with no new event.
-            if (_nameText != null) _nameText.text = s.EffectiveUsername;
-            if (_levelText != null)
+            if (_nameText != null)
             {
                 int level = _controller.PlayerLevel != null ? _controller.PlayerLevel.Level() : 0;
-                _levelText.text = $"Level:{level}";
+                _nameText.text = $"{s.EffectiveUsername} ({level})";
             }
             if (_inboxButton != null)
             {
