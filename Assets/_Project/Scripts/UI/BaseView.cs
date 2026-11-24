@@ -3481,12 +3481,19 @@ namespace LunarDominion.UI
             // The group inherits the root's yaw; the cross is
             // symmetric, so the yaw is invisible.
 
+            // The pad and cross sit shifted toward the north end
+            // of the roof (Patrick, 2026-11-23): in the sign group's
+            // local frame north is -Z (the alert panel at -1.75 Z
+            // stands at the roof's far side), so the pad/cross take
+            // a -0.7 Z offset and stay clear of the panel post.
+            const float signZ = -0.7f;
+
             // White pad on the roof (the cylinder primitive is 2
             // units tall and 2 across, hence the half scales).
             var pad = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             pad.name = "HospitalSignPad";
             pad.transform.SetParent(group.transform, false);
-            pad.transform.localPosition = new Vector3(0f, 0.07f, 0f);
+            pad.transform.localPosition = new Vector3(0f, 0.07f, signZ);
             pad.transform.localScale = new Vector3(1.15f, 0.07f, 1.15f);
             var padCol = pad.GetComponent<Collider>();
             if (padCol != null) Destroy(padCol);
@@ -3498,7 +3505,7 @@ namespace LunarDominion.UI
             var vBar = GameObject.CreatePrimitive(PrimitiveType.Cube);
             vBar.name = "HospitalSignCrossV";
             vBar.transform.SetParent(group.transform, false);
-            vBar.transform.localPosition = new Vector3(0f, 0.17f, 0f);
+            vBar.transform.localPosition = new Vector3(0f, 0.17f, signZ);
             vBar.transform.localScale = new Vector3(0.55f, 0.06f, 1.7f);
             var vCol = vBar.GetComponent<Collider>();
             if (vCol != null) Destroy(vCol);
@@ -3507,7 +3514,7 @@ namespace LunarDominion.UI
             var hBar = GameObject.CreatePrimitive(PrimitiveType.Cube);
             hBar.name = "HospitalSignCrossH";
             hBar.transform.SetParent(group.transform, false);
-            hBar.transform.localPosition = new Vector3(0f, 0.17f, 0f);
+            hBar.transform.localPosition = new Vector3(0f, 0.17f, signZ);
             hBar.transform.localScale = new Vector3(1.7f, 0.06f, 0.55f);
             var hCol = hBar.GetComponent<Collider>();
             if (hCol != null) Destroy(hCol);
