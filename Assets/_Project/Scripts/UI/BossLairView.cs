@@ -1228,6 +1228,7 @@ namespace LunarDominion.UI
             // want to re-fight it.
             _selectedBossLevel = HighestUnlockedBossLevel();
             _root.SetActive(true);
+            SuppressNav(true);
             // Hero selection is menu-only: the 3D scene stays
             // hidden until the fight starts (Patrick 2026-11-13 —
             // "we shouldn't be seeing this boss, since we are
@@ -1268,6 +1269,23 @@ namespace LunarDominion.UI
             if (_ambience != null) _ambience.ReleaseEnvironment();
             if (_sceneRoot != null) _sceneRoot.SetActive(false);
             if (_root != null) _root.SetActive(false);
+            SuppressNav(false);
+        }
+
+        // Bottom-nav suppression for the whole lair visit
+        // (Patrick 2026-11-24: the base's bottom bar should not
+        // show on this view at all — previously only the fight
+        // itself suppressed it, so the enter screen showed the
+        // bar). Resolves the nav view lazily, like SetFightChrome
+        // always did.
+        private void SuppressNav(bool suppressed)
+        {
+            if (_bottomNav == null)
+            {
+                var navHost = GameObject.Find("BottomNavView");
+                if (navHost != null) _bottomNav = navHost.GetComponent<BottomNavView>();
+            }
+            if (_bottomNav != null) _bottomNav.SetSuppressed(suppressed);
         }
 
         // Hero selection mode: while the player is picking the
@@ -2346,15 +2364,13 @@ namespace LunarDominion.UI
             if (_topBarGo == null) _topBarGo = GameObject.Find("TopBar");
             if (_topBarGo != null) _topBarGo.SetActive(!fight);
             // The BottomNav routes through its own view (2026-11-18):
-            // the bar is player-toggled now, so a fight only
-            // SUPPRESSES it (and its MENU button) — the player's
-            // open/closed choice survives the fight.
-            if (_bottomNav == null)
-            {
-                var navHost = GameObject.Find("BottomNavView");
-                if (navHost != null) _bottomNav = navHost.GetComponent<BottomNavView>();
-            }
-            if (_bottomNav != null) _bottomNav.SetSuppressed(fight);
+            // the bar is player-toggled now, so suppression only
+            // hides it (and its MENU button) — the player's
+            // open/closed choice survives. The whole lair visit
+            // suppresses it (Patrick 2026-11-24), so a fight
+            // ending back at the enter screen keeps it suppressed
+            // while the lair stays open.
+            SuppressNav(fight || _visible);
             if (_bossHpText != null && _bossHpText.transform.parent is RectTransform barRt)
             {
                 // Fight height: level with the DEV button (Patrick
