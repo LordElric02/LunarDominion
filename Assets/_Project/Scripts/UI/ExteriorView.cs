@@ -2132,6 +2132,8 @@ namespace LunarDominion.UI
                         _marching[slot] = false;
                         _marchPaths[slot] = null;
                         HideRouteDots(slot);
+                        _marchLabels[slot] = null;
+                        RefreshMarchPanel();
                         var callback = _marchCallbacks[slot];
                         _marchCallbacks[slot] = null;
                         callback?.Invoke();
@@ -2813,7 +2815,7 @@ namespace LunarDominion.UI
         // the ground so it never clips the terrain. The caller
         // (MapExcursionService) chains outbound and return marches
         // through the callback.
-        public void StartMarch(int slot, Vector3 from, Vector3 to, Action onArrive)
+        public void StartMarch(int slot, Vector3 from, Vector3 to, Action onArrive, string label = null)
         {
             if (slot < 0 || slot >= _marchMarkers.Length) return;
             var marker = _marchMarkers[slot];
@@ -2845,6 +2847,8 @@ namespace LunarDominion.UI
             _marchTargets[slot] = path.Count > 0 ? path[0] : to;
             _marchCallbacks[slot] = onArrive;
             _marching[slot] = true;
+            _marchLabels[slot] = label;
+            RefreshMarchPanel();
         }
 
         // Stop one slot's march and hide its marker. Called when a
@@ -2858,9 +2862,63 @@ namespace LunarDominion.UI
             _marching[slot] = false;
             _marchCallbacks[slot] = null;
             _marchPaths[slot] = null;
+            _marchLabels[slot] = null;
+            RefreshMarchPanel();
             _markerWanted[slot] = false;
             HideRouteDots(slot);
             if (_marchMarkers[slot] != null) _marchMarkers[slot].SetActive(false);
+        }
+
+        // Rebuild the march tracker from the current march
+        // state: one row per marching army (labelled by the
+        // service at StartMarch), stacked from the top in army
+        // order, panel sized to fit; hidden when nothing is on
+        // the move or the Map is closed. Called on every march
+        // start, arrival and cancel, and from SetVisible.
+        private void RefreshMarchPanel()
+        {
+            if (_marchPanel == null) return;
+            int count = 0;
+            for (int slot = 0; slot < GameState.MaxArmies; slot++)
+                if (_marching[slot] && _marchLabels[slot] != null) count++;
+            _marchPanel.SetActive(_visible && count > 0);
+            if (count == 0) return;
+            const float rowH = 56f, gap = 8f, pad = 8f, panelW = 340f;
+            float height = pad * 2f + count * rowH + (count - 1) * gap;
+            var rt = _marchPanel.GetComponent<RectTransform>();
+            rt.offsetMin = new Vector2(-(panelW + 16f), -height / 2f);
+            rt.offsetMax = new Vector2(-16f, height / 2f);
+            int row = 0;
+            for (int slot = 0; slot < GameState.MaxArmies; slot++)
+            {
+                if (!_marching[slot] || _marchLabels[slot] == null) continue;
+                var btn = _marchRows[row];
+                _marchRowSlots[row] = slot;
+                btn.gameObject.SetActive(true);
+                var brt = btn.GetComponent<RectTransform>();
+                float top = 1f - (pad + row * (rowH + gap)) / height;
+                float bottom = 1f - (pad + row * (rowH + gap) + rowH) / height;
+                brt.anchorMin = new Vector2(pad / panelW, bottom);
+                brt.anchorMax = new Vector2(1f - pad / panelW, top);
+                brt.offsetMin = Vector2.zero;
+                brt.offsetMax = Vector2.zero;
+                var txt = btn.GetComponentInChildren<Text>();
+                if (txt != null) txt.text = _marchLabels[slot];
+                row++;
+            }
+            for (int i = row; i < _marchRows.Length; i++)
+                _marchRows[i].gameObject.SetActive(false);
+        }
+
+        // March tracker row click: glide the camera to the
+        // army's marker, wherever it is right now.
+        private void OnMarchRowClicked(int row)
+        {
+            if (row < 0 || row >= _marchRowSlots.Length) return;
+            int slot = _marchRowSlots[row];
+            if (slot < 0 || slot >= _marchMarkers.Length) return;
+            if (!_marching[slot] || _marchMarkers[slot] == null) return;
+            GlideTo(_marchMarkers[slot].transform.position);
         }
 
         // Show or hide every slot's marker and route dots to match
@@ -3711,6 +3769,14 @@ namespace LunarDominion.UI
         private readonly Button[] _findChips = new Button[ChipCategories.Length];
         private Button _campChip;
         private GameObject _campMenu;
+        // March tracker (Patrick, 2026-11-24): a right-middle
+        // list of the armies currently on the move — one row per
+        // marching army, all three when all three are out — and
+        // clicking a row glides the camera to that army.
+        private GameObject _marchPanel;
+        private readonly Button[] _marchRows = new Button[GameState.MaxArmies];
+        private readonly int[] _marchRowSlots = new int[GameState.MaxArmies];
+        private readonly string[] _marchLabels = new string[GameState.MaxArmies];
         private int _campFindMaxTier = 1;
         private bool _findBarOpen;
         private SearchCategory _searchCategory = SearchCategory.None;
@@ -3871,6 +3937,22 @@ namespace LunarDominion.UI
                 new Vector2(0.5064f, 1f), new Vector2(0.5064f, 1f),
                 new Vector2(0f, 8f), new Vector2(200f, 74f));
             _campMenu.SetActive(false);
+
+            // March tracker panel: right edge, middle of the
+            // screen (Patrick). Anchored (1, 0.5); RefreshMarchPanel
+            // sizes it to the rows actually showing and stacks them.
+            _marchPanel = UIHelpers.Panel(canvas.gameObject, "MarchPanel", barColor,
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(-356f, -40f), new Vector2(-16f, 40f));
+            for (int i = 0; i < _marchRows.Length; i++)
+            {
+                int row = i;
+                var btn = UIHelpers.Button(_marchPanel, "MarchRow" + i, "", 22,
+                    UIHelpers.Hex("#1A2436"), Color.white);
+                _marchRows[i] = btn;
+                btn.onClick.AddListener(() => OnMarchRowClicked(row));
+            }
+            _marchPanel.SetActive(false);
 
             _searchRoot = new GameObject("SearchHighlights");
             _searchRoot.SetActive(false);
@@ -4656,6 +4738,7 @@ namespace LunarDominion.UI
             if (_findBar != null) _findBar.SetActive(visible && _findBarOpen);
             if (_searchRoot != null) _searchRoot.SetActive(visible);
             if (_baseBtnRoot != null) _baseBtnRoot.SetActive(visible && !_findBarOpen);
+            RefreshMarchPanel();
             // Full-screen Map (Patrick 2026-11-13): the TopBar
             // and BottomNav panels hide while the Map is up —
             // the same canvas panels the boss fight's chrome

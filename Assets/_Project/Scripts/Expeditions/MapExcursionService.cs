@@ -453,7 +453,8 @@ namespace LunarDominion.Expeditions
             slot.Marching = true;
             OnExcursionStateChanged?.Invoke();
             // Outbound: castle (origin) to the point, 1 unit above ground.
-            _view.StartMarch(slotIndex, new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), () => OnArrivedAtTarget(slotIndex));
+            _view.StartMarch(slotIndex, new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), () => OnArrivedAtTarget(slotIndex),
+                "Army " + (slotIndex + 1) + " \u2192 " + point.Title);
         }
 
         /// <summary>The slot's squad as unit ids for the view's
@@ -733,7 +734,8 @@ namespace LunarDominion.Expeditions
             {
                 var from = slot.Point;
                 slot.Point = null;
-                _view.StartMarch(slotIndex, from.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), () => FinishMarch(slotIndex));
+                _view.StartMarch(slotIndex, from.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), () => FinishMarch(slotIndex),
+                    "Army " + (slotIndex + 1) + " \u2192 Base");
             }
             else
             {
@@ -1252,7 +1254,8 @@ namespace LunarDominion.Expeditions
         // Return march: back to the castle, then the excursion ends.
         private void StartReturnMarch(int slotIndex, MapPointData point)
         {
-            _view.StartMarch(slotIndex, point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), () => FinishMarch(slotIndex));
+            _view.StartMarch(slotIndex, point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), () => FinishMarch(slotIndex),
+                "Army " + (slotIndex + 1) + " \u2192 Base");
         }
 
         // Default squad (available army + heroes combined, strongest
