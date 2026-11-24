@@ -347,6 +347,18 @@ namespace LunarDominion.UI
             }
             units.Sort((a, b) => a.Tier.CompareTo(b.Tier));
 
+            // Promotion target (2026-11-23, Patrick): the highest
+            // tier this barracks has unlocked. Every lower tier's
+            // row offers promotion straight to it — at Aegis 25-27
+            // that is T4, so T1-T3 all promote to T4; at barracks
+            // 30 it is T6, and T1-T5 all promote to T6.
+            int barracksLevel = _controller.State.GetLevel(_current.Id);
+            UnitDefinition maxDef = null;
+            foreach (var u in units)
+            {
+                if (RecruitmentService.RequiredBarracksLevel(u.Tier) <= barracksLevel) maxDef = u;
+            }
+
             foreach (var def in units)
             {
                 var row = new RecruitRow { Def = def };
@@ -355,10 +367,11 @@ namespace LunarDominion.UI
                 var rowRt = row.Root.AddComponent<RectTransform>();
                 rowRt.anchorMin = Vector2.zero;
                 rowRt.anchorMax = Vector2.one;
+                bool promotable = maxDef != null && def.Tier < maxDef.Tier;
                 var le = row.Root.AddComponent<LayoutElement>();
-                // Tier 2+ rows are taller: they carry a Promote
+                // Promotable rows are taller: they carry a Promote
                 // button under the Recruit button (2026-11-23).
-                le.preferredHeight = def.Tier >= 2 ? 150 : 118;
+                le.preferredHeight = promotable ? 150 : 118;
                 le.minHeight = le.preferredHeight;
                 var rowBg = row.Root.AddComponent<Image>();
                 rowBg.color = UIHelpers.Hex("#1A2436");
@@ -380,7 +393,7 @@ namespace LunarDominion.UI
                 row.RecruitButton = UIHelpers.Button(row.Root, "RecruitBtn", "Recruit", 24,
                     UIHelpers.Hex("#2E7D32"), Color.white);
                 var btnRt = row.RecruitButton.GetComponent<RectTransform>();
-                if (def.Tier >= 2)
+                if (promotable)
                 {
                     btnRt.anchorMin = new Vector2(0.68f, 0.56f);
                     btnRt.anchorMax = new Vector2(0.97f, 0.90f);
@@ -395,16 +408,19 @@ namespace LunarDominion.UI
                 var captured = def;
                 row.RecruitButton.onClick.AddListener(() => OnRecruitClicked(captured));
 
-                // Promotion (2026-11-23, Patrick): on Tier 2+ rows,
-                // a Promote button under Recruit upgrades the best
-                // owned unit of the tier below into this tier, at
-                // the difference in recruit costs. The label names
-                // the candidate's level and the price (or the short
-                // blocker); the full reason logic lives in
+                // Promotion (2026-11-23, Patrick): on every row
+                // below the highest unlocked tier, a Promote button
+                // under Recruit upgrades the best owned unit OF
+                // THIS ROW'S TIER straight to that highest tier,
+                // at the difference in recruit costs (stepping
+                // tier by tier would total the same). The label
+                // names the target tier and the price (or the
+                // short blocker); the full reason logic lives in
                 // RecruitmentService.CheckPromote, like Recruit.
-                if (def.Tier >= 2)
+                if (promotable)
                 {
-                    var fromDef = units.Find(u => u.Tier == def.Tier - 1);
+                    var fromDef = def;
+                    var toDef = maxDef;
                     row.PromoteButton = UIHelpers.Button(row.Root, "PromoteBtn", "Promote", 20,
                         UIHelpers.Hex("#8D6E00"), Color.white);
                     var pRt = row.PromoteButton.GetComponent<RectTransform>();
@@ -413,11 +429,11 @@ namespace LunarDominion.UI
                     pRt.offsetMin = Vector2.zero;
                     pRt.offsetMax = Vector2.zero;
                     var capturedFrom = fromDef;
-                    row.PromoteButton.onClick.AddListener(() => OnPromoteClicked(capturedFrom, captured));
-                    var pStatus = _controller.Recruitment.CheckPromote(fromDef, def,
-                        out var candidate, out var pCost, out _);
-                    string pLabel = "Promote";
-                    if (candidate != null) pLabel += $" Lv {candidate.Level}";
+                    var capturedTo = toDef;
+                    row.PromoteButton.onClick.AddListener(() => OnPromoteClicked(capturedFrom, capturedTo));
+                    var pStatus = _controller.Recruitment.CheckPromote(fromDef, toDef,
+                        out _, out var pCost, out _);
+                    string pLabel = $"Promote → T{toDef.Tier}";
                     pLabel += "\n" + (pStatus == PromoteStatus.CanPromote
                         ? CostText(pCost)
                         : pStatus == PromoteStatus.NoCandidate ? "None owned"

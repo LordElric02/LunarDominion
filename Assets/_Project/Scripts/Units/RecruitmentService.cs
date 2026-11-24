@@ -233,9 +233,12 @@ namespace LunarDominion.Units
         }
 
         /// <summary>Promotion (2026-11-23, Patrick): an existing
-        /// troop can be promoted to the next tier of its own class
-        /// (T1 up to T6) instead of recruiting the higher tier
-        /// fresh. Promotion RESETS the unit to level 1 with 0 XP
+        /// troop can be promoted to a higher tier of its own
+        /// class instead of recruiting the higher tier fresh —
+        /// the barracks panel offers promotion straight to the
+        /// highest unlocked tier (T1-T3 all promote to T4 while
+        /// T4 is the max unlocked; T1-T5 to T6 at barracks 30).
+        /// Promotion RESETS the unit to level 1 with 0 XP
         /// (Patrick's call, 2026-11-23: each tier is a fresh
         /// climb, defending the long endgame grind — and with
         /// tier base stats ~2.2x the tier below, the promoted
