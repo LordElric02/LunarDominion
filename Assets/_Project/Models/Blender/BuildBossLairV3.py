@@ -611,15 +611,37 @@ def verify(objects):
     check(abs(min(ys)) <= 17.2 and abs(max(ys)) <= 14.6,
           "footprint y in [-17.2, 14.6] (got [%.2f, %.2f])"
           % (min(ys), max(ys)))
-    # The ground disc's bottom is the model's base plane; spike
-    # bases deliberately bury ~0.5 below it into the mound/disc.
+    # The ground disc's bottom is the model's base plane. Spike
+    # bases deliberately bury below it into the mound: a tilted
+    # cone's lowest rim point is centre_z - (depth/2)cos(tilt)
+    # - radius*sin(tilt); with centre_z = 0.42*depth that is
+    # -(0.08*depth + 1.5*sin25) — up to -1.08 for the tallest
+    # spike. So the burial check is per-class: spikes may reach
+    # -1.15 (that computed bound + margin); EVERYTHING ELSE must
+    # stay at the base plane — that is what catches a genuinely
+    # sunken part. (First run, 2026-11-24: min z -0.812, owned
+    # by a spike rim — the flat -0.6 bound here missed the tilt
+    # term and false-failed.)
     ground_obj = by_name("Lair_Ground")
     if ground_obj is not None:
         gz = min(p.z for p in world_pts(ground_obj))
         check(abs(gz) < 1e-4, "ground disc flat-based at z=0 (min z %.3f)" % gz)
     else:
         check(False, "no ground disc")
-    check(min(zs) >= -0.6, "nothing buried past -0.6 (min z %.3f)" % min(zs))
+    lowest_name, lowest_z = None, None
+    burial_ok = True
+    for o in objects:
+        if o.type != "MESH":
+            continue
+        oz = min(p.z for p in world_pts(o))
+        if lowest_z is None or oz < lowest_z:
+            lowest_name, lowest_z = o.name, oz
+        limit = -1.15 if o.name.startswith("Lair_Spike_") else -0.05
+        if oz < limit:
+            burial_ok = False
+    check(burial_ok,
+          "burial within per-class bounds (lowest: %s at %.3f)"
+          % (lowest_name, lowest_z if lowest_z is not None else 0.0))
     check(max(zs) <= MAX_HEIGHT + 0.01,
           "height %.2f (spec <= %.1f)" % (max(zs), MAX_HEIGHT))
     check(max(zs) >= 7.5, "height %.2f (spec >= 7.5, reads from far)"
