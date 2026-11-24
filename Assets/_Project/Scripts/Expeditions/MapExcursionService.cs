@@ -806,6 +806,11 @@ namespace LunarDominion.Expeditions
         /// FIND camp dropdown can offer exactly the tiers a player
         /// can meet (Patrick 2026-11-23: don't show all camp
         /// levels to all users).</summary>
+        /// <summary>The boss lair appears on the Map at Nexus 10
+        /// (Patrick 2026-11-24): a new player should not see it
+        /// before then. Matches the lair point's own info text.</summary>
+        public const int BossLairUnlockNexus = 10;
+
         public static int CampTierUnlockNexus(int tier)
         {
             switch (tier)
@@ -1019,7 +1024,8 @@ namespace LunarDominion.Expeditions
 
         /// <summary>Retired (2026-11-10): the boss no longer respawns —
         /// it never leaves. This only clears a stale BossRespawnUtc
-        /// left by an old save and makes sure the lair shows.</summary>
+        /// left by an old save and re-syncs the lair's Nexus-10
+        /// visibility.</summary>
         public void CheckBossRespawn()
         {
             if (!string.IsNullOrEmpty(_state.BossRespawnUtc))
@@ -1028,16 +1034,18 @@ namespace LunarDominion.Expeditions
                 _saveGame?.Invoke();
                 _notifyChanged?.Invoke();
             }
-            _view?.SetBossVisible(true);
+            _view?.SetBossVisible(_state.NexusLevel >= BossLairUnlockNexus);
         }
 
-        /// <summary>The boss lair is always visible now (2026-11-10
-        /// ladder redesign — the boss never vanishes). Called on load
-        /// and whenever the Map is shown.</summary>
+        /// <summary>The boss never vanishes once unlocked
+        /// (2026-11-10 ladder redesign), but the lair itself is
+        /// hidden until Nexus 10 (Patrick 2026-11-24). Called on
+        /// load and whenever the Map is shown, so the lair appears
+        /// the moment the Nexus reaches 10.</summary>
         public void SyncBoss()
         {
             if (_view == null) return;
-            _view.SetBossVisible(true);
+            _view.SetBossVisible(_state.NexusLevel >= BossLairUnlockNexus);
         }
 
         /// <summary>The War Robot encounter. Null when the catalog

@@ -9,8 +9,9 @@
 # and the 12-unit mech now standing beside it. V3 keeps V2's
 # read (rock mound, portal frame, near-black opening, glow
 # inside, spikes, rubble, ruined-bunker metal) and changes:
-#   - SIZE: footprint +/-13.5, height ~9.0 — at the map's flat 2x
-#     legacy scale that is ~54 wide and ~18 tall, fortress-class.
+#   - SIZE: footprint +/-13.5, height ~13.0 (V3.1) — at the map's
+#     flat 2x legacy scale that is ~54 wide and ~26 tall,
+#     fortress-class.
 #   - FACING: the doorway faces -Y in Blender = +Z (north) in
 #     Unity, toward the boss figure standing 36 units north of
 #     the structure. V2's door faced +X (east), away from it.
@@ -18,6 +19,11 @@
 #     not V2's red robot-eye glow: a lit panel inside the opening,
 #     a lava pool on the threshold, runnels spilling forward,
 #     ember stones, and a lava vent crater on the mound top.
+# V3.1 (2026-11-24, Patrick's Play check on V3): the mound read
+# as a flat black disc — dome too flat, basalt too dark, spikes
+# too small. Dome squash 0.34 -> 0.50 (top 8.5 -> 12.5), rock
+# base colours lifted (0.16 -> 0.27 / 0.21 -> 0.33) with
+# stronger texture contrast, spikes ~1.4x taller and thicker.
 #
 # DESIGN (Blender coords: x = Unity x, y = -Unity z, z = up;
 # front of the lair is -Y): a cluster of three squashed rock
@@ -65,18 +71,18 @@ TEXTURE_NAMES = {
 
 # Palette (linear RGB). Saturated on purpose: pale tints read
 # washed-out white in Unity (the Hydroponics lesson).
-ROCK_DARK = (0.16, 0.15, 0.17)   # basalt mound / pillars
-ROCK_ALT = (0.21, 0.18, 0.16)    # warmer rear mound / rubble
+ROCK_DARK = (0.27, 0.25, 0.27)   # basalt mound / pillars
+ROCK_ALT = (0.33, 0.29, 0.25)    # warmer rear mound / rubble
 LAIR_METAL = (0.20, 0.22, 0.26)  # dark metal plates / strips
 DARK_OPENING = (0.02, 0.02, 0.03)  # near-black cave mouth
 GLOW_LAVA = (1.0, 0.36, 0.04)    # lava orange (LavaTube palette)
 HAZARD_YELLOW = (0.95, 0.75, 0.08)  # hazard stripe yellow
 HAZARD_BLACK = (0.04, 0.04, 0.04)   # hazard stripe black
-GROUND_DARK = (0.09, 0.09, 0.10)  # ground disc
+GROUND_DARK = (0.15, 0.14, 0.15)  # ground disc
 
-# Envelope: footprint +/-14.6, height 0-9.2 (authored units;
+# Envelope: footprint +/-15.4, height 0-13.2 (authored units;
 # the map renders the lair at 2x).
-MAX_HEIGHT = 9.2
+MAX_HEIGHT = 13.2
 
 
 def make_material(name, rgb, metallic=0.0, roughness=0.8, emission=0.0,
@@ -230,16 +236,16 @@ def build():
     objects.append(add_cylinder("Lair_Ground", 24, 14.0, 0.5, 0.25, ground))
 
     # ---- The mound: three overlapping squashed spheres. Main
-    # dome centre (0, 1.5): r 12.5 x scale (1.05, 0.95, 0.34) —
-    # half-height 4.25, centre z 4.25 so the bottom is exactly
-    # z 0, top at 8.5. Rear dome and a side boulder layer the
+    # dome centre (0, 1.5): r 12.5 x scale (1.05, 0.95, 0.50) —
+    # half-height 6.25, centre z 6.25 so the bottom is exactly
+    # z 0, top at 12.5. Rear dome and a side boulder layer the
     # silhouette. ----
     objects.append(add_sphere("Lair_Mound", 18, 9, 12.5,
-                              (0.0, 1.5, 4.25), rock, (1.05, 0.95, 0.34)))
+                              (0.0, 1.5, 6.25), rock, (1.05, 0.95, 0.50)))
     objects.append(add_sphere("Lair_MoundRear", 14, 7, 8.0,
-                              (0.0, 6.5, 3.36), rock_alt, (1.0, 1.0, 0.42)))
+                              (0.0, 6.5, 4.4), rock_alt, (1.0, 1.0, 0.55)))
     objects.append(add_sphere("Lair_Boulder", 12, 6, 5.5,
-                              (-9.0, 2.0, 2.2), rock_alt, (1.0, 1.0, 0.40)))
+                              (-9.0, 2.0, 2.86), rock_alt, (1.0, 1.0, 0.52)))
 
     # ---- Portal frame on the front (-Y, toward the boss
     # figure): two rock pillars + a lintel, standing proud of
@@ -290,22 +296,22 @@ def build():
                                metal))
 
     # ---- Lava vent on the mound top: a short rock crater
-    # cylinder with a glowing disc inside (top z ~9.0, the
+    # cylinder with a glowing disc inside (top z ~13.0, the
     # model's tallest point). ----
-    objects.append(add_cylinder("Lair_Vent", 10, 1.6, 1.3, 8.35, rock,
+    objects.append(add_cylinder("Lair_Vent", 10, 1.6, 1.3, 12.35, rock,
                                 x=0.0, y=1.5))
-    objects.append(add_cylinder("Lair_VentGlow", 10, 1.15, 0.3, 8.85, glow,
+    objects.append(add_cylinder("Lair_VentGlow", 10, 1.15, 0.3, 12.85, glow,
                                 x=0.0, y=1.5))
 
     # ---- Seven rock spikes ringed around the mound (sides and
     # back only — the front sector is the portal), tilted
     # outward 25 deg. ----
-    spike_spots = ((10.5, -3.5, 5.2), (11.5, 3.0, 5.6), (7.5, 9.0, 4.6),
-                   (0.5, 11.5, 5.4), (-7.0, 9.5, 4.8), (-11.0, 3.5, 5.6),
-                   (-10.5, -3.5, 5.0))
+    spike_spots = ((10.5, -3.5, 7.3), (11.5, 3.0, 7.8), (7.5, 9.0, 6.4),
+                   (0.5, 11.5, 7.6), (-7.0, 9.5, 6.7), (-11.0, 3.5, 7.8),
+                   (-10.5, -3.5, 7.0))
     for i, (sx, sy, sh) in enumerate(spike_spots):
         objects.append(add_cone_tilted("Lair_Spike_%02d" % (i + 1),
-                                       7, 1.5, 0.0, sh,
+                                       7, 1.9, 0.0, sh,
                                        (sx, sy, sh * 0.42), rock,
                                        tilt_deg=25.0, tilt_dir=(sx, sy)))
 
@@ -434,11 +440,11 @@ def make_rock_texture(rgb, seed, filename):
     for _ in range(60):
         gx, gy = rng.uniform(0, S, 2)
         r = rng.uniform(30, 120)
-        strength = rng.uniform(-0.15, 0.15)
+        strength = rng.uniform(-0.22, 0.22)
         d2 = (xx - gx) ** 2 + (yy - gy) ** 2
         blotch += strength * np.exp(-d2 / (2.0 * (r / 2.5) ** 2))
     # Fine speckle.
-    speckle = rng.uniform(0.88, 1.12, (S, S)).astype(np.float32)
+    speckle = rng.uniform(0.82, 1.18, (S, S)).astype(np.float32)
     # Dark pits (small, deep).
     pits = np.zeros((S, S), dtype=np.float32)
     for _ in range(20):
@@ -606,18 +612,18 @@ def verify(objects):
           "total tris %d (spec 800-8000)" % total_tris)
     pts = [p for o in objects if o.type == "MESH" for p in world_pts(o)]
     xs = [p.x for p in pts]; ys = [p.y for p in pts]; zs = [p.z for p in pts]
-    check(abs(min(xs)) <= 14.6 and abs(max(xs)) <= 14.6,
-          "footprint x in +/-14.6 (got [%.2f, %.2f])" % (min(xs), max(xs)))
-    check(abs(min(ys)) <= 17.2 and abs(max(ys)) <= 14.6,
-          "footprint y in [-17.2, 14.6] (got [%.2f, %.2f])"
+    check(abs(min(xs)) <= 15.4 and abs(max(xs)) <= 15.4,
+          "footprint x in +/-15.4 (got [%.2f, %.2f])" % (min(xs), max(xs)))
+    check(abs(min(ys)) <= 17.2 and abs(max(ys)) <= 15.4,
+          "footprint y in [-17.2, 15.4] (got [%.2f, %.2f])"
           % (min(ys), max(ys)))
     # The ground disc's bottom is the model's base plane. Spike
     # bases deliberately bury below it into the mound: a tilted
     # cone's lowest rim point is centre_z - (depth/2)cos(tilt)
     # - radius*sin(tilt); with centre_z = 0.42*depth that is
-    # -(0.08*depth + 1.5*sin25) — up to -1.08 for the tallest
+    # -(0.08*depth + 1.9*sin25) — up to -1.42 for the tallest
     # spike. So the burial check is per-class: spikes may reach
-    # -1.15 (that computed bound + margin); EVERYTHING ELSE must
+    # -1.55 (that computed bound + margin); EVERYTHING ELSE must
     # stay at the base plane — that is what catches a genuinely
     # sunken part. (First run, 2026-11-24: min z -0.812, owned
     # by a spike rim — the flat -0.6 bound here missed the tilt
@@ -638,7 +644,7 @@ def verify(objects):
             lowest_name, lowest_z = o.name, oz
         # Per-class bounds, each from the part's authored
         # geometry: tilted spike rims reach -(0.08*depth +
-        # 1.5*sin25) = -1.08 worst case; the rotated
+        # 1.9*sin25) = -1.42 worst case; the rotated
         # half-buried plates' lowest corners reach ~-0.35
         # (second run caught them at that class's -0.05 —
         # also deliberate burial, missed in the first fix);
@@ -646,7 +652,7 @@ def verify(objects):
         # offender is printed — the first fix printed only
         # the lowest part, which hid the actual offender.
         if o.name.startswith("Lair_Spike_"):
-            limit = -1.15
+            limit = -1.55
         elif o.name.startswith("Lair_BrokenPlate"):
             limit = -0.55
         else:
@@ -660,7 +666,7 @@ def verify(objects):
              ("; offenders: " + "; ".join(offenders)) if offenders else ""))
     check(max(zs) <= MAX_HEIGHT + 0.01,
           "height %.2f (spec <= %.1f)" % (max(zs), MAX_HEIGHT))
-    check(max(zs) >= 7.5, "height %.2f (spec >= 7.5, reads from far)"
+    check(max(zs) >= 11.0, "height %.2f (spec >= 11.0, reads from far)"
           % max(zs))
     # The dark opening must face -Y (north in Unity, toward the
     # boss figure).

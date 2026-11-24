@@ -3808,18 +3808,25 @@ namespace LunarDominion.UI
             }
         }
 
-        // Show or hide the boss lair (2026-11-09; ladder 2026-11-10):
-        // the boss never vanishes now, so this is always called with
-        // true. Hiding also hides it from taps. The lair (index 21)
-        // and its robot both carry Data.Index == 21, so one pass hides
-        // the whole lair.
+        // Boss lair visibility (2026-11-09; ladder 2026-11-10;
+        // Nexus gate 2026-11-24): the service drives this from the
+        // Nexus level — hidden before Nexus 10, always shown after
+        // (the boss never vanishes). The state is kept in
+        // _bossVisible so SetVisible's point pass and the FIND
+        // search honour it whatever order they run in; hiding also
+        // hides the lair from taps. The lair structure (index 21)
+        // and its mech both carry Data.Index == 21, so one pass
+        // covers the whole lair.
+        private bool _bossVisible;
+
         public void SetBossVisible(bool visible)
         {
+            _bossVisible = visible;
             foreach (var point in _mapPoints)
             {
                 if (point.Data == null || point.Data.Index != 21) continue;
                 if (point.Data.Kind != MapPointKind.BossLair) continue;
-                if (point.Go != null) point.Go.SetActive(visible);
+                if (point.Go != null) point.Go.SetActive(visible && _visible);
             }
         }
 
@@ -4286,7 +4293,10 @@ namespace LunarDominion.UI
                     }
                     break;
                 case SearchCategory.Lair:
-                    _searchMatches.Add(NodeDefs[21].Position);
+                    // Pre-Nexus-10 the lair is not on the map at
+                    // all: no match, so the search reports nothing
+                    // found and never glides there.
+                    if (_bossVisible) _searchMatches.Add(NodeDefs[21].Position);
                     break;
             }
             // Nearest first, measured from where the camera is
@@ -4935,6 +4945,13 @@ namespace LunarDominion.UI
                 // (an empty slot must stay hidden) — handled below.
                 if (point.Data != null && point.Data.Kind == MapPointKind.Camp
                     && point.Data.Index >= CampSlotIndexBase) continue;
+                // The boss lair additionally honours its Nexus-10
+                // gate, whatever the Map's own visibility does.
+                if (point.Data != null && point.Data.Kind == MapPointKind.BossLair)
+                {
+                    if (point.Go != null) point.Go.SetActive(visible && _bossVisible);
+                    continue;
+                }
                 if (point.Go != null) point.Go.SetActive(visible);
             }
             for (int slot = 0; slot < CampSlotCount; slot++) ApplySlotVisibility(slot);
