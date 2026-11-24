@@ -3621,12 +3621,13 @@ namespace LunarDominion.UI
         // again cycles to the next. Only usable places match:
         // nodes that are neither depleted (hidden) nor being
         // farmed, and camp slots currently holding creatures.
-        private enum SearchCategory { None, Biomass, Alloy, Helium, Tier1, Tier2, Tier3, Lair }
+        private enum SearchCategory { None, Biomass, Alloy, Helium, Tier1, Tier2, Tier3, Tier4, Tier5, Tier6, Lair }
 
         private static readonly SearchCategory[] ChipCategories =
         {
             SearchCategory.Biomass, SearchCategory.Alloy, SearchCategory.Helium,
             SearchCategory.Tier1, SearchCategory.Tier2, SearchCategory.Tier3,
+            SearchCategory.Tier4, SearchCategory.Tier5, SearchCategory.Tier6,
             SearchCategory.Lair
         };
 
@@ -3674,6 +3675,9 @@ namespace LunarDominion.UI
                 case SearchCategory.Tier1: return "Tier 1 camp";
                 case SearchCategory.Tier2: return "Tier 2 camp";
                 case SearchCategory.Tier3: return "Tier 3 camp";
+                case SearchCategory.Tier4: return "Tier 4 camp";
+                case SearchCategory.Tier5: return "Tier 5 camp";
+                case SearchCategory.Tier6: return "Tier 6 camp";
                 case SearchCategory.Lair: return "Boss Lair";
                 default: return "";
             }
@@ -3689,6 +3693,9 @@ namespace LunarDominion.UI
                 case SearchCategory.Tier1: return "No Tier 1 camps on the map right now";
                 case SearchCategory.Tier2: return "No Tier 2 camps on the map right now";
                 case SearchCategory.Tier3: return "No Tier 3 camps on the map right now";
+                case SearchCategory.Tier4: return "No Tier 4 camps on the map right now";
+                case SearchCategory.Tier5: return "No Tier 5 camps on the map right now";
+                case SearchCategory.Tier6: return "No Tier 6 camps on the map right now";
                 default: return "Nothing found";
             }
         }
@@ -3746,15 +3753,19 @@ namespace LunarDominion.UI
                 new Rect(0.02f, 0.55f, 0.98f, 0.97f), TextAnchor.MiddleCenter);
             _findStatus.verticalOverflow = VerticalWrapMode.Overflow;
 
-            string[] chipLabels = { "BIO", "ALLOY", "HE-3", "T1", "T2", "T3", "LAIR", "\u00D7" };
+            // T4-T6 chips added 2026-11-23 (Patrick): camps of
+            // those tiers spawn from Nexus 20/25/29 but the bar
+            // only knew T1-T3. 11 chips now, so the step/width
+            // shrank from 0.1235/0.111 to fit the same bar.
+            string[] chipLabels = { "BIO", "ALLOY", "HE-3", "T1", "T2", "T3", "T4", "T5", "T6", "LAIR", "\u00D7" };
             for (int i = 0; i < chipLabels.Length; i++)
             {
                 bool isClear = i == chipLabels.Length - 1;
                 var chip = UIHelpers.Button(_findBar, "FindChip" + i, chipLabels[i], 26,
                     UIHelpers.Hex("#1A2436"), Color.white);
                 var rt = chip.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0.012f + i * 0.1235f, 0.07f);
-                rt.anchorMax = new Vector2(0.012f + i * 0.1235f + 0.111f, 0.47f);
+                rt.anchorMin = new Vector2(0.012f + i * 0.0891f, 0.07f);
+                rt.anchorMax = new Vector2(0.012f + i * 0.0891f + 0.085f, 0.47f);
                 rt.offsetMin = Vector2.zero;
                 rt.offsetMax = Vector2.zero;
                 if (isClear)
@@ -3837,8 +3848,14 @@ namespace LunarDominion.UI
                 case SearchCategory.Tier1:
                 case SearchCategory.Tier2:
                 case SearchCategory.Tier3:
+                case SearchCategory.Tier4:
+                case SearchCategory.Tier5:
+                case SearchCategory.Tier6:
                     int tier = _searchCategory == SearchCategory.Tier1 ? 1
-                        : _searchCategory == SearchCategory.Tier2 ? 2 : 3;
+                        : _searchCategory == SearchCategory.Tier2 ? 2
+                        : _searchCategory == SearchCategory.Tier3 ? 3
+                        : _searchCategory == SearchCategory.Tier4 ? 4
+                        : _searchCategory == SearchCategory.Tier5 ? 5 : 6;
                     for (int slot = 0; slot < CampSlotCount; slot++)
                     {
                         if (_campSlotTier[slot] == tier) _searchMatches.Add(CampSlotPositions[slot]);
