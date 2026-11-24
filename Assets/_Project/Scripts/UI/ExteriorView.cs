@@ -4902,6 +4902,27 @@ namespace LunarDominion.UI
             if (_mapPostVolume != null) _mapPostVolume.enabled = false;
         }
 
+        // One-shot return focus (2026-11-24, Patrick): leaving
+        // the boss lair should land the camera outside the lair,
+        // not back at the home base. The bootstrap sets this when
+        // the lair closes; the next SetVisible(true) consumes it
+        // and centres there instead of the base. Every later
+        // opening recentres on the base as before.
+        private Vector3? _returnFocus;
+
+        /// <summary>World position of the boss lair map point
+        /// (NodeDefs 21).</summary>
+        public static Vector3 LairMapPosition => NodeDefs[21].Position;
+
+        /// <summary>Ask the Map to centre on a world position the
+        /// next time it opens (one-shot).</summary>
+        public void SetReturnFocus(Vector3 worldPosition)
+        {
+            _returnFocus = new Vector3(
+                Mathf.Clamp(worldPosition.x, -PanLimitX, PanLimitX), 0f,
+                Mathf.Clamp(worldPosition.z, -PanLimitZ, PanLimitZ));
+        }
+
         public void SetVisible(bool visible)
         {
             _visible = visible;
@@ -4960,9 +4981,12 @@ namespace LunarDominion.UI
             if (_bottomNav != null) _bottomNav.SetSuppressed(visible);
             if (visible)
             {
-                // Opening the Map always recentres on the base — the
-                // pan starts from zero each time.
-                _panOffset = Vector3.zero;
+                // Opening the Map recentres on the base — the pan
+                // starts from zero each time — UNLESS a one-shot
+                // return focus was set (leaving the boss lair
+                // lands outside the lair, Patrick 2026-11-24).
+                _panOffset = _returnFocus ?? Vector3.zero;
+                _returnFocus = null;
                 _pointerDown = false;
                 _isDrag = false;
                 ApplyCamera();

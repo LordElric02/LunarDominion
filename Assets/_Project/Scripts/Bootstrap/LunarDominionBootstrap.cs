@@ -24,6 +24,10 @@ namespace LunarDominion.Bootstrap
         private MapInfoView _mapInfoView;
         private ArmyView _armyView;
         private BossLairView _lairView;
+        // True while the boss lair is on screen, so leaving it
+        // (its Back to Map button, or any bottom-nav tab) can land
+        // the Map camera outside the lair (Patrick 2026-11-24).
+        private bool _lairOpen;
         private MusicDirector _music;
         private MapExcursionService _excursions;
         private InboxService _inbox;
@@ -199,6 +203,7 @@ namespace LunarDominion.Bootstrap
             _mapInfoView.Hide();
             _selectedPoint = null;
             _exteriorView.SetVisible(false);
+            _lairOpen = true;
             _lairView.Show();
             _music?.PlayLair();
         }
@@ -250,6 +255,10 @@ namespace LunarDominion.Bootstrap
             _lairView.Hide();
             _mapInfoView.Hide();
             _selectedPoint = null;
+            // Land outside the lair, not back at the base
+            // (Patrick 2026-11-24).
+            _lairOpen = false;
+            _exteriorView.SetReturnFocus(ExteriorView.LairMapPosition);
             _exteriorView.SetVisible(true);
             RefreshMapNodeStates();
             _music?.PlayExterior();
@@ -412,6 +421,11 @@ namespace LunarDominion.Bootstrap
             // (2026-11-15): marches run in the background and their
             // results land in the Inbox.
             _selectedPoint = null;
+            // Leaving the lair via a tab (Patrick 2026-11-24):
+            // remember it before the hides below, so the Map tab
+            // can land outside the lair instead of at the base.
+            bool wasLairOpen = _lairOpen;
+            _lairOpen = false;
             _buildingPanel.Hide();
             _mapInfoView.Hide();
             _armyView.Hide();
@@ -455,6 +469,7 @@ namespace LunarDominion.Bootstrap
                     _baseView.SetVisible(false);
                     _baseView.SetEnvironmentVisible(false);
                     _baseView.SetMountainsVisible(false);
+                    if (wasLairOpen) _exteriorView.SetReturnFocus(ExteriorView.LairMapPosition);
                     _exteriorView.SetVisible(true);
                     RefreshMapNodeStates();
                     break;
