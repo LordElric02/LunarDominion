@@ -3448,12 +3448,28 @@ namespace LunarDominion.UI
         {
             if (_hospitalSign != null) return;
             // Measure BEFORE the sign exists, so it never measures
-            // itself. The hospital root's own renderers (if any) and
-            // its children's all count.
+            // itself. Measure the ROOF, not the whole building
+            // (2026-11-23 fix): the kit hospital carries a ground-
+            // level annex and entrance section whose renderers drag
+            // the whole-building bounds centre off the roof slab,
+            // which parked the sign at the roof's edge (Patrick's
+            // Play check). Roof-level parts — tops within 0.75 of
+            // the building's highest point — give the roof's own
+            // centre and top.
             var renderers = hospital.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length == 0) return;
-            var bounds = renderers[0].bounds;
-            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            float topY = float.NegativeInfinity;
+            for (int i = 0; i < renderers.Length; i++)
+                if (renderers[i].bounds.max.y > topY) topY = renderers[i].bounds.max.y;
+            Bounds bounds = new Bounds();
+            bool hasBounds = false;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i].bounds.max.y < topY - 0.75f) continue;
+                if (!hasBounds) { bounds = renderers[i].bounds; hasBounds = true; }
+                else bounds.Encapsulate(renderers[i].bounds);
+            }
+            if (!hasBounds) return;
             var lossy = hospital.transform.lossyScale;
             var group = new GameObject("HospitalSign");
             group.transform.SetParent(hospital.transform, false);
