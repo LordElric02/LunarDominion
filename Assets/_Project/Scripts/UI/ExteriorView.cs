@@ -477,7 +477,8 @@ namespace LunarDominion.UI
         // the structure rises back untouched. One signature
         // creature per tier - a tier whose path is still null
         // (or whose FBX is not installed) falls back to the
-        // simulated fight, so the feature lands tier by tier.
+        // arena presentation with class figures standing in,
+        // so the feature lands tier by tier.
         private static readonly string[] ArenaCreaturePaths =
         {
             null, // tier 0 = no camp
@@ -2890,9 +2891,13 @@ namespace LunarDominion.UI
         // on a wider ring, and the camera pushes in; the clash
         // and outcome beats run at that scale, then everything
         // swaps back before onComplete fires. Tiers without a
-        // creature keep the SIMULATED fight: enemy figures (one
-        // per enemy type in the encounter, rust-red class
-        // models) rise inside the army's ring and clash there.
+        // creature (T3+, from 2026-11-23) play the SAME arena
+        // swap with the rust-red class figures (one per enemy
+        // type) standing in as the enemy pack — the march-scale
+        // ring scuffle they used before was effectively
+        // invisible at map distance. The ring scuffle remains
+        // only for fights with no camp root (the legacy boss
+        // call).
         // Either way the clash length scales with the fight's
         // real round count, figures on the losing side tip over
         // as it goes, and the army's fall count follows the
@@ -3048,19 +3053,19 @@ namespace LunarDominion.UI
             Vector3 arenaFocus = Vector3.zero;
             if (campRoot != null)
             {
+                // The pack faces the base - the direction
+                // the army marched in from.
+                Vector3 campPos = campRoot.position;
+                var toBase = new Vector3(-campPos.x, 0f, -campPos.z);
+                float faceYaw = toBase.sqrMagnitude > 0.01f
+                    ? Mathf.Atan2(toBase.x, toBase.z) * Mathf.Rad2Deg
+                    : 0f;
+                var faceDir = new Vector3(Mathf.Sin(faceYaw * Mathf.Deg2Rad), 0f, Mathf.Cos(faceYaw * Mathf.Deg2Rad));
+                var perp = new Vector3(faceDir.z, 0f, -faceDir.x);
                 var anchor = BuildArenaCreature(campTier);
                 if (anchor != null)
                 {
                     arena = true;
-                    // The pack faces the base - the direction
-                    // the army marched in from.
-                    Vector3 campPos = campRoot.position;
-                    var toBase = new Vector3(-campPos.x, 0f, -campPos.z);
-                    float faceYaw = toBase.sqrMagnitude > 0.01f
-                        ? Mathf.Atan2(toBase.x, toBase.z) * Mathf.Rad2Deg
-                        : 0f;
-                    var faceDir = new Vector3(Mathf.Sin(faceYaw * Mathf.Deg2Rad), 0f, Mathf.Cos(faceYaw * Mathf.Deg2Rad));
-                    var perp = new Vector3(faceDir.z, 0f, -faceDir.x);
                     // Anchor at the centre; two kin behind it,
                     // flanking, at a smaller scale.
                     var spots = new[]
@@ -3091,6 +3096,51 @@ namespace LunarDominion.UI
                     arenaFocus = new Vector3(
                         Mathf.Clamp(campPos.x, -PanLimitX, PanLimitX), 0f,
                         Mathf.Clamp(campPos.z, -PanLimitZ, PanLimitZ));
+                }
+                else if (enemyTypes != null && enemyTypes.Count > 0)
+                {
+                    // No dedicated creature for this tier (T3+):
+                    // stage the ARENA presentation with the rust-red
+                    // class figures as the enemy pack (Patrick,
+                    // 2026-11-23: "T1 is working but T3+ are not" —
+                    // the march-scale ring scuffle was effectively
+                    // invisible). Same spots, sink and camera as the
+                    // creature path; the figures grow to arena scale
+                    // like the army, and the face-the-lead restage
+                    // below re-aims them at the army.
+                    int n = Mathf.Min(enemyTypes.Count, 3);
+                    var spots = new[]
+                    {
+                        new KeyValuePair<Vector3, float>(Vector3.zero, ArenaFigureScale),
+                        new KeyValuePair<Vector3, float>(-faceDir * 4.5f + perp * 3.8f, ArenaFigureScale),
+                        new KeyValuePair<Vector3, float>(-faceDir * 4.5f - perp * 3.8f, ArenaFigureScale),
+                    };
+                    for (int i = 0; i < n; i++)
+                    {
+                        var fig = BuildEnemyFigure(enemyTypes[i]);
+                        if (fig == null) continue;
+                        fig.transform.SetParent(campRoot, false);
+                        fig.transform.localPosition = spots[i].Key;
+                        fig.transform.localRotation = Quaternion.Euler(0f, faceYaw, 0f);
+                        fig.transform.localScale = Vector3.one * spots[i].Value;
+                        GroundSnap(fig);
+                        enemies.Add(fig);
+                        enemyBase.Add(fig.transform.localPosition);
+                        enemyBaseRot.Add(fig.transform.localRotation);
+                        enemyBaseScale.Add(fig.transform.localScale);
+                        enemyLungeDir.Add(faceDir);
+                        // Start sunk - the swap phase raises them.
+                        var sunk = fig.transform.localPosition;
+                        sunk.y -= 4.5f;
+                        fig.transform.localPosition = sunk;
+                    }
+                    if (enemies.Count > 0)
+                    {
+                        arena = true;
+                        arenaFocus = new Vector3(
+                            Mathf.Clamp(campPos.x, -PanLimitX, PanLimitX), 0f,
+                            Mathf.Clamp(campPos.z, -PanLimitZ, PanLimitZ));
+                    }
                 }
             }
 
