@@ -37,6 +37,7 @@ namespace LunarDominion.Bootstrap
         private HeroesView _heroesView;
         private BottomNavView _bottomNav;
         private ResearchView _researchView;
+        private LeaderboardsView _leaderboardsView;
         private DevHUDView _devHud;
         private SplashView _splashView;
 
@@ -136,6 +137,9 @@ namespace LunarDominion.Bootstrap
             _researchView = new GameObject("ResearchView").AddComponent<ResearchView>();
             _researchView.Build(canvas, _controller);
 
+            _leaderboardsView = new GameObject("LeaderboardsView").AddComponent<LeaderboardsView>();
+            _leaderboardsView.Build(canvas, _controller);
+
             _bottomNav = new GameObject("BottomNavView").AddComponent<BottomNavView>();
             _bottomNav.Build(canvas);
             _bottomNav.OnTabSelected += OnTabSelected;
@@ -233,6 +237,8 @@ namespace LunarDominion.Bootstrap
                 if (result.HeroCasualtyNames != null && result.HeroCasualtyNames.Count > 0)
                     body.AppendLine("Heroes down: " + string.Join(", ", result.HeroCasualtyNames) + " — heroes recover after the fight.");
                 body.AppendLine($"XP pool: {result.XpPool}");
+                if (result.LeaderboardPoints > 0)
+                    body.AppendLine($"Leaderboard: +{result.LeaderboardPoints} pts — Robot Lair Damage (boss {result.BossDamageDealt} + drones {result.DroneDamageDealt}, x level {result.BossLevelFought})");
                 if (result.XpGains != null)
                 {
                     foreach (var gain in result.XpGains)
@@ -432,6 +438,7 @@ namespace LunarDominion.Bootstrap
             _lairView?.Hide();
             _heroesView.Hide();
             _researchView.Hide();
+            _leaderboardsView.Hide();
             _inboxView?.Hide();
             switch (tab)
             {
@@ -458,6 +465,12 @@ namespace LunarDominion.Bootstrap
                     _baseView.SetVisible(false);
                     _baseView.SetMountainsVisible(true);
                     _researchView.Show();
+                    break;
+                case NavTab.Leaderboards:
+                    _exteriorView.SetVisible(false);
+                    _baseView.SetVisible(false);
+                    _baseView.SetMountainsVisible(true);
+                    _leaderboardsView.Show();
                     break;
                 case NavTab.Map:
                     // The detailed buildings are HIDDEN in the Map view

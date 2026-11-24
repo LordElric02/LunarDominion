@@ -70,6 +70,10 @@ namespace LunarDominion.Save
         // defeated (0 = none yet, up to 15). Old saves load as 0.
         public string BossRespawnUtc = "";
         public int BossLevelDefeated = 0;
+        // Leaderboards (2026-11-24): Robot Lair Damage totals.
+        public int LairDamageScore;
+        public int LairBossDamage;
+        public int LairDroneDamage;
         // Enemy camp field (2026-11-10): 36 slots. CampSlotTier[i] =
         // the tier in slot i (0 = empty); CampSlotRespawnUtc[i] = when
         // an empty slot refills ("" = not waiting). Old saves load
@@ -158,6 +162,9 @@ namespace LunarDominion.Save
                 OccupationTroopCounts = CopyIntSlots(state.OccupationTroops, 0),
                 BossRespawnUtc = state.BossRespawnUtc ?? "",
                 BossLevelDefeated = Math.Max(0, Math.Min(state.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
+                LairDamageScore = Math.Max(0, state.LairDamageScore),
+                LairBossDamage = Math.Max(0, state.LairBossDamage),
+                LairDroneDamage = Math.Max(0, state.LairDroneDamage),
                 CampSlotTier = ValidateCampSlotTiers(state.CampSlotTier),
                 CampSlotRespawnUtc = ValidateCampSlotRespawns(state.CampSlotRespawnUtc),
                 ArmyRosters = SerializeRosters(state),
@@ -208,6 +215,9 @@ namespace LunarDominion.Save
                     NodeLevel = ValidateNodeLevel(data.NodeLevel),
                     BossRespawnUtc = data.BossRespawnUtc ?? "",
                     BossLevelDefeated = Math.Max(0, Math.Min(data.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
+                    LairDamageScore = Math.Max(0, data.LairDamageScore),
+                    LairBossDamage = Math.Max(0, data.LairBossDamage),
+                    LairDroneDamage = Math.Max(0, data.LairDroneDamage),
                     CampSlotTier = ValidateCampSlotTiers(data.CampSlotTier),
                     CampSlotRespawnUtc = ValidateCampSlotRespawns(data.CampSlotRespawnUtc),
                     Inbox = ValidateInbox(data.Inbox),

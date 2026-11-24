@@ -4,11 +4,11 @@ using UnityEngine.UI;
 
 namespace LunarDominion.UI
 {
-    public enum NavTab { Base, Heroes, Army, Research, Map }
+    public enum NavTab { Base, Heroes, Army, Research, Map, Leaderboards }
 
-    /// <summary>Bottom navigation. One reusable tab component, five
-    /// instances. Tabs only switch views — they contain no gameplay
-    /// logic.
+    /// <summary>Bottom navigation. One reusable tab component, six
+    /// instances (Leaderboards added 2026-11-24). Tabs only switch
+    /// views — they contain no gameplay logic.
     ///
     /// Player-toggled (Patrick 2026-11-18: the permanent bar "takes
     /// up too much space to be permanent"): the bar starts HIDDEN.
@@ -46,8 +46,8 @@ namespace LunarDominion.UI
             // Five tabs since the Army tab returned (2026-11-12,
             // standing armies): Base / Heroes / Army / Research /
             // Map. Each tab takes an equal share of the bar.
-            string[] labels = { "Base", "Heroes", "Army", "Research", "Map" };
-            NavTab[] tabs = { NavTab.Base, NavTab.Heroes, NavTab.Army, NavTab.Research, NavTab.Map };
+            string[] labels = { "Base", "Heroes", "Army", "Research", "Map", "Leaderboards" };
+            NavTab[] tabs = { NavTab.Base, NavTab.Heroes, NavTab.Army, NavTab.Research, NavTab.Map, NavTab.Leaderboards };
             float step = 1f / labels.Length;
             for (int i = 0; i < labels.Length; i++)
             {

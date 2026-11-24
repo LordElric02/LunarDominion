@@ -34,6 +34,13 @@ namespace LunarDominion.Expeditions
         public int EnergySpent;
         public ResourceCost RewardEarned;
         public int XpPool;
+        // Leaderboards (2026-11-24): Robot Lair Damage for this
+        // fight — damage actually dealt to the boss / his drones,
+        // the level fought, and the points banked from them.
+        public int BossDamageDealt;
+        public int DroneDamageDealt;
+        public int BossLevelFought;
+        public int LeaderboardPoints;
         public List<string> CasualtyNames = new List<string>();
         // Fallen heroes are listed separately (2026-11-10): heroes
         // recover instantly after the fight and are never injured, so

@@ -97,6 +97,15 @@ namespace LunarDominion.Core
         public string BossRespawnUtc = "";
         public int BossLevelDefeated = 0;
 
+        // Leaderboards (2026-11-24): Robot Lair Damage career
+        // totals. LairDamageScore is the ranked number; the two
+        // damage totals are its breakdown. Points per fight =
+        // (boss damage + drone damage) x boss level — see
+        // LeaderboardService.
+        public int LairDamageScore;
+        public int LairBossDamage;
+        public int LairDroneDamage;
+
         // Node occupation (2026-11-09; per army slot 2026-11-11): an
         // army farms a node for a real-time duration (120 min / troops
         // sent) instead of collecting instantly. Arrays are per army

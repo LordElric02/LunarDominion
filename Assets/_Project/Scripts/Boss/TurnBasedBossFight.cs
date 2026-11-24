@@ -142,6 +142,12 @@ namespace LunarDominion.Boss
 
         public int BossMaxHp { get; private set; }
         public int BossHp { get; private set; }
+
+        // Leaderboards (2026-11-24): damage actually dealt this
+        // fight (HP removed; overkill is not counted), read by
+        // the view at fight end for Robot Lair Damage points.
+        public int TotalBossDamageDealt { get; private set; }
+        public int TotalDroneDamageDealt { get; private set; }
         public int BossAtk { get; private set; }
         public int BossDef { get; private set; }
         public int BossLevel { get; private set; }
@@ -337,6 +343,8 @@ namespace LunarDominion.Boss
             }
             BossMaxHp = bossMaxHp;
             BossHp = bossMaxHp;
+            TotalBossDamageDealt = 0;
+            TotalDroneDamageDealt = 0;
             BossAtk = bossAtk;
             BossDef = bossDef;
             BossLevel = bossLevel;
@@ -1060,6 +1068,7 @@ namespace LunarDominion.Boss
         private void ApplyBossDamage(TurnHeroState hero, int dmg, string label, bool crit = false)
         {
             if (_ventActive) dmg = Mathf.RoundToInt(dmg * VentVulnMult);
+            TotalBossDamageDealt += Mathf.Min(dmg, BossHp);
             BossHp = Mathf.Max(0, BossHp - dmg);
             _recoil = Mathf.Min(1f, _recoil + 0.55f);
             bool isCrit = crit || _ventActive;
@@ -1088,6 +1097,7 @@ namespace LunarDominion.Boss
 
         private void ApplyDroneDamage(TurnHeroState hero, TurnDroneState drone, int dmg, string label)
         {
+            TotalDroneDamageDealt += Mathf.Min(dmg, drone.Hp);
             drone.Hp = Mathf.Max(0, drone.Hp - dmg);
             RefreshDroneBar(drone);
             if (dmg > 0 && drone.Figure != null)

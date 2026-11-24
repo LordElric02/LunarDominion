@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using LunarDominion.Boss;
 using LunarDominion.Core;
 using LunarDominion.Expeditions;
+using LunarDominion.Progression;
 using LunarDominion.Units;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -3244,6 +3245,18 @@ namespace LunarDominion.UI
             int rounds = _turnFight != null ? _turnFight.Round : 0;
             var result = _controller.Expeditions.CompleteHeroesTurnBased(
                 _turnEncounter, _turnSquad, fallen, victory, rounds, timeout);
+            // Leaderboards (2026-11-24): bank this fight's Robot
+            // Lair Damage before the save below, and carry the
+            // numbers on the result for the panel + Inbox lines.
+            if (_turnFight != null)
+            {
+                result.BossDamageDealt = _turnFight.TotalBossDamageDealt;
+                result.DroneDamageDealt = _turnFight.TotalDroneDamageDealt;
+                result.BossLevelFought = _selectedBossLevel;
+                result.LeaderboardPoints = LeaderboardService.AwardLairDamage(
+                    _controller.State, _selectedBossLevel,
+                    result.BossDamageDealt, result.DroneDamageDealt);
+            }
             EndTurnUiCleanup();
             if (_headerGo != null) _headerGo.SetActive(true);
             if (_bottomGo != null) _bottomGo.SetActive(true);
@@ -3288,6 +3301,8 @@ namespace LunarDominion.UI
                 body.AppendLine("Heroes down: " + string.Join(", ", result.HeroCasualtyNames) + " — heroes recover after the fight.");
             }
             body.AppendLine($"XP pool: {result.XpPool}");
+            if (result.LeaderboardPoints > 0)
+                body.AppendLine($"Leaderboard: +{result.LeaderboardPoints} pts — Robot Lair Damage");
             if (result.XpGains.Count == 0)
             {
                 body.AppendLine("No XP gained.");
