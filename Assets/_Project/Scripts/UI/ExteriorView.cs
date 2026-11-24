@@ -1615,25 +1615,39 @@ namespace LunarDominion.UI
             _squadModes[slot] = SquadModeParked;
         }
 
-        // Fixed creatures on the map: only the War Robot at the boss
-        // lair now (2026-11-10). Camp slots show no creatures at all
+        // Fixed creatures on the map: only the boss at its lair now
+        // (2026-11-10). Camp slots show no creatures at all
         // since 2026-11-14 — each slot carries one tier structure
         // (see CampStructurePaths), swapped by SetCampSlot.
         private struct CreatureDef
         {
             public string ResourcePath; // Resources/Models/<name>
+            public string FallbackPath; // used when the primary is
+            // not installed (legacy raw-scale path, never measured)
             public int CampIndex; // index into NodeDefs — tapping a
             // creature selects its point, not a separate point.
             public Vector3 Position;
             public float Scale;
+            public float TargetHeight; // > 0: scale by measured
+            // bounds to this height (assembled prefabs) instead of
+            // the raw Scale multiplier
         }
+        // Facing dial for the map boss figure (the MechHeavyBoss
+        // prefab): 0 keeps the assembly's natural facing; turn it
+        // if the Play check shows the mech facing the wrong way.
+        private const float MapBossYawDegrees = 0f;
         private static readonly CreatureDef[] CreatureDefs =
         {
-            // Boss — War Robot at its lair (-1440, -1200), lair index 21.
-            // Scale 4x: a GIANT war robot, twice the size of the Brood
-            // Tyrant. Stands 36 units north of the lair structure so the
-            // two do not overlap. Tapping it selects the lair.
-            new CreatureDef { ResourcePath = "Models/WarRobot", CampIndex = 21, Position = new Vector3(-1440f, 0f, -1164f), Scale = 4f },
+            // Boss — Morbius 3 at its lair (-1440, -1200), lair
+            // index 21. Since 2026-11-24 the map figure is the same
+            // MechHeavyBoss prefab the arena fights (Patrick's full
+            // lair pass), measured to ~12 units tall — the old War
+            // Robot's map presence (native ~3 at 4x) — standing 36
+            // units north of the lair structure so the two do not
+            // overlap. The War Robot FBX is the fallback when the
+            // local-only mech prefab is not installed. Tapping it
+            // selects the lair.
+            new CreatureDef { ResourcePath = "Models/MechHeavyBoss", FallbackPath = "Models/WarRobot", CampIndex = 21, Position = new Vector3(-1440f, 0f, -1164f), Scale = 4f, TargetHeight = 12f },
         };
 
         private void BuildCreatures()
@@ -1649,6 +1663,17 @@ namespace LunarDominion.UI
                 {
                     Debug.LogWarning("[ExteriorView] Creature failed to load (" + def.ResourcePath + "): " + e.Message);
                 }
+                // Fallback visual (the boss: the old War Robot FBX
+                // when the local-only MechHeavyBoss prefab is not
+                // installed, e.g. a repo-only checkout). A fallback
+                // always takes the legacy raw-scale path below.
+                bool usedFallback = false;
+                if (prefab == null && !string.IsNullOrEmpty(def.FallbackPath))
+                {
+                    try { prefab = Resources.Load<GameObject>(def.FallbackPath); }
+                    catch (System.Exception) { prefab = null; }
+                    usedFallback = prefab != null;
+                }
                 if (prefab == null)
                 {
                     Debug.LogWarning("[ExteriorView] " + def.ResourcePath + " is missing — that creature will be an empty spot. Copy the FBX into Assets/_Project/Resources/Models/ (do not rename it).");
@@ -1657,9 +1682,54 @@ namespace LunarDominion.UI
                 var go = Instantiate(prefab);
                 go.name = NodeDefs[def.CampIndex].Title + " Creature";
                 go.transform.position = def.Position;
-                // Same rotation rule as the terrain: leave the imported
-                // rotation alone (Bake Axis Conversion).
-                go.transform.localScale = Vector3.one * def.Scale;
+                if (def.TargetHeight > 0f && !usedFallback)
+                {
+                    // Assembled-prefab discipline (mirrors the lair's
+                    // MechHeavyBoss build in BossLairView): the prefab
+                    // root carries its MechTest scene placement, so
+                    // rotation and scale are set explicitly; the part
+                    // colliders are destroyed (the standard tap box
+                    // below replaces them); the model is scaled by
+                    // MEASURED bounds to the target height; and only
+                    // the root (legs) Animator runs, set to its idle —
+                    // the legs controller's default state is a running
+                    // left turn and the part Animators' free-running
+                    // clips tear the assembly apart (MechTest lesson,
+                    // 2026-11-17).
+                    go.transform.rotation = Quaternion.Euler(0f, MapBossYawDegrees, 0f);
+                    go.transform.localScale = Vector3.one;
+                    foreach (var col in go.GetComponentsInChildren<Collider>())
+                        Destroy(col);
+                    var rends = go.GetComponentsInChildren<Renderer>();
+                    if (rends.Length > 0)
+                    {
+                        Bounds b = rends[0].bounds;
+                        for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                        if (b.size.y > 0.01f)
+                            go.transform.localScale = Vector3.one * Mathf.Clamp(def.TargetHeight / b.size.y, 0.1f, 60f);
+                    }
+                    var rootAnim = go.GetComponent<Animator>();
+                    if (rootAnim == null) rootAnim = go.GetComponentInChildren<Animator>();
+                    foreach (var anim in go.GetComponentsInChildren<Animator>(true))
+                        if (anim != rootAnim) anim.enabled = false;
+                    if (rootAnim != null)
+                    {
+                        rootAnim.applyRootMotion = false;
+                        // Probed, never assumed: Idle_Single is the
+                        // Legs_Heavy_Ctrl gameplay idle hub (verified
+                        // 2026-11-17); plain Idle is the fallback.
+                        if (rootAnim.HasState(0, Animator.StringToHash("Idle_Single")))
+                            rootAnim.Play("Idle_Single", 0, 0f);
+                        else if (rootAnim.HasState(0, Animator.StringToHash("Idle")))
+                            rootAnim.Play("Idle", 0, 0f);
+                    }
+                }
+                else
+                {
+                    // Same rotation rule as the terrain: leave the imported
+                    // rotation alone (Bake Axis Conversion).
+                    go.transform.localScale = Vector3.one * def.Scale;
+                }
                 GroundSnap(go);
                 // Tappable like the nodes/camps: a generous BoxCollider
                 // so the creature shows its camp's info when tapped.
