@@ -3774,6 +3774,7 @@ namespace LunarDominion.UI
         // marching army, all three when all three are out — and
         // clicking a row glides the camera to that army.
         private GameObject _marchPanel;
+        private GameObject _homeBtnRoot;
         private readonly Button[] _marchRows = new Button[GameState.MaxArmies];
         private readonly int[] _marchRowSlots = new int[GameState.MaxArmies];
         private readonly string[] _marchLabels = new string[GameState.MaxArmies];
@@ -3953,6 +3954,26 @@ namespace LunarDominion.UI
                 btn.onClick.AddListener(() => OnMarchRowClicked(row));
             }
             _marchPanel.SetActive(false);
+
+            // Home camera button (Patrick, 2026-11-24): right
+            // side, above the march tracker, and always there
+            // while the Map is up — even with no armies out.
+            // The march panel tops out at +100 above centre with
+            // all three rows, so the button sits at +114..+170
+            // and never overlaps it. Clicking glides the camera
+            // back to the home base (the castle at the origin).
+            _homeBtnRoot = UIHelpers.Panel(canvas.gameObject, "HomeButton", barColor,
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(-356f, 114f), new Vector2(-16f, 170f));
+            var homeBtn = UIHelpers.Button(_homeBtnRoot, "Home", "HOME BASE", 22,
+                UIHelpers.Hex("#1A2436"), Color.white);
+            var hrt = homeBtn.GetComponent<RectTransform>();
+            hrt.anchorMin = Vector2.zero;
+            hrt.anchorMax = Vector2.one;
+            hrt.offsetMin = Vector2.zero;
+            hrt.offsetMax = Vector2.zero;
+            homeBtn.onClick.AddListener(() => GlideTo(Vector3.zero));
+            _homeBtnRoot.SetActive(false);
 
             _searchRoot = new GameObject("SearchHighlights");
             _searchRoot.SetActive(false);
@@ -4738,6 +4759,7 @@ namespace LunarDominion.UI
             if (_findBar != null) _findBar.SetActive(visible && _findBarOpen);
             if (_searchRoot != null) _searchRoot.SetActive(visible);
             if (_baseBtnRoot != null) _baseBtnRoot.SetActive(visible && !_findBarOpen);
+            if (_homeBtnRoot != null) _homeBtnRoot.SetActive(visible);
             RefreshMarchPanel();
             // Full-screen Map (Patrick 2026-11-13): the TopBar
             // and BottomNav panels hide while the Map is up —
