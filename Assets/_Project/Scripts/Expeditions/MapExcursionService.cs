@@ -841,10 +841,18 @@ namespace LunarDominion.Expeditions
         // from it (ExteriorView.NodeYieldMultiplier).
         public const int MaxNodeLevel = 6;
 
+        /// <summary>The highest node level that can roll at a
+        /// Nexus level. The FIND resource dropdowns gate on the
+        /// same table (SyncCamps pushes it to the view), so a
+        /// dropdown never offers levels that cannot exist yet.</summary>
+        public static int MaxNodeLevelForNexus(int nexus)
+        {
+            return nexus < 8 ? 1 : nexus < 15 ? 2 : nexus < 20 ? 3 : nexus < 25 ? 4 : nexus < 29 ? 5 : 6;
+        }
+
         private int RollNodeLevel()
         {
-            int nexus = _state.NexusLevel;
-            int max = nexus < 8 ? 1 : nexus < 15 ? 2 : nexus < 20 ? 3 : nexus < 25 ? 4 : nexus < 29 ? 5 : 6;
+            int max = MaxNodeLevelForNexus(_state.NexusLevel);
             float roll = UnityEngine.Random.value;
             int drop = roll < 0.50f ? 0 : roll < 0.80f ? 1 : roll < 0.95f ? 2 : 3;
             return Math.Max(1, max - drop);
@@ -975,6 +983,7 @@ namespace LunarDominion.Expeditions
             if (_view == null) return;
             EnsureCampSlots();
             _view.SetCampFindMaxTier(MaxCampTierForNexus(_state.NexusLevel));
+            _view.SetNodeFindMaxLevel(MaxNodeLevelForNexus(_state.NexusLevel));
             for (int slot = 0; slot < ExteriorView.CampSlotCount; slot++)
             {
                 int tier = _state.CampSlotTier[slot];

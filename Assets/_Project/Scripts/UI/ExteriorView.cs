@@ -840,6 +840,17 @@ namespace LunarDominion.UI
             _campFindMaxTier = Mathf.Clamp(tier, 1, 6);
         }
 
+        /// <summary>The highest node level the FIND resource
+        /// dropdowns offer. Node levels only roll up to a cap set
+        /// by the Nexus (MapExcursionService.MaxNodeLevelForNexus),
+        /// so — exactly like the camp tiers — a dropdown never
+        /// advertises levels that cannot exist for the player yet
+        /// (Patrick 2026-11-24). Fed by SyncCamps.</summary>
+        public void SetNodeFindMaxLevel(int level)
+        {
+            _nodeFindMaxLevel = Mathf.Clamp(level, 1, 6);
+        }
+
         /// <summary>Show a camp slot as the given tier (0 = empty):
         /// swaps the slot's structure for the tier and updates the
         /// marker's data in place (so a panel already showing this camp
@@ -3779,6 +3790,10 @@ namespace LunarDominion.UI
         private readonly int[] _marchRowSlots = new int[GameState.MaxArmies];
         private readonly string[] _marchLabels = new string[GameState.MaxArmies];
         private int _campFindMaxTier = 1;
+        private GameObject _nodeMenu;
+        private int _nodeFindMaxLevel = 1;
+        private SearchCategory _nodeMenuCategory = SearchCategory.None;
+        private int _searchNodeLevel;
         private bool _findBarOpen;
         private SearchCategory _searchCategory = SearchCategory.None;
         private readonly List<Vector3> _searchMatches = new List<Vector3>();
@@ -3925,7 +3940,19 @@ namespace LunarDominion.UI
                 else
                 {
                     int idx = catIdx++;
-                    chip.onClick.AddListener(() => OnSearchChip(ChipCategories[idx]));
+                    int chipIndex = i;
+                    if (idx < 3)
+                    {
+                        // Resource chips open the level dropdown
+                        // (Patrick 2026-11-24), anchored over the
+                        // chip that opened it.
+                        chip.onClick.AddListener(() => ToggleNodeMenu(
+                            ChipCategories[idx], 0.012f + chipIndex * 0.1648f));
+                    }
+                    else
+                    {
+                        chip.onClick.AddListener(() => OnSearchChip(ChipCategories[idx]));
+                    }
                     _findChips[idx] = chip;
                 }
             }
@@ -3938,6 +3965,17 @@ namespace LunarDominion.UI
                 new Vector2(0.5064f, 1f), new Vector2(0.5064f, 1f),
                 new Vector2(0f, 8f), new Vector2(200f, 74f));
             _campMenu.SetActive(false);
+
+            // The resource dropdown (2026-11-24, Patrick): the
+            // BIO / ALLOY / HE-3 chips each open this menu of node
+            // levels, mirroring the camp dropdown — one row per
+            // level the player's Nexus can roll, with the on-map
+            // count. The panel re-anchors over whichever chip
+            // opened it (see ToggleNodeMenu).
+            _nodeMenu = UIHelpers.Panel(_findBar, "NodeMenu", barColor,
+                new Vector2(0.012f, 1f), new Vector2(0.012f, 1f),
+                new Vector2(0f, 8f), new Vector2(200f, 74f));
+            _nodeMenu.SetActive(false);
 
             // March tracker panel: right edge, middle of the
             // screen (Patrick). Anchored (1, 0.5); RefreshMarchPanel
@@ -3986,7 +4024,7 @@ namespace LunarDominion.UI
         private void SetFindBarOpen(bool open)
         {
             _findBarOpen = open;
-            if (!open) { ClearSearch(); SetCampMenuOpen(false); }
+            if (!open) { ClearSearch(); SetCampMenuOpen(false); SetNodeMenuOpen(false); }
             if (_findRoot != null) _findRoot.SetActive(_visible && !open);
             if (_baseBtnRoot != null) _baseBtnRoot.SetActive(_visible && !open);
             if (_findBar != null) _findBar.SetActive(_visible && open);
@@ -4008,7 +4046,7 @@ namespace LunarDominion.UI
         private void ToggleCampMenu()
         {
             bool open = _campMenu != null && !_campMenu.activeSelf;
-            if (open) RebuildCampMenu();
+            if (open) { SetNodeMenuOpen(false); RebuildCampMenu(); }
             SetCampMenuOpen(open);
         }
 
@@ -4048,15 +4086,78 @@ namespace LunarDominion.UI
             }
         }
 
-        private void OnSearchChip(SearchCategory cat)
+        private void ToggleNodeMenu(SearchCategory cat, float chipLeft)
+        {
+            bool open = _nodeMenu != null && !(_nodeMenu.activeSelf && _nodeMenuCategory == cat);
+            if (open)
+            {
+                SetCampMenuOpen(false);
+                _nodeMenuCategory = cat;
+                var nrt = _nodeMenu.GetComponent<RectTransform>();
+                nrt.anchorMin = new Vector2(chipLeft, 1f);
+                nrt.anchorMax = new Vector2(chipLeft, 1f);
+                RebuildNodeMenu();
+            }
+            SetNodeMenuOpen(open);
+        }
+
+        private void SetNodeMenuOpen(bool open)
+        {
+            if (_nodeMenu != null) _nodeMenu.SetActive(open && _findBarOpen);
+        }
+
+        /// <summary>(Re)build the resource dropdown rows for the
+        /// resource whose chip opened it: one per level the
+        /// player's Nexus can roll (Level 1 at the bottom, highest
+        /// at the top — the camp menu's arrangement), labelled with
+        /// how many nodes of that resource and level are on the
+        /// map right now. Rebuilt on every open, so counts are
+        /// never stale.</summary>
+        private void RebuildNodeMenu()
+        {
+            if (_nodeMenu == null) return;
+            for (int i = _nodeMenu.transform.childCount - 1; i >= 0; i--)
+                Destroy(_nodeMenu.transform.GetChild(i).gameObject);
+            int maxLevel = Mathf.Clamp(_nodeFindMaxLevel, 1, 6);
+            var mrt = _nodeMenu.GetComponent<RectTransform>();
+            mrt.offsetMax = new Vector2(200f, 8f + maxLevel * 54f + 12f);
+            var kind = _nodeMenuCategory == SearchCategory.Biomass ? MapPointKind.Biomass
+                : _nodeMenuCategory == SearchCategory.Alloy ? MapPointKind.Alloy
+                : MapPointKind.Helium3;
+            for (int l = 1; l <= maxLevel; l++)
+            {
+                int count = 0;
+                for (int i = 0; i < NodeDefs.Length && i < _nodeLevel.Length; i++)
+                {
+                    if (NodeDefs[i].Kind != kind) continue;
+                    if (_nodeHidden[i] || _nodeOccupied[i]) continue;
+                    if (_nodeLevel[i] == l) count++;
+                }
+                int level = l;
+                var cat = _nodeMenuCategory;
+                var row = UIHelpers.Button(_nodeMenu, "NodeLevel" + l,
+                    "Level " + l + " node" + (count > 0 ? $" ({count})" : ""), 24,
+                    UIHelpers.Hex("#1A2436"), Color.white);
+                var rt = row.GetComponent<RectTransform>();
+                rt.anchorMin = Vector2.zero;
+                rt.anchorMax = Vector2.zero;
+                rt.offsetMin = new Vector2(4f, 6f + (l - 1) * 54f);
+                rt.offsetMax = new Vector2(196f, 6f + (l - 1) * 54f + 50f);
+                row.onClick.AddListener(() => { SetNodeMenuOpen(false); OnSearchChip(cat, level); });
+            }
+        }
+
+        private void OnSearchChip(SearchCategory cat, int nodeLevel = 0)
         {
             SetCampMenuOpen(false);
-            bool sameCategory = cat == _searchCategory;
+            SetNodeMenuOpen(false);
+            bool sameCategory = cat == _searchCategory && nodeLevel == _searchNodeLevel;
             Vector3 previousFocus = Vector3.zero;
             bool hadFocus = sameCategory && _searchIndex >= 0 && _searchIndex < _searchMatches.Count;
             if (hadFocus) previousFocus = _searchMatches[_searchIndex];
 
             _searchCategory = cat;
+            _searchNodeLevel = nodeLevel;
             RebuildSearchMatches();
 
             if (_searchMatches.Count == 0)
@@ -4094,6 +4195,7 @@ namespace LunarDominion.UI
                     {
                         if (NodeDefs[i].Kind != kind) continue;
                         if (_nodeHidden[i] || _nodeOccupied[i]) continue;
+                        if (_searchNodeLevel > 0 && _nodeLevel[i] != _searchNodeLevel) continue;
                         _searchMatches.Add(NodeDefs[i].Position);
                     }
                     break;
@@ -4205,6 +4307,7 @@ namespace LunarDominion.UI
         private void ClearSearch()
         {
             _searchCategory = SearchCategory.None;
+            _searchNodeLevel = 0;
             _searchMatches.Clear();
             _searchIndex = -1;
             ClearSearchHighlights();
@@ -4246,11 +4349,14 @@ namespace LunarDominion.UI
             }
             else if (_searchMatches.Count == 0)
             {
-                _findStatus.text = SearchEmptyText(_searchCategory);
+                _findStatus.text = _searchNodeLevel > 0
+                    ? "No Level " + _searchNodeLevel + " " + SearchSingular(_searchCategory).Replace(" node", " nodes") + " on the map right now"
+                    : SearchEmptyText(_searchCategory);
             }
             else
             {
-                _findStatus.text = SearchSingular(_searchCategory) + " \u2014 "
+                _findStatus.text = (_searchNodeLevel > 0 ? "Level " + _searchNodeLevel + " " : "")
+                    + SearchSingular(_searchCategory) + " \u2014 "
                     + (_searchIndex + 1) + " of " + _searchMatches.Count;
             }
         }
