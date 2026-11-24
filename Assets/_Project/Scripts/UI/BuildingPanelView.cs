@@ -36,6 +36,7 @@ namespace LunarDominion.UI
             public Text OwnedText;
             public Text CostText;
             public Button RecruitButton;
+            public Button PromoteButton;
         }
 
         private GameObject _root;
@@ -355,8 +356,10 @@ namespace LunarDominion.UI
                 rowRt.anchorMin = Vector2.zero;
                 rowRt.anchorMax = Vector2.one;
                 var le = row.Root.AddComponent<LayoutElement>();
-                le.preferredHeight = 118;
-                le.minHeight = 118;
+                // Tier 2+ rows are taller: they carry a Promote
+                // button under the Recruit button (2026-11-23).
+                le.preferredHeight = def.Tier >= 2 ? 150 : 118;
+                le.minHeight = le.preferredHeight;
                 var rowBg = row.Root.AddComponent<Image>();
                 rowBg.color = UIHelpers.Hex("#1A2436");
 
@@ -377,12 +380,53 @@ namespace LunarDominion.UI
                 row.RecruitButton = UIHelpers.Button(row.Root, "RecruitBtn", "Recruit", 24,
                     UIHelpers.Hex("#2E7D32"), Color.white);
                 var btnRt = row.RecruitButton.GetComponent<RectTransform>();
-                btnRt.anchorMin = new Vector2(0.68f, 0.30f);
-                btnRt.anchorMax = new Vector2(0.97f, 0.88f);
+                if (def.Tier >= 2)
+                {
+                    btnRt.anchorMin = new Vector2(0.68f, 0.56f);
+                    btnRt.anchorMax = new Vector2(0.97f, 0.90f);
+                }
+                else
+                {
+                    btnRt.anchorMin = new Vector2(0.68f, 0.30f);
+                    btnRt.anchorMax = new Vector2(0.97f, 0.88f);
+                }
                 btnRt.offsetMin = Vector2.zero;
                 btnRt.offsetMax = Vector2.zero;
                 var captured = def;
                 row.RecruitButton.onClick.AddListener(() => OnRecruitClicked(captured));
+
+                // Promotion (2026-11-23, Patrick): on Tier 2+ rows,
+                // a Promote button under Recruit upgrades the best
+                // owned unit of the tier below into this tier, at
+                // the difference in recruit costs. The label names
+                // the candidate's level and the price (or the short
+                // blocker); the full reason logic lives in
+                // RecruitmentService.CheckPromote, like Recruit.
+                if (def.Tier >= 2)
+                {
+                    var fromDef = units.Find(u => u.Tier == def.Tier - 1);
+                    row.PromoteButton = UIHelpers.Button(row.Root, "PromoteBtn", "Promote", 20,
+                        UIHelpers.Hex("#8D6E00"), Color.white);
+                    var pRt = row.PromoteButton.GetComponent<RectTransform>();
+                    pRt.anchorMin = new Vector2(0.68f, 0.30f);
+                    pRt.anchorMax = new Vector2(0.97f, 0.54f);
+                    pRt.offsetMin = Vector2.zero;
+                    pRt.offsetMax = Vector2.zero;
+                    var capturedFrom = fromDef;
+                    row.PromoteButton.onClick.AddListener(() => OnPromoteClicked(capturedFrom, captured));
+                    var pStatus = _controller.Recruitment.CheckPromote(fromDef, def,
+                        out var candidate, out var pCost, out _);
+                    string pLabel = "Promote";
+                    if (candidate != null) pLabel += $" Lv {candidate.Level}";
+                    pLabel += "\n" + (pStatus == PromoteStatus.CanPromote
+                        ? CostText(pCost)
+                        : pStatus == PromoteStatus.NoCandidate ? "None owned"
+                        : pStatus == PromoteStatus.InsufficientResources ? "Can't afford"
+                        : "Locked");
+                    var pText = row.PromoteButton.GetComponentInChildren<Text>();
+                    if (pText != null) pText.text = pLabel;
+                    UIHelpers.SetButtonEnabled(row.PromoteButton, pStatus == PromoteStatus.CanPromote);
+                }
 
                 int owned = _controller.Recruitment.CountOwned(def.Id);
                 // Owned gets its own label under the Recruit
@@ -418,6 +462,16 @@ namespace LunarDominion.UI
         private void OnRecruitClicked(UnitDefinition def)
         {
             if (_controller.Recruitment.TryRecruit(def, out _))
+            {
+                _controller.SaveGame();
+            }
+            _controller.NotifyChanged();
+            Refresh();
+        }
+
+        private void OnPromoteClicked(UnitDefinition fromDef, UnitDefinition toDef)
+        {
+            if (_controller.Recruitment.TryPromote(fromDef, toDef, out _))
             {
                 _controller.SaveGame();
             }

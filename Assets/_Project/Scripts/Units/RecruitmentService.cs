@@ -14,6 +14,15 @@ namespace LunarDominion.Units
         ArmyFull
     }
 
+    public enum PromoteStatus
+    {
+        CanPromote,
+        BarracksNotBuilt,
+        TierLocked,
+        NoCandidate,
+        InsufficientResources
+    }
+
     /// <summary>Recruitment rules only: barracks built, tier unlocked by
     /// barracks level, affordability, troop limit. UI displays the
     /// status/reason — it never recomputes it. Recruitment is instant
@@ -220,6 +229,102 @@ namespace LunarDominion.Units
                 _state.Army.Add(unit);
             }
             reason = $"{def.DisplayName} recruited at level 1.";
+            return true;
+        }
+
+        /// <summary>Promotion (2026-11-23, Patrick): an existing
+        /// troop can be promoted to the next tier of its own class
+        /// (T1 up to T6) instead of recruiting the higher tier
+        /// fresh. The unit keeps its level, XP, serial and army
+        /// assignment — only its Id changes, so its stats rescale
+        /// from the new tier's definition. The price is the
+        /// DIFFERENCE between the two tiers' recruit costs (the
+        /// lower tier was already paid for), so stepping tier by
+        /// tier costs exactly the same in total as the direct
+        /// difference. Gates mirror recruiting: the target tier
+        /// must be unlocked by its barracks level. Heroes cannot
+        /// be promoted — they are named characters, not tiers.
+        /// The candidate is the player's best unit of the lower
+        /// tier (highest level, then most XP), across the army
+        /// and the hospital's injured list.</summary>
+        public static ResourceCost PromotionCost(UnitDefinition fromDef, UnitDefinition toDef)
+        {
+            var from = fromDef.Cost;
+            var to = toDef.Cost;
+            return new ResourceCost(
+                Math.Max(0, to.Biomass - from.Biomass),
+                Math.Max(0, to.Alloy - from.Alloy),
+                Math.Max(0, to.Helium3 - from.Helium3));
+        }
+
+        public OwnedUnit FindPromotionCandidate(UnitId fromId)
+        {
+            OwnedUnit best = null;
+            ConsiderCandidates(_state.Army, fromId, ref best);
+            ConsiderCandidates(_state.Injured, fromId, ref best);
+            return best;
+        }
+
+        private static void ConsiderCandidates(List<OwnedUnit> list, UnitId fromId, ref OwnedUnit best)
+        {
+            if (list == null) return;
+            foreach (var unit in list)
+            {
+                if (unit == null || unit.Id != fromId) continue;
+                if (best == null || unit.Level > best.Level
+                    || (unit.Level == best.Level && unit.XP > best.XP))
+                {
+                    best = unit;
+                }
+            }
+        }
+
+        public PromoteStatus CheckPromote(UnitDefinition fromDef, UnitDefinition toDef,
+            out OwnedUnit candidate, out ResourceCost cost, out string reason)
+        {
+            candidate = null;
+            cost = ResourceCost.Zero;
+            reason = "";
+            if (fromDef == null || toDef == null || fromDef.IsHero || toDef.IsHero)
+            {
+                reason = "Heroes cannot be promoted.";
+                return PromoteStatus.NoCandidate;
+            }
+            int barracksLevel = _state.GetLevel(toDef.BarracksBuilding);
+            if (barracksLevel == 0)
+            {
+                reason = $"Build {BarracksName(toDef.BarracksBuilding)} first.";
+                return PromoteStatus.BarracksNotBuilt;
+            }
+            int required = RequiredBarracksLevel(toDef.Tier);
+            if (barracksLevel < required)
+            {
+                reason = $"Requires {BarracksName(toDef.BarracksBuilding)} level {required} (currently {barracksLevel}).";
+                return PromoteStatus.TierLocked;
+            }
+            candidate = FindPromotionCandidate(fromDef.Id);
+            if (candidate == null)
+            {
+                reason = $"No {fromDef.DisplayName} to promote.";
+                return PromoteStatus.NoCandidate;
+            }
+            cost = PromotionCost(fromDef, toDef);
+            if (!_economy.CanAfford(cost))
+            {
+                reason = "Not enough resources.";
+                return PromoteStatus.InsufficientResources;
+            }
+            reason = "Ready to promote.";
+            return PromoteStatus.CanPromote;
+        }
+
+        public bool TryPromote(UnitDefinition fromDef, UnitDefinition toDef, out string reason)
+        {
+            var status = CheckPromote(fromDef, toDef, out var candidate, out var cost, out reason);
+            if (status != PromoteStatus.CanPromote) return false;
+            if (!_economy.Spend(cost)) { reason = "Not enough resources."; return false; }
+            candidate.Id = toDef.Id;
+            reason = $"{fromDef.DisplayName} promoted to {toDef.DisplayName} (level {candidate.Level} kept).";
             return true;
         }
     }
