@@ -235,9 +235,14 @@ namespace LunarDominion.Units
         /// <summary>Promotion (2026-11-23, Patrick): an existing
         /// troop can be promoted to the next tier of its own class
         /// (T1 up to T6) instead of recruiting the higher tier
-        /// fresh. The unit keeps its level, XP, serial and army
-        /// assignment — only its Id changes, so its stats rescale
-        /// from the new tier's definition. The price is the
+        /// fresh. Promotion RESETS the unit to level 1 with 0 XP
+        /// (Patrick's call, 2026-11-23: each tier is a fresh
+        /// climb, defending the long endgame grind — and with
+        /// tier base stats ~2.2x the tier below, the promoted
+        /// unit is still stronger than it was). Serial and army
+        /// assignment are kept; only Id, Level and XP change, so
+        /// its stats rescale from the new tier's definition at
+        /// level 1. The price is the
         /// DIFFERENCE between the two tiers' recruit costs (the
         /// lower tier was already paid for), so stepping tier by
         /// tier costs exactly the same in total as the direct
@@ -324,7 +329,9 @@ namespace LunarDominion.Units
             if (status != PromoteStatus.CanPromote) return false;
             if (!_economy.Spend(cost)) { reason = "Not enough resources."; return false; }
             candidate.Id = toDef.Id;
-            reason = $"{fromDef.DisplayName} promoted to {toDef.DisplayName} (level {candidate.Level} kept).";
+            candidate.Level = 1;
+            candidate.XP = 0;
+            reason = $"{fromDef.DisplayName} promoted to {toDef.DisplayName} (reset to level 1).";
             return true;
         }
     }
