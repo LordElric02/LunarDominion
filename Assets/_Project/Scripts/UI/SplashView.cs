@@ -15,7 +15,7 @@ namespace LunarDominion.UI
     public class SplashView : MonoBehaviour
     {
         // Tunable: how long the artwork holds before fading.
-        private const float HoldSeconds = 2.0f;
+        private const float HoldSeconds = 4.0f;
         private const float FadeSeconds = 0.5f;
         private const string TexturePath = "Textures/LunarDominionSplash";
 
