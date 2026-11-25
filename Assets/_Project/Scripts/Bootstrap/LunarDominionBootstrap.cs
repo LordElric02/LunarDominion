@@ -219,6 +219,7 @@ namespace LunarDominion.Bootstrap
             _mapInfoView.Hide();
             _selectedPoint = null;
             _exteriorView.SetVisible(false);
+            _topBar.SetInboxVisible(false);
             _lairOpen = true;
             _lairView.Show();
             _music?.PlayLair();
@@ -499,6 +500,10 @@ namespace LunarDominion.Bootstrap
                     RefreshMapNodeStates();
                     break;
             }
+            // INBOX button is Base-only for now (Patrick
+            // 2026-11-25); the lair-close path returns to the Map,
+            // where it stays hidden until the Base tab is picked.
+            _topBar.SetInboxVisible(tab == NavTab.Base);
             // Music follows the area: the Map gets the Exterior theme;
             // every management tab keeps the Base theme. (Entering the
             // lair overrides this via OpenLairView.)

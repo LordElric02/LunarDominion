@@ -29,6 +29,16 @@ namespace LunarDominion.UI
         public event Action OnInboxClicked;
         public Func<int> UnreadCountProvider;
 
+        /// <summary>Base view only (Patrick 2026-11-25): the
+        /// INBOX button shows on the Base tab and nowhere else
+        /// for now — the rest of the TopBar stays shared. The
+        /// Bootstrap drives this from its view switching (tab
+        /// changes and the lair open path).</summary>
+        public void SetInboxVisible(bool visible)
+        {
+            if (_inboxButton != null) _inboxButton.gameObject.SetActive(visible);
+        }
+
         // Account panel (2026-11-25): the Bootstrap hands over
         // its AccountManager after Build; the panel itself is
         // built lazily on first open from the name editor's
