@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using LunarDominion.Core;
+using LunarDominion.Save;
 using UnityEngine;
 
 namespace LunarDominion.Accounts
@@ -40,6 +41,31 @@ namespace LunarDominion.Accounts
         /// the local file for next launch. The UI pass wires this
         /// to an Inbox message; today it is logged.</summary>
         public event Action OnCloudSaveStaged;
+
+        /// <summary>One side of a save conflict, in player
+        /// terms: whose game it is and how far it got.</summary>
+        public sealed class SaveSummary
+        {
+            public string Name;
+            public int NexusLevel;
+            public string SavedTimeUtc;
+        }
+
+        /// <summary>MERGE SAFEGUARD (Patrick 2026-11-25): when
+        /// the device save and the account save carry different
+        /// player names they are different games, and the
+        /// newest-wins timestamp rule must NOT pick between
+        /// them — a fresh or passively re-saved game always
+        /// carries the newest stamp (a fresh phone save
+        /// overwrote this account's progressed save twice in one
+        /// day). The sync then stops: nothing is uploaded,
+        /// staged, or pushed until the player chooses in the
+        /// account panel. These hold the pending choice.</summary>
+        public SaveSummary PendingLocalSave { get; private set; }
+        public SaveSummary PendingCloudSave { get; private set; }
+        public bool HasPendingConflict => PendingLocalSave != null && PendingCloudSave != null;
+        public event Action OnSaveConflict;
+        private string _pendingCloudJson;
 
         private GameController _controller;
         private bool _initialized;
@@ -127,9 +153,16 @@ namespace LunarDominion.Accounts
                     await Accounts.SetDisplayNameAsync(state.EffectiveUsername);
                 }
 
-                await CloudSaves.PushProfileAsync(uid, state.EffectiveUsername);
                 await SyncSaveOnSignInAsync(uid);
-                await PushLairDamageAsync();
+                // While a save conflict is pending the local
+                // state is not the account's game, so its name
+                // and scores must not be pushed over the
+                // account's profile/leaderboard entries.
+                if (!HasPendingConflict)
+                {
+                    await CloudSaves.PushProfileAsync(uid, state.EffectiveUsername);
+                    await PushLairDamageAsync();
+                }
             }
             catch (Exception e)
             {
@@ -149,11 +182,28 @@ namespace LunarDominion.Accounts
 
             if (cloud == null)
             {
+                ClearConflict();
                 if (localJson != null)
                     await CloudSaves.UploadSaveAsync(uid, localJson, localTime);
                 return;
             }
 
+            // Merge safeguard: different player names = different
+            // games. Neither save moves until the player chooses.
+            var localSummary = Summarize(localJson, localTime);
+            var cloudSummary = Summarize(cloud.SaveJson, cloud.ClientSaveTimeUtc);
+            if (localSummary != null && cloudSummary != null
+                && !string.Equals(localSummary.Name, cloudSummary.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                PendingLocalSave = localSummary;
+                PendingCloudSave = cloudSummary;
+                _pendingCloudJson = cloud.SaveJson;
+                Debug.Log($"[Lunar Dominion] Save conflict: this device has '{localSummary.Name}' (Nexus {localSummary.NexusLevel}), the account has '{cloudSummary.Name}' (Nexus {cloudSummary.NexusLevel}) — waiting for the player's choice in the account panel.");
+                OnSaveConflict?.Invoke();
+                return;
+            }
+
+            ClearConflict();
             if (IsNewer(cloud.ClientSaveTimeUtc, localTime))
             {
                 StageSaveForNextLaunch(cloud.SaveJson);
@@ -164,6 +214,61 @@ namespace LunarDominion.Accounts
             {
                 await CloudSaves.UploadSaveAsync(uid, localJson, localTime);
             }
+        }
+
+        /// <summary>Summarize a save JSON for the conflict
+        /// check and the player's choice: the name it plays
+        /// under (the untouched default reads "Commander") and
+        /// its Nexus level. Unparseable = null, and null never
+        /// raises a conflict — the sync falls back to the plain
+        /// newest-wins rule rather than blocking on a bad read.</summary>
+        private static SaveSummary Summarize(string saveJson, string savedTimeUtc)
+        {
+            if (string.IsNullOrEmpty(saveJson)) return null;
+            SaveData data;
+            try { data = JsonUtility.FromJson<SaveData>(saveJson); }
+            catch { return null; }
+            if (data == null) return null;
+            string name = (data.Username ?? "").Trim();
+            return new SaveSummary
+            {
+                Name = name.Length == 0 ? "Commander" : name,
+                NexusLevel = data.BuildingLevels != null && data.BuildingLevels.Length > 0
+                    ? data.BuildingLevels[0] : 1,
+                SavedTimeUtc = savedTimeUtc ?? ""
+            };
+        }
+
+        private void ClearConflict()
+        {
+            PendingLocalSave = null;
+            PendingCloudSave = null;
+            _pendingCloudJson = null;
+        }
+
+        /// <summary>Player chose the account save: stage it for
+        /// next launch (a live session is never yanked) and
+        /// clear the conflict. From the next launch the device
+        /// plays the account's game, so later syncs match by
+        /// name and run automatically again.</summary>
+        public void ResolveConflictUseCloud()
+        {
+            if (!HasPendingConflict || _pendingCloudJson == null) return;
+            StageSaveForNextLaunch(_pendingCloudJson);
+            ClearConflict();
+            OnCloudSaveStaged?.Invoke();
+        }
+
+        /// <summary>Player chose this device's save: upload it
+        /// as the account save. This explicit choice is the only
+        /// path allowed to replace a different-named cloud
+        /// save.</summary>
+        public async Task<bool> ResolveConflictKeepLocalAsync()
+        {
+            if (!HasPendingConflict) return false;
+            bool ok = await UploadCurrentSaveAsync();
+            if (ok) ClearConflict();
+            return ok;
         }
 
         /// <summary>Upload trigger for after major events (boss

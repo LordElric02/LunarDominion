@@ -31,6 +31,8 @@ namespace LunarDominion.UI
         private Button _signInButton;
         private Button _forgotButton;
         private Button _signOutButton;
+        private Button _useCloudButton;
+        private Button _keepLocalButton;
         private bool _busy;
         private bool _stagedSaveSeen;
 
@@ -73,6 +75,10 @@ namespace LunarDominion.UI
                 new Vector2(0.515f, 0.19f), new Vector2(0.95f, 0.30f), OnSignInClicked);
             _signOutButton = AddButton(card, "SignOut", "SIGN OUT",
                 new Vector2(0.05f, 0.19f), new Vector2(0.95f, 0.30f), OnSignOutClicked);
+            _useCloudButton = AddButton(card, "UseAccountSave", "USE ACCOUNT SAVE",
+                new Vector2(0.05f, 0.19f), new Vector2(0.485f, 0.30f), OnUseCloudClicked);
+            _keepLocalButton = AddButton(card, "KeepThisSave", "KEEP THIS SAVE",
+                new Vector2(0.515f, 0.19f), new Vector2(0.95f, 0.30f), OnKeepLocalClicked);
             _forgotButton = AddButton(card, "Forgot", "FORGOT PASSWORD",
                 new Vector2(0.05f, 0.05f), new Vector2(0.485f, 0.16f), OnForgotClicked);
             AddButton(card, "Close", "CLOSE",
@@ -81,7 +87,10 @@ namespace LunarDominion.UI
             if (_manager != null && _manager.Accounts != null)
                 _manager.Accounts.OnStatusChanged += RefreshPanel;
             if (_manager != null)
+            {
                 _manager.OnCloudSaveStaged += () => { _stagedSaveSeen = true; };
+                _manager.OnSaveConflict += RefreshPanel;
+            }
 
             _root.SetActive(false);
         }
@@ -172,12 +181,31 @@ namespace LunarDominion.UI
 
             bool guestOrOut = status == AccountStatus.SignedInGuest || status == AccountStatus.SignedOut;
             bool linked = status == AccountStatus.SignedInLinked;
-            SetVisible(_emailInput.gameObject, guestOrOut);
-            SetVisible(_passwordInput.gameObject, guestOrOut);
-            SetVisible(_linkButton.gameObject, guestOrOut);
-            SetVisible(_signInButton.gameObject, guestOrOut);
-            SetVisible(_signOutButton.gameObject, linked);
-            SetVisible(_forgotButton.gameObject, guestOrOut || linked);
+            // Merge safeguard: while a save conflict is pending,
+            // the panel is the choice screen — the credential
+            // and sign-out controls step aside until the player
+            // picks which save the account keeps.
+            bool conflict = _manager.HasPendingConflict;
+            SetVisible(_emailInput.gameObject, guestOrOut && !conflict);
+            SetVisible(_passwordInput.gameObject, guestOrOut && !conflict);
+            SetVisible(_linkButton.gameObject, guestOrOut && !conflict);
+            SetVisible(_signInButton.gameObject, guestOrOut && !conflict);
+            SetVisible(_signOutButton.gameObject, linked && !conflict);
+            SetVisible(_forgotButton.gameObject, (guestOrOut || linked) && !conflict);
+            SetVisible(_useCloudButton.gameObject, conflict);
+            SetVisible(_keepLocalButton.gameObject, conflict);
+
+            if (conflict)
+            {
+                var local = _manager.PendingLocalSave;
+                var cloud = _manager.PendingCloudSave;
+                _statusText.text =
+                    "This device and your account have different saves.\n" +
+                    $"This device: {local.Name} — Nexus {local.NexusLevel}\n" +
+                    $"Account: {cloud.Name} — Nexus {cloud.NexusLevel}\n" +
+                    "Which save should your account keep?";
+                return;
+            }
 
             switch (status)
             {
@@ -222,6 +250,8 @@ namespace LunarDominion.UI
             if (_signInButton != null) _signInButton.interactable = enabled;
             if (_forgotButton != null) _forgotButton.interactable = enabled;
             if (_signOutButton != null) _signOutButton.interactable = enabled;
+            if (_useCloudButton != null) _useCloudButton.interactable = enabled;
+            if (_keepLocalButton != null) _keepLocalButton.interactable = enabled;
         }
 
         private bool ValidateCredentials(out string email, out string password, bool requirePasswordLength)
@@ -290,6 +320,28 @@ namespace LunarDominion.UI
             {
                 SetHint("Sign-in failed — check the email and password.", false);
             }
+            RefreshPanel();
+        }
+
+        private void OnUseCloudClicked()
+        {
+            if (_busy || _manager == null) return;
+            _manager.ResolveConflictUseCloud();
+            SetHint("Account save chosen — restart the app and it loads.", true);
+            RefreshPanel();
+        }
+
+        private async void OnKeepLocalClicked()
+        {
+            if (_busy || _manager == null) return;
+            SetBusy(true);
+            bool ok = false;
+            try { ok = await _manager.ResolveConflictKeepLocalAsync(); }
+            catch { ok = false; }
+            SetBusy(false);
+            SetHint(ok
+                ? "Done — this device's save is now your account save."
+                : "Couldn't reach your account — check your connection and try again.", ok);
             RefreshPanel();
         }
 
