@@ -4,6 +4,7 @@ using LunarDominion.Audio;
 using LunarDominion.Core;
 using LunarDominion.Expeditions;
 using LunarDominion.Inbox;
+using LunarDominion.Save;
 using LunarDominion.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -60,6 +61,11 @@ namespace LunarDominion.Bootstrap
             }
 
             var canvas = UIHelpers.CreateCanvas("MainCanvas");
+
+            // A cloud save staged last session (account sync)
+            // becomes the save file BEFORE the controller loads
+            // it — see SaveService.StagePendingSave.
+            SaveService.ApplyPendingSave();
 
             var controllerGo = new GameObject("GameController");
             _controller = controllerGo.AddComponent<GameController>();

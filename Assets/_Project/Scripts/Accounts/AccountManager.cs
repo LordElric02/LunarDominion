@@ -337,20 +337,18 @@ namespace LunarDominion.Accounts
             }
         }
 
-        /// <summary>Write a cloud save over the local file using
-        /// the same temp-file + replace pattern as SaveService,
-        /// so a crash mid-stage can never leave a torn file. The
-        /// staged save is picked up by the normal load path on
-        /// the next launch.</summary>
+        /// <summary>Stage a cloud save for next launch. The
+        /// JSON waits in SaveService's pending file, NOT over
+        /// the live save file: this session keeps saving its
+        /// own state (pause/quit autosaves included) and would
+        /// overwrite a directly replaced file before the next
+        /// launch ever read it. Bootstrap applies the pending
+        /// file before the controller loads.</summary>
         private void StageSaveForNextLaunch(string saveJson)
         {
             try
             {
-                string path = _controller.Save.SavePath;
-                string temp = path + ".tmp";
-                File.WriteAllText(temp, saveJson);
-                if (File.Exists(path)) File.Replace(temp, path, null);
-                else File.Move(temp, path);
+                SaveService.StagePendingSave(saveJson);
             }
             catch (Exception e)
             {

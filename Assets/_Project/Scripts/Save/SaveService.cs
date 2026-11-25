@@ -108,7 +108,53 @@ namespace LunarDominion.Save
     public class SaveService
     {
         private readonly BalanceData _balance;
-        public string SavePath => Path.Combine(Application.persistentDataPath, "lunar-dominion-save.json");
+        private static string SaveFilePath =>
+            Path.Combine(Application.persistentDataPath, "lunar-dominion-save.json");
+
+        public string SavePath => SaveFilePath;
+
+        /// <summary>Where a cloud save staged for next launch
+        /// waits. It lives BESIDE the save file, never in it:
+        /// the running session keeps saving its own state over
+        /// SavePath — including the pause/quit autosaves — which
+        /// silently undid a staged replacement written straight
+        /// to SavePath (hit on device 2026-11-25: choosing USE
+        /// ACCOUNT SAVE had no effect, because backgrounding the
+        /// app re-saved the old game over the staged one).</summary>
+        public static string PendingSavePath => SaveFilePath + ".pending";
+
+        /// <summary>Stage a save JSON for next launch without
+        /// touching the live save file.</summary>
+        public static void StagePendingSave(string json)
+        {
+            string temp = PendingSavePath + ".tmp";
+            File.WriteAllText(temp, json);
+            if (File.Exists(PendingSavePath)) File.Replace(temp, PendingSavePath, null);
+            else File.Move(temp, PendingSavePath);
+        }
+
+        /// <summary>Apply a staged save, if one is waiting:
+        /// the staged JSON becomes the save file and the
+        /// pending file is consumed. Called once at startup,
+        /// BEFORE the game state loads. Safe when nothing is
+        /// staged.</summary>
+        public static void ApplyPendingSave()
+        {
+            try
+            {
+                if (!File.Exists(PendingSavePath)) return;
+                string temp = SaveFilePath + ".tmp";
+                File.Copy(PendingSavePath, temp, true);
+                if (File.Exists(SaveFilePath)) File.Replace(temp, SaveFilePath, null);
+                else File.Move(temp, SaveFilePath);
+                File.Delete(PendingSavePath);
+                Debug.Log("[Lunar Dominion] Staged cloud save applied — loading it now.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Lunar Dominion] Could not apply the staged save: {ex.Message}");
+            }
+        }
 
         public SaveService(BalanceData balance) { _balance = balance; }
 
@@ -558,6 +604,7 @@ namespace LunarDominion.Save
         public void DeleteSave()
         {
             if (File.Exists(SavePath)) File.Delete(SavePath);
+            if (File.Exists(PendingSavePath)) File.Delete(PendingSavePath);
         }
     }
 }
