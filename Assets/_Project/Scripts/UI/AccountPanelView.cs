@@ -13,8 +13,12 @@ namespace LunarDominion.UI
     /// the save and leaderboard totals are untouched. Sign-in
     /// runs the AccountManager's post-sign-in sync, so a newer
     /// cloud save stages in for next launch (newest-wins).
-    /// Google/Apple buttons arrive with their native plugins;
-    /// the service already accepts their tokens.
+    /// The Google button rides on GoogleSignInBridge (Google's
+    /// Sign in with Google plugin): guests get CONTINUE WITH
+    /// GOOGLE (link-first, sign-in fallback), linked accounts
+    /// get LINK GOOGLE to attach it for one-tap sign-ins. The
+    /// button only exists in GOOGLE_SIGNIN builds. The Apple
+    /// button arrives with the iOS phase.
     ///
     /// Built lazily by TopBarView on first open, following the
     /// name editor's construction pattern (dim backdrop + card,
@@ -29,6 +33,7 @@ namespace LunarDominion.UI
         private InputField _passwordInput;
         private Button _linkButton;
         private Button _signInButton;
+        private Button _googleButton;
         private Button _forgotButton;
         private Button _signOutButton;
         private Button _useCloudButton;
@@ -58,31 +63,33 @@ namespace LunarDominion.UI
             _statusText.raycastTarget = false;
 
             _emailInput = BuildInput(card, "EmailInput", "Email address",
-                new Vector2(0.08f, 0.545f), new Vector2(0.92f, 0.645f),
+                new Vector2(0.08f, 0.565f), new Vector2(0.92f, 0.655f),
                 InputField.ContentType.EmailAddress);
             _passwordInput = BuildInput(card, "PasswordInput", "Password (6+ characters)",
-                new Vector2(0.08f, 0.425f), new Vector2(0.92f, 0.525f),
+                new Vector2(0.08f, 0.455f), new Vector2(0.92f, 0.545f),
                 InputField.ContentType.Password);
 
-            _hintText = UIHelpers.LabelInRect(card, "Hint", "", 20,
-                HintBad, new Rect(0.06f, 0.315f, 0.94f, 0.415f),
+            _hintText = UIHelpers.LabelInRect(card, "Hint", "", 19,
+                HintBad, new Rect(0.06f, 0.365f, 0.94f, 0.445f),
                 TextAnchor.MiddleCenter);
             _hintText.raycastTarget = false;
 
+            _googleButton = AddButton(card, "Google", "CONTINUE WITH GOOGLE",
+                new Vector2(0.05f, 0.255f), new Vector2(0.95f, 0.355f), OnGoogleClicked);
             _linkButton = AddButton(card, "LinkEmail", "LINK EMAIL",
-                new Vector2(0.05f, 0.19f), new Vector2(0.485f, 0.30f), OnLinkClicked);
+                new Vector2(0.05f, 0.135f), new Vector2(0.485f, 0.235f), OnLinkClicked);
             _signInButton = AddButton(card, "SignIn", "SIGN IN",
-                new Vector2(0.515f, 0.19f), new Vector2(0.95f, 0.30f), OnSignInClicked);
+                new Vector2(0.515f, 0.135f), new Vector2(0.95f, 0.235f), OnSignInClicked);
             _signOutButton = AddButton(card, "SignOut", "SIGN OUT",
-                new Vector2(0.05f, 0.19f), new Vector2(0.95f, 0.30f), OnSignOutClicked);
+                new Vector2(0.05f, 0.135f), new Vector2(0.95f, 0.235f), OnSignOutClicked);
             _useCloudButton = AddButton(card, "UseAccountSave", "USE ACCOUNT SAVE",
-                new Vector2(0.05f, 0.19f), new Vector2(0.485f, 0.30f), OnUseCloudClicked);
+                new Vector2(0.05f, 0.135f), new Vector2(0.485f, 0.235f), OnUseCloudClicked);
             _keepLocalButton = AddButton(card, "KeepThisSave", "KEEP THIS SAVE",
-                new Vector2(0.515f, 0.19f), new Vector2(0.95f, 0.30f), OnKeepLocalClicked);
+                new Vector2(0.515f, 0.135f), new Vector2(0.95f, 0.235f), OnKeepLocalClicked);
             _forgotButton = AddButton(card, "Forgot", "FORGOT PASSWORD",
-                new Vector2(0.05f, 0.05f), new Vector2(0.485f, 0.16f), OnForgotClicked);
+                new Vector2(0.05f, 0.03f), new Vector2(0.485f, 0.115f), OnForgotClicked);
             AddButton(card, "Close", "CLOSE",
-                new Vector2(0.515f, 0.05f), new Vector2(0.95f, 0.16f), Hide);
+                new Vector2(0.515f, 0.03f), new Vector2(0.95f, 0.115f), Hide);
 
             if (_manager != null && _manager.Accounts != null)
                 _manager.Accounts.OnStatusChanged += RefreshPanel;
@@ -194,6 +201,14 @@ namespace LunarDominion.UI
             SetVisible(_forgotButton.gameObject, (guestOrOut || linked) && !conflict);
             SetVisible(_useCloudButton.gameObject, conflict);
             SetVisible(_keepLocalButton.gameObject, conflict);
+            SetVisible(_googleButton.gameObject,
+                (guestOrOut || linked) && !conflict && GoogleSignInBridge.IsAvailable);
+            if (_googleButton != null)
+            {
+                var googleLabel = _googleButton.GetComponentInChildren<Text>();
+                if (googleLabel != null)
+                    googleLabel.text = linked ? "LINK GOOGLE" : "CONTINUE WITH GOOGLE";
+            }
 
             if (conflict)
             {
@@ -248,6 +263,7 @@ namespace LunarDominion.UI
             bool enabled = !busy;
             if (_linkButton != null) _linkButton.interactable = enabled;
             if (_signInButton != null) _signInButton.interactable = enabled;
+            if (_googleButton != null) _googleButton.interactable = enabled;
             if (_forgotButton != null) _forgotButton.interactable = enabled;
             if (_signOutButton != null) _signOutButton.interactable = enabled;
             if (_useCloudButton != null) _useCloudButton.interactable = enabled;
@@ -320,6 +336,71 @@ namespace LunarDominion.UI
             {
                 SetHint("Sign-in failed — check the email and password.", false);
             }
+            RefreshPanel();
+        }
+
+        private void OnGoogleClicked()
+        {
+            if (_busy || _manager == null) return;
+            SetBusy(true);
+            SetHint("Opening Google sign-in…", true);
+            GoogleSignInBridge.SignIn(OnGoogleToken, OnGoogleError);
+        }
+
+        /// <summary>Google returned an ID token. Linked account:
+        /// attach Google to it (one-tap sign-ins from then on).
+        /// Guest: link first — same UID, save untouched — and if
+        /// that Google identity already owns an account, fall
+        /// back to signing into it (the save safeguard then
+        /// arbitrates, exactly like email sign-in). Patrick's own
+        /// account is email/password with the same Gmail address,
+        /// so his first Google tap lands on the failure hint
+        /// below until he attaches Google from the signed-in
+        /// panel — a one-time, two-minute path.</summary>
+        private async void OnGoogleToken(string idToken)
+        {
+            bool ok = false;
+            try
+            {
+                var accounts = _manager.Accounts;
+                if (accounts.Status == AccountStatus.SignedInLinked)
+                {
+                    ok = await accounts.LinkGoogleAsync(idToken);
+                    SetHint(ok
+                        ? "Google attached — you can now sign in with Google on any device."
+                        : "Couldn't attach Google — that Google account may already belong to another game account.", ok);
+                }
+                else
+                {
+                    ok = await accounts.LinkGoogleAsync(idToken);
+                    if (!ok) ok = await accounts.SignInGoogleAsync(idToken);
+                    if (ok)
+                    {
+                        _stagedSaveSeen = false;
+                        try { await _manager.OnSignedInAsync(); }
+                        catch { /* the manager logs its own failures */ }
+                        if (_manager.HasPendingConflict)
+                            SetHint("Signed in with Google — now choose which save your account keeps.", true);
+                        else
+                            SetHint(_stagedSaveSeen
+                                ? "Signed in with Google. A newer cloud save from your account loads on next launch."
+                                : "Signed in with Google — welcome.", true);
+                    }
+                    else
+                    {
+                        SetHint("Google sign-in didn't complete. If that Google email matches your password account, sign in with email + password once, then use LINK GOOGLE here.", false);
+                    }
+                }
+            }
+            catch { SetHint("Google sign-in didn't complete — try again.", false); }
+            SetBusy(false);
+            RefreshPanel();
+        }
+
+        private void OnGoogleError(string error)
+        {
+            SetBusy(false);
+            SetHint(string.IsNullOrEmpty(error) ? "Google sign-in was cancelled." : error, false);
             RefreshPanel();
         }
 
