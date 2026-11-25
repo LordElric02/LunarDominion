@@ -17,7 +17,12 @@ namespace LunarDominion.Accounts
     /// FirebaseAuth.DefaultInstance, Task-based sign-in methods
     /// (SDK 12+ returns AuthResult — the user is .User),
     /// GetIdTokenResultAsync for custom-claim reads. Adjusted
-    /// to SDK 14.2 on 2026-11-25 from Patrick's first compile.</summary>
+    /// to SDK 14.2 on 2026-11-25 from Patrick's first compile.
+    /// Session-restore race fixed the same day: InitializeAsync
+    /// now waits for the first StateChanged (the persisted
+    /// session verdict) before the manager may decide a guest
+    /// sign-in is needed, and SignInGuestAsync refuses to mint
+    /// a guest over an existing session.</summary>
     public sealed class FirebaseAccountService : IAccountService
     {
         private FirebaseAuth _auth;
@@ -49,6 +54,19 @@ namespace LunarDominion.Accounts
             }
             _auth = FirebaseAuth.DefaultInstance;
             _auth.StateChanged += OnAuthStateChanged;
+            // Wait for the SDK to deliver the persisted session
+            // before returning (Patrick 2026-11-25: "it's saying
+            // I'm a guest account when I'm not"). CurrentUser is
+            // restored ASYNCHRONOUSLY on desktop/Editor — reading
+            // it immediately can still show null, the manager then
+            // reads SignedOut and mints a fresh guest OVER the
+            // returning linked account. The first StateChanged is
+            // the restore verdict (it fires even when there is no
+            // persisted user). Bounded at 5s: a hung SDK must not
+            // stall the game's launch.
+            var restored = new TaskCompletionSource<bool>();
+            _auth.StateChanged += (s, e) => restored.TrySetResult(true);
+            await Task.WhenAny(restored.Task, Task.Delay(5000));
             UpdateFromCurrentUser();
         }
 
@@ -81,6 +99,14 @@ namespace LunarDominion.Accounts
         public async Task<bool> SignInGuestAsync()
         {
             if (!IsAvailable) return false;
+            if (_auth.CurrentUser != null)
+            {
+                // Never mint a fresh guest over an existing
+                // session — a restored linked account must
+                // survive this call regardless of caller timing.
+                UpdateFromCurrentUser();
+                return true;
+            }
             try
             {
                 SetSigningIn();
