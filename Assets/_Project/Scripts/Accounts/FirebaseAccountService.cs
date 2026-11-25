@@ -165,7 +165,7 @@ namespace LunarDominion.Accounts
                 if (current != null && current.IsAnonymous)
                     user = (await current.LinkWithCredentialAsync(credential))?.User;
                 else if (current == null)
-                    user = (await _auth.SignInWithCredentialAsync(credential))?.User;
+                    user = await _auth.SignInWithCredentialAsync(credential);
                 else
                     return true;
                 UpdateFromCurrentUser();
@@ -185,7 +185,7 @@ namespace LunarDominion.Accounts
             try
             {
                 SetSigningIn();
-                var user = (await _auth.SignInWithCredentialAsync(credential))?.User;
+                var user = await _auth.SignInWithCredentialAsync(credential);
                 UpdateFromCurrentUser();
                 return user != null;
             }
@@ -233,7 +233,7 @@ namespace LunarDominion.Accounts
             {
                 var token = await user.GetIdTokenResultAsync(true);
                 Role = AccountRole.Player;
-                if (token != null && token.Claims != null
+                if (token.Claims != null
                     && token.Claims.TryGetValue("role", out var raw))
                 {
                     if (raw is string roleName)
