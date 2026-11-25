@@ -13,12 +13,11 @@ namespace LunarDominion.Accounts
     /// defines — without the define this whole file is inert and
     /// LocalAccountService runs instead.
     ///
-    /// Written against the Firebase Unity SDK (v11/12) surface:
-    /// FirebaseAuth.DefaultInstance, Task-based sign-in methods,
-    /// TokenAsync for custom-claim reads. First compile with the
-    /// SDK imported may still surface small API deltas between
-    /// SDK versions — that Play check is Patrick's, per the
-    /// design doc's SDK integration steps.</summary>
+    /// Written against the Firebase Unity SDK surface:
+    /// FirebaseAuth.DefaultInstance, Task-based sign-in methods
+    /// (SDK 12+ returns AuthResult — the user is .User),
+    /// GetIdTokenResultAsync for custom-claim reads. Adjusted
+    /// to SDK 14.2 on 2026-11-25 from Patrick's first compile.</summary>
     public sealed class FirebaseAccountService : IAccountService
     {
         private FirebaseAuth _auth;
@@ -84,7 +83,7 @@ namespace LunarDominion.Accounts
             try
             {
                 SetSigningIn();
-                var user = await _auth.SignInAnonymouslyAsync();
+                var user = (await _auth.SignInAnonymouslyAsync())?.User;
                 UpdateFromCurrentUser();
                 return user != null;
             }
@@ -106,9 +105,9 @@ namespace LunarDominion.Accounts
                 var current = _auth.CurrentUser;
                 FirebaseUser user;
                 if (current != null && current.IsAnonymous)
-                    user = await current.LinkWithCredentialAsync(credential);
+                    user = (await current.LinkWithCredentialAsync(credential))?.User;
                 else if (current == null)
-                    user = await _auth.CreateUserWithEmailAndPasswordAsync(email, password);
+                    user = (await _auth.CreateUserWithEmailAndPasswordAsync(email, password))?.User;
                 else
                     return true; // already linked/signed in — nothing to attach
                 UpdateFromCurrentUser();
@@ -128,7 +127,7 @@ namespace LunarDominion.Accounts
             try
             {
                 SetSigningIn();
-                var user = await _auth.SignInWithEmailAndPasswordAsync(email, password);
+                var user = (await _auth.SignInWithEmailAndPasswordAsync(email, password))?.User;
                 UpdateFromCurrentUser();
                 return user != null;
             }
@@ -164,9 +163,9 @@ namespace LunarDominion.Accounts
                 var current = _auth.CurrentUser;
                 FirebaseUser user;
                 if (current != null && current.IsAnonymous)
-                    user = await current.LinkWithCredentialAsync(credential);
+                    user = (await current.LinkWithCredentialAsync(credential))?.User;
                 else if (current == null)
-                    user = await _auth.SignInWithCredentialAsync(credential);
+                    user = (await _auth.SignInWithCredentialAsync(credential))?.User;
                 else
                     return true;
                 UpdateFromCurrentUser();
@@ -186,7 +185,7 @@ namespace LunarDominion.Accounts
             try
             {
                 SetSigningIn();
-                var user = await _auth.SignInWithCredentialAsync(credential);
+                var user = (await _auth.SignInWithCredentialAsync(credential))?.User;
                 UpdateFromCurrentUser();
                 return user != null;
             }
@@ -232,13 +231,16 @@ namespace LunarDominion.Accounts
             if (user == null) { Role = AccountRole.Player; return; }
             try
             {
-                var token = await user.TokenAsync(true);
+                var token = await user.GetIdTokenResultAsync(true);
                 Role = AccountRole.Player;
                 if (token != null && token.Claims != null
-                    && token.Claims.TryGetValue("role", out var raw) && raw is string roleName)
+                    && token.Claims.TryGetValue("role", out var raw))
                 {
-                    if (roleName == "admin") Role = AccountRole.Admin;
-                    else if (roleName == "tester") Role = AccountRole.Tester;
+                    if (raw is string roleName)
+                    {
+                        if (roleName == "admin") Role = AccountRole.Admin;
+                        else if (roleName == "tester") Role = AccountRole.Tester;
+                    }
                 }
                 OnStatusChanged?.Invoke();
             }
