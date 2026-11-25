@@ -19,6 +19,7 @@ namespace LunarDominion.Accounts
         public string CurrentUid => "";
         public bool IsAnonymous => false;
         public string DisplayName => "";
+        public string Email => "";
         public AccountRole Role => AccountRole.Player;
 
         public Task InitializeAsync() => Task.CompletedTask;

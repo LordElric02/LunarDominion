@@ -1,4 +1,5 @@
 using System;
+using LunarDominion.Accounts;
 using LunarDominion.Core;
 using LunarDominion.Progression;
 using UnityEngine;
@@ -28,9 +29,18 @@ namespace LunarDominion.UI
         public event Action OnInboxClicked;
         public Func<int> UnreadCountProvider;
 
+        // Account panel (2026-11-25): the Bootstrap hands over
+        // its AccountManager after Build; the panel itself is
+        // built lazily on first open from the name editor's
+        // ACCOUNT button, so ordering never matters.
+        public AccountManager AccountManager { get; set; }
+        private Canvas _canvas;
+        private AccountPanelView _accountPanel;
+
         public void Build(Canvas canvas, GameController controller)
         {
             _controller = controller;
+            _canvas = canvas;
             var safe = SafeArea.Get(canvas);
             // Transparent background (Patrick 2026-11-14): the navy
             // band is gone — the level/resource text overlays the 3D
@@ -102,15 +112,15 @@ namespace LunarDominion.UI
                 new Vector2(0.32f, 0.36f), new Vector2(0.68f, 0.64f),
                 Vector2.zero, Vector2.zero);
             UIHelpers.LabelInRect(card, "Title", "USERNAME", 30, Color.white,
-                new Rect(0.05f, 0.68f, 0.95f, 0.95f), TextAnchor.MiddleCenter);
+                new Rect(0.05f, 0.70f, 0.95f, 0.96f), TextAnchor.MiddleCenter);
 
             var inputGo = new GameObject("NameInput");
             inputGo.transform.SetParent(card.transform, false);
             var inputImg = inputGo.AddComponent<Image>();
             inputImg.color = UIHelpers.Hex("#101A29");
             var inputRt = inputGo.GetComponent<RectTransform>();
-            inputRt.anchorMin = new Vector2(0.08f, 0.42f);
-            inputRt.anchorMax = new Vector2(0.92f, 0.64f);
+            inputRt.anchorMin = new Vector2(0.08f, 0.47f);
+            inputRt.anchorMax = new Vector2(0.92f, 0.67f);
             inputRt.offsetMin = Vector2.zero;
             inputRt.offsetMax = Vector2.zero;
 
@@ -148,15 +158,24 @@ namespace LunarDominion.UI
             _nameInput.characterLimit = 16;
 
             _editorHint = UIHelpers.LabelInRect(card, "Hint", "", 20,
-                new Color(1f, 0.62f, 0.62f), new Rect(0.05f, 0.29f, 0.95f, 0.41f),
+                new Color(1f, 0.62f, 0.62f), new Rect(0.05f, 0.35f, 0.95f, 0.45f),
                 TextAnchor.MiddleCenter);
             _editorHint.raycastTarget = false;
+
+            var accountBtn = UIHelpers.Button(card, "Account", "ACCOUNT", 26,
+                UIHelpers.Hex("#2A3B52"), Color.white);
+            var accountRt = accountBtn.GetComponent<RectTransform>();
+            accountRt.anchorMin = new Vector2(0.05f, 0.21f);
+            accountRt.anchorMax = new Vector2(0.95f, 0.33f);
+            accountRt.offsetMin = Vector2.zero;
+            accountRt.offsetMax = Vector2.zero;
+            accountBtn.onClick.AddListener(OpenAccountPanel);
 
             var cancelBtn = UIHelpers.Button(card, "CancelName", "CANCEL", 26,
                 UIHelpers.Hex("#2A3B52"), Color.white);
             var cancelRt = cancelBtn.GetComponent<RectTransform>();
-            cancelRt.anchorMin = new Vector2(0.05f, 0.06f);
-            cancelRt.anchorMax = new Vector2(0.48f, 0.26f);
+            cancelRt.anchorMin = new Vector2(0.05f, 0.04f);
+            cancelRt.anchorMax = new Vector2(0.48f, 0.19f);
             cancelRt.offsetMin = Vector2.zero;
             cancelRt.offsetMax = Vector2.zero;
             cancelBtn.onClick.AddListener(CloseNameEditor);
@@ -164,8 +183,8 @@ namespace LunarDominion.UI
             var saveBtn = UIHelpers.Button(card, "SaveName", "SAVE", 26,
                 UIHelpers.Hex("#2A3B52"), Color.white);
             var saveRt = saveBtn.GetComponent<RectTransform>();
-            saveRt.anchorMin = new Vector2(0.52f, 0.06f);
-            saveRt.anchorMax = new Vector2(0.95f, 0.26f);
+            saveRt.anchorMin = new Vector2(0.52f, 0.04f);
+            saveRt.anchorMax = new Vector2(0.95f, 0.19f);
             saveRt.offsetMin = Vector2.zero;
             saveRt.offsetMax = Vector2.zero;
             saveBtn.onClick.AddListener(SaveNameEditor);
@@ -185,6 +204,19 @@ namespace LunarDominion.UI
         private void CloseNameEditor()
         {
             if (_editorRoot != null) _editorRoot.SetActive(false);
+        }
+
+        private void OpenAccountPanel()
+        {
+            if (AccountManager == null || _canvas == null) return;
+            if (_accountPanel == null)
+            {
+                var go = new GameObject("AccountPanelView");
+                _accountPanel = go.AddComponent<AccountPanelView>();
+                _accountPanel.Build(_canvas, AccountManager);
+            }
+            CloseNameEditor();
+            _accountPanel.Show();
         }
 
         private void SaveNameEditor()

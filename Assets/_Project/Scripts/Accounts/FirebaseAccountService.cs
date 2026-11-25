@@ -30,6 +30,7 @@ namespace LunarDominion.Accounts
         public string CurrentUid => _auth != null && _auth.CurrentUser != null ? _auth.CurrentUser.UserId : "";
         public bool IsAnonymous => _auth != null && _auth.CurrentUser != null && _auth.CurrentUser.IsAnonymous;
         public string DisplayName => _auth != null && _auth.CurrentUser != null ? _auth.CurrentUser.DisplayName ?? "" : "";
+        public string Email => _auth != null && _auth.CurrentUser != null ? _auth.CurrentUser.Email ?? "" : "";
         public AccountRole Role { get; private set; } = AccountRole.Player;
 
         public async Task InitializeAsync()

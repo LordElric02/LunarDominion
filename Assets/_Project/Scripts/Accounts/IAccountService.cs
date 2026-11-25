@@ -32,6 +32,11 @@ namespace LunarDominion.Accounts
         /// <summary>The account's display name ("" if unset).</summary>
         string DisplayName { get; }
 
+        /// <summary>The linked/sign-in email ("" for a guest or
+        /// when unset). Display only — the account panel shows it
+        /// so the player can see which identity is attached.</summary>
+        string Email { get; }
+
         /// <summary>Role claim from the current token.</summary>
         AccountRole Role { get; }
 

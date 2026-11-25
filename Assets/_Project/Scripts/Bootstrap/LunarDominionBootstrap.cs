@@ -75,6 +75,7 @@ namespace LunarDominion.Bootstrap
 
             _topBar = new GameObject("TopBarView").AddComponent<TopBarView>();
             _topBar.Build(canvas, _controller);
+            _topBar.AccountManager = _accountManager;
 
             _baseView = new GameObject("BaseView").AddComponent<BaseView>();
             _baseView.Build(_controller);
