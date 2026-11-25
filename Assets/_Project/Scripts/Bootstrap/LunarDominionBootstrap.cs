@@ -157,6 +157,7 @@ namespace LunarDominion.Bootstrap
 
             _leaderboardsView = new GameObject("LeaderboardsView").AddComponent<LeaderboardsView>();
             _leaderboardsView.Build(canvas, _controller);
+            _leaderboardsView.AccountManager = _accountManager;
 
             _bottomNav = new GameObject("BottomNavView").AddComponent<BottomNavView>();
             _bottomNav.Build(canvas);
