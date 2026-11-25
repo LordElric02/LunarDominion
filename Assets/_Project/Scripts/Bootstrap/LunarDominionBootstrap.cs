@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using LunarDominion.Accounts;
 using LunarDominion.Audio;
 using LunarDominion.Core;
 using LunarDominion.Expeditions;
@@ -18,6 +19,7 @@ namespace LunarDominion.Bootstrap
     public class LunarDominionBootstrap : MonoBehaviour
     {
         private GameController _controller;
+        private AccountManager _accountManager;
         private TopBarView _topBar;
         private BaseView _baseView;
         private ExteriorView _exteriorView;
@@ -61,6 +63,15 @@ namespace LunarDominion.Bootstrap
 
             var controllerGo = new GameObject("GameController");
             _controller = controllerGo.AddComponent<GameController>();
+
+            // Accounts (2026-11-24): local stub today — no sign-in,
+            // no network, no behaviour change. The Firebase
+            // implementation compiles in only when the SDK is
+            // imported and FIREBASE_SDK is added to the scripting
+            // defines (see Scripts/Accounts and
+            // files/Lunar-Dominion-Firebase-Design.md).
+            _accountManager = AccountManager.CreateDefault();
+            _accountManager.Initialize(_controller);
 
             _topBar = new GameObject("TopBarView").AddComponent<TopBarView>();
             _topBar.Build(canvas, _controller);
