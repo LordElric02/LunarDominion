@@ -37,6 +37,15 @@ namespace LunarDominion.Accounts
         public bool CloudAvailable =>
             Accounts.IsAvailable && CloudSaves.IsAvailable && !string.IsNullOrEmpty(Accounts.CurrentUid);
 
+        /// <summary>The name this device's game plays under:
+        /// the player's chosen name, or "Commander" while the
+        /// default stands. Account setup gates on this — a
+        /// bound account must carry a chosen name, so the
+        /// leaderboards don't fill up with Commanders.</summary>
+        public string PlayerDisplayName =>
+            _controller != null && _controller.State != null
+                ? _controller.State.EffectiveUsername : "Commander";
+
         /// <summary>Raised when a newer cloud save was staged to
         /// the local file for next launch. The UI pass wires this
         /// to an Inbox message; today it is logged.</summary>

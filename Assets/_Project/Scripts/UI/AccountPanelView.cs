@@ -320,9 +320,25 @@ namespace LunarDominion.UI
             return true;
         }
 
+        /// <summary>Account setup requires a chosen player
+        /// name: while the game still plays under the default
+        /// "Commander", binding is refused, with directions to
+        /// the name editor (the player name at the top left).
+        /// Sign-in is NOT gated — a returning account already
+        /// has its name, and the sign-in reconcile adopts it
+        /// over the local default.</summary>
+        private bool BlockedByDefaultName()
+        {
+            if (_manager == null) return false;
+            if (_manager.PlayerDisplayName.ToLowerInvariant() != "commander") return false;
+            SetHint("Pick your player name first: close this panel, tap your name at the top left, and change it from Commander — then come back to set up your account.", false);
+            return true;
+        }
+
         private async void OnBindEmailClicked()
         {
             if (_busy || _manager == null) return;
+            if (BlockedByDefaultName()) return;
             if (!ValidateCredentials(out var email, out var password, true)) return;
             SetBusy(true);
             bool ok = false;
@@ -375,6 +391,7 @@ namespace LunarDominion.UI
         private void OnGoogleClicked()
         {
             if (_busy || _manager == null) return;
+            if (BlockedByDefaultName()) return;
             SetBusy(true);
             SetHint("Opening Google sign-in…", true);
             GoogleSignInBridge.SignIn(OnGoogleToken, OnGoogleError);
