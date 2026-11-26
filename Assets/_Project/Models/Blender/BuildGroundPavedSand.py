@@ -102,7 +102,9 @@ HAZARD_YELLOW = (0.90, 0.75, 0.20)
 HAZARD_DARK = (0.15, 0.15, 0.16)
 
 # Road network in layout-root local space (2026-11-13 redesign,
-# grown with the compound — x1.25 then x1.5 on 2026-11-18):
+# grown with the compound — x1.25 then x1.5 on 2026-11-18; the
+# south side grown again 2026-11-26 to move the military row
+# off the ring road, south spine extended to match):
 # segments as (ax, az, bx, bz), all 3 units wide. A ring road
 # around the Nexus plaza (its east/west edges extend to serve
 # the four corner buildings' driveways), the main street
@@ -110,8 +112,8 @@ HAZARD_DARK = (0.15, 0.15, 0.16)
 # two spines from the plaza to the Helium-3 Harvester and
 # Aegis Motor Pool. Building positions (BaseView.cs):
 # Nexus (0,0); Hydroponics (-31.5,21); Alloy (31.5,21);
-# Helium-3 (0,24); Marine (-31.5,-21); Nova (31.5,-21);
-# Aegis (0,-24); Lab (-45,0); Hospital (45,0).
+# Helium-3 (0,24); Marine (-28.5,-22); Nova (28.5,-22);
+# Aegis (0,-28); Lab (-45,0); Hospital (45,0).
 # (BuildGroundPaved.py keeps the pre-growth network — that
 # generator retired with the black-glass floor.)
 ROAD_SEGMENTS = [
@@ -121,7 +123,7 @@ ROAD_SEGMENTS = [
     (31.5, -17.25, 31.5, 17.25),      # ring east (+ corner driveways)
     (-41.25, 0.0, 54.0, 0.0),         # main street: Lab to the gate
     (0.0, 9.0, 0.0, 20.25),           # north spine to Helium-3
-    (0.0, -20.25, 0.0, -9.0),         # south spine to Aegis
+    (0.0, -24.25, 0.0, -9.0),         # south spine to Aegis
 ]
 ROAD_HALF_WIDTH = 1.5
 ROAD_EDGE_IN = 1.26   # edge lines live between 1.26 and 1.5

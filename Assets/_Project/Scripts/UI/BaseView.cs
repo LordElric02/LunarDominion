@@ -675,8 +675,8 @@ namespace LunarDominion.UI
                 var corners = new[]
                 {
                     new Vector2(54f, 19.5f), new Vector2(0f, 39f),
-                    new Vector2(-54f, 19.5f), new Vector2(-54f, -19.5f),
-                    new Vector2(0f, -39f), new Vector2(54f, -19.5f),
+                    new Vector2(-54f, 19.5f), new Vector2(-54f, -23f),
+                    new Vector2(0f, -46f), new Vector2(54f, -23f),
                 };
                 var verts = new Vector3[7];
                 var uvs = new Vector2[7];
@@ -795,7 +795,11 @@ namespace LunarDominion.UI
             // The east side is split into two runs for the 3.4-wide
             // gate gap at local z 0. (Hexagon growth, 2026-11-18:
             // x1.25 first, then x1.5 the same night at Patrick's
-            // call — vertices (+/-54, +/-19.5), (0, +/-39).)
+            // call — vertices (+/-54, +/-19.5), (0, +/-39).
+            // South side grown again 2026-11-26 at Patrick's
+            // call, to move the military row off the ring road:
+            // south corners (+/-54, -23), south vertex (0, -46);
+            // the north side is unchanged.)
             // 2026-11-19 (Patrick): the perimeter is built from
             // the Vol 2 kit piece saved as Models/WallKit when it
             // is installed (local-only asset); without it, the
@@ -803,13 +807,13 @@ namespace LunarDominion.UI
             bool kitWall = TryBuildKitWall();
             if (!kitWall)
             {
-                AddWallRun(54f, -19.5f, 54f, -1.7f);
+                AddWallRun(54f, -23f, 54f, -1.7f);
                 AddWallRun(54f, 1.7f, 54f, 19.5f);
                 AddWallRun(54f, 19.5f, 0f, 39f);
                 AddWallRun(0f, 39f, -54f, 19.5f);
-                AddWallRun(-54f, 19.5f, -54f, -19.5f);
-                AddWallRun(-54f, -19.5f, 0f, -39f);
-                AddWallRun(0f, -39f, 54f, -19.5f);
+                AddWallRun(-54f, 19.5f, -54f, -23f);
+                AddWallRun(-54f, -23f, 0f, -46f);
+                AddWallRun(0f, -46f, 54f, -23f);
             }
 
             // Vertex towers, each capped and topped with a glowing
@@ -817,8 +821,8 @@ namespace LunarDominion.UI
             foreach (var v in new[]
             {
                 new Vector2(54f, 19.5f), new Vector2(0f, 39f),
-                new Vector2(-54f, 19.5f), new Vector2(-54f, -19.5f),
-                new Vector2(0f, -39f), new Vector2(54f, -19.5f),
+                new Vector2(-54f, 19.5f), new Vector2(-54f, -23f),
+                new Vector2(0f, -46f), new Vector2(54f, -23f),
             })
             {
                 AddWallBox(new Vector3(v.x, 1.3f, v.y), new Vector3(2.2f, 2.6f, 2.2f), WallTowerColor);
@@ -829,13 +833,13 @@ namespace LunarDominion.UI
             // Lamp posts inside the wall: one at each side's
             // midpoint, and one in each east half-run so two lamps
             // flank the gate.
-            AddLampForRun(54f, -19.5f, 54f, -1.7f);
+            AddLampForRun(54f, -23f, 54f, -1.7f);
             AddLampForRun(54f, 1.7f, 54f, 19.5f);
             AddLampForRun(54f, 19.5f, 0f, 39f);
             AddLampForRun(0f, 39f, -54f, 19.5f);
-            AddLampForRun(-54f, 19.5f, -54f, -19.5f);
-            AddLampForRun(-54f, -19.5f, 0f, -39f);
-            AddLampForRun(0f, -39f, 54f, -19.5f);
+            AddLampForRun(-54f, 19.5f, -54f, -23f);
+            AddLampForRun(-54f, -23f, 0f, -46f);
+            AddLampForRun(0f, -46f, 54f, -23f);
         }
 
         // Kit wall widening across the run (see AddKitWallPiece).
@@ -875,13 +879,13 @@ namespace LunarDominion.UI
             float pieceH = b.size.y;
             if (segLen < 0.5f || pieceH < 0.1f) return false;
 
-            AddKitWallRun(prefab, alongX, segLen, pieceH, 54f, -19.5f, 54f, -1.7f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, 54f, -23f, 54f, -1.7f);
             AddKitWallRun(prefab, alongX, segLen, pieceH, 54f, 1.7f, 54f, 19.5f);
             AddKitWallRun(prefab, alongX, segLen, pieceH, 54f, 19.5f, 0f, 39f);
             AddKitWallRun(prefab, alongX, segLen, pieceH, 0f, 39f, -54f, 19.5f);
-            AddKitWallRun(prefab, alongX, segLen, pieceH, -54f, 19.5f, -54f, -19.5f);
-            AddKitWallRun(prefab, alongX, segLen, pieceH, -54f, -19.5f, 0f, -39f);
-            AddKitWallRun(prefab, alongX, segLen, pieceH, 0f, -39f, 54f, -19.5f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, -54f, 19.5f, -54f, -23f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, -54f, -23f, 0f, -46f);
+            AddKitWallRun(prefab, alongX, segLen, pieceH, 0f, -46f, 54f, -23f);
             return true;
         }
 
@@ -1309,7 +1313,7 @@ namespace LunarDominion.UI
             // the old green-grey cube so the base still builds when the
             // files are missing.
             if (!TryAddKitMarineFoundry() && !TryAddModelMarineFoundry())
-                AddBuilding(BuildingId.MarineFoundry, new Vector3(-28.5f, 0f, -18f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
+                AddBuilding(BuildingId.MarineFoundry, new Vector3(-28.5f, 0f, -22f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.35f, 0.65f, 0.25f), "Marine");
             // Nova Arsenal: prefer the Scifi-Kit prefab (2026-11-18,
             // the kit's Room_Small_01 — a compact room whose central
             // chamber reads as a weapons core) when installed, then
@@ -1317,7 +1321,7 @@ namespace LunarDominion.UI
             // the old red cube so the base still builds when the
             // model file is missing.
             if (!TryAddKitNovaArsenal() && !TryAddModelNovaArsenal())
-                AddBuilding(BuildingId.NovaArsenal, new Vector3(28.5f, 0f, -18f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
+                AddBuilding(BuildingId.NovaArsenal, new Vector3(28.5f, 0f, -22f), PrimitiveType.Cube, new Vector3(2f, 1.4f, 2f), new Color(0.85f, 0.35f, 0.20f), "Nova");
             // Aegis Motor Pool: prefer the Scifi-Kit prefab (2026-11-18,
             // Patrick re-picked the kit's Room_Large_02 complex for
             // Aegis over Nova — its open sprawl suits a motor pool)
@@ -1325,7 +1329,7 @@ namespace LunarDominion.UI
             // otherwise fall back to the old grey cube so the base
             // still builds when the model file is missing.
             if (!TryAddKitAegisMotorPool() && !TryAddModelAegisMotorPool())
-                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -24f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
+                AddBuilding(BuildingId.AegisMotorPool, new Vector3(0f, 0f, -28f), PrimitiveType.Cube, new Vector3(2.4f, 1.2f, 2f), new Color(0.55f, 0.55f, 0.60f), "Aegis");
             // Research Lab: prefer the Vol 2 kit room (2026-11-18)
             // when Patrick has it installed, then the Blender FBX
             // model (2026-11-05), otherwise fall back to the old
@@ -1778,7 +1782,7 @@ namespace LunarDominion.UI
                 // footprint on the Marine plot and grounds the float
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(-28.5f, 0f, -18f)
+                go.transform.localPosition = new Vector3(-28.5f, 0f, -22f)
                     + new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitMarineScale;
 
@@ -1845,7 +1849,7 @@ namespace LunarDominion.UI
         /// <summary>Instantiate the Scifi-Kit Aegis Motor Pool
         /// (Resources/Models/AegisKit — a local-only prefab Patrick
         /// saved in KitTest from the Creepy Cat Room_Large_02
-        /// assembly, 2026-11-18) at the Aegis plot (0, -16) if it
+        /// assembly, 2026-11-18) at the Aegis plot (0, -28) if it
         /// can be loaded. Returns false (caller falls back to the
         /// FBX model, then the primitive) when the prefab is missing
         /// or has no meshes. Patrick re-picked this assembly for
@@ -1945,7 +1949,7 @@ namespace LunarDominion.UI
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale and rotated by
                 // the instance yaw.
-                go.transform.localPosition = new Vector3(0f, 0f, -24f)
+                go.transform.localPosition = new Vector3(0f, 0f, -28f)
                     + go.transform.localRotation * (new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitAegisScale);
 
@@ -2012,7 +2016,7 @@ namespace LunarDominion.UI
         /// <summary>Instantiate the Scifi-Kit Nova Arsenal (Resources/
         /// Models/NovaKit — a local-only prefab Patrick saved in
         /// KitTest from the Creepy Cat Room_Small_01 assembly,
-        /// 2026-11-18) at the Nova plot (21, -14) if it can be
+        /// 2026-11-18) at the Nova plot (28.5, -22) if it can be
         /// loaded. Returns false (caller falls back to the FBX
         /// model, then the primitive) when the prefab is missing or
         /// has no meshes. Room_Small_01 is a compact open-topped
@@ -2102,7 +2106,7 @@ namespace LunarDominion.UI
                 // footprint on the Nova plot and grounds the float
                 // is the plot position plus the bounds offset
                 // multiplied by the instance scale.
-                go.transform.localPosition = new Vector3(28.5f, 0f, -18f)
+                go.transform.localPosition = new Vector3(28.5f, 0f, -22f)
                     + new Vector3(
                         -bounds.center.x, -bounds.min.y, -bounds.center.z) * KitNovaScale;
 
@@ -3168,8 +3172,10 @@ namespace LunarDominion.UI
         // The support vehicle's road circuit (layout space). The
         // painted ring roads run at x +/-31.5 and z +/-14.25; the
         // loop sits a touch inside them so the vehicle never grazes
-        // a building frontage (the Marine/Nova fronts reach
-        // z -14.5). Dwell is the pause ON ARRIVAL at each point:
+        // a building frontage (the Marine/Nova fronts reached
+        // z -14.5 until the 2026-11-26 south expansion moved
+        // the row back to z -22, fronts at -18.5, clear of the
+        // road). Dwell is the pause ON ARRIVAL at each point:
         // delivery stops on the four cardinal straights, outside
         // the Helium, Lab, Aegis and Hospital plots.
         private static readonly Vector3[] VehicleRoute =
