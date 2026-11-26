@@ -128,6 +128,24 @@ namespace LunarDominion.Accounts
             }
         }
 
+        /// <summary>Account deletion (one-to-one binding's
+        /// "start over" path): remove the save, the public
+        /// profile, and the leaderboard entry for this uid.
+        /// Each delete is attempted even if another fails, so
+        /// a retry starts from the least leftover state.</summary>
+        public async Task<bool> DeleteAccountDataAsync(string uid)
+        {
+            if (string.IsNullOrEmpty(uid)) return false;
+            bool ok = true;
+            try { await Db.Collection(SavesCollection).Document(uid).DeleteAsync(); }
+            catch (Exception e) { ok = false; Debug.LogWarning($"[Lunar Dominion] Cloud save delete failed: {e.Message}"); }
+            try { await Db.Collection(UsersCollection).Document(uid).DeleteAsync(); }
+            catch (Exception e) { ok = false; Debug.LogWarning($"[Lunar Dominion] Profile delete failed: {e.Message}"); }
+            try { await Db.Collection(LairBoardCollection).Document(uid).DeleteAsync(); }
+            catch (Exception e) { ok = false; Debug.LogWarning($"[Lunar Dominion] Leaderboard entry delete failed: {e.Message}"); }
+            return ok;
+        }
+
         // ---- leaderboard ----------------------------------------------------
 
         public async Task<bool> PushLairDamageAsync(LeaderboardEntry entry)

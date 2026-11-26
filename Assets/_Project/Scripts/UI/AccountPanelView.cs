@@ -7,18 +7,26 @@ namespace LunarDominion.UI
     /// <summary>Account panel (2026-11-25): the in-game face of
     /// the account layer. Opened from the TopBar name editor.
     /// Guest-first, per the Firebase design: the player is
-    /// already signed in anonymously, so this panel is about
-    /// ATTACHING an identity (link email) or returning to one
-    /// (sign in) — never a wall. Linking keeps the same UID, so
-    /// the save and leaderboard totals are untouched. Sign-in
-    /// runs the AccountManager's post-sign-in sync, so a newer
-    /// cloud save stages in for next launch (newest-wins).
-    /// The Google button rides on GoogleSignInBridge (Google's
-    /// Sign in with Google plugin): guests get CONTINUE WITH
-    /// GOOGLE (link-first, sign-in fallback), linked accounts
-    /// get LINK GOOGLE to attach it for one-tap sign-ins. The
-    /// button only exists in GOOGLE_SIGNIN builds. The Apple
-    /// button arrives with the iOS phase.
+    /// already signed in anonymously, so this panel is never a
+    /// wall.
+    ///
+    /// ONE-TO-ONE BINDING (Patrick 2026-11-25, supersedes the
+    /// linking design): an account takes exactly ONE sign-in —
+    /// an email password, Google, or (iOS phase) Apple — chosen
+    /// when the guest binds, and it can never take another.
+    /// The panel therefore offers the bind choices ONLY to an
+    /// unbound guest (BIND EMAIL, or CONTINUE WITH GOOGLE which
+    /// binds Google to the guest — or signs into the existing
+    /// Google-bound account if that identity already owns one,
+    /// with the save safeguard arbitrating). A bound account
+    /// shows its door ("Sign-in: …") and gets SIGN OUT and
+    /// DELETE ACCOUNT — deleting and starting over is the only
+    /// way to a different door. Sign-in runs the
+    /// AccountManager's post-sign-in sync, so a newer cloud
+    /// save stages in for next launch (newest-wins). The
+    /// Google button rides on GoogleSignInBridge and only
+    /// exists in GOOGLE_SIGNIN builds. The Apple button
+    /// arrives with the iOS phase.
     ///
     /// Built lazily by TopBarView on first open, following the
     /// name editor's construction pattern (dim backdrop + card,
@@ -31,15 +39,17 @@ namespace LunarDominion.UI
         private Text _hintText;
         private InputField _emailInput;
         private InputField _passwordInput;
-        private Button _linkButton;
+        private Button _bindButton;
         private Button _signInButton;
         private Button _googleButton;
+        private Button _deleteButton;
         private Button _forgotButton;
         private Button _signOutButton;
         private Button _useCloudButton;
         private Button _keepLocalButton;
         private bool _busy;
         private bool _stagedSaveSeen;
+        private bool _deleteArmed;
 
         private static readonly Color HintOk = new Color(0.55f, 0.95f, 0.55f);
         private static readonly Color HintBad = new Color(1f, 0.62f, 0.62f);
@@ -76,8 +86,13 @@ namespace LunarDominion.UI
 
             _googleButton = AddButton(card, "Google", "CONTINUE WITH GOOGLE",
                 new Vector2(0.05f, 0.255f), new Vector2(0.95f, 0.355f), OnGoogleClicked);
-            _linkButton = AddButton(card, "LinkEmail", "LINK EMAIL",
-                new Vector2(0.05f, 0.135f), new Vector2(0.485f, 0.235f), OnLinkClicked);
+            // Same slot as the Google button: the two never
+            // coexist (Google is a guest's bind choice, Delete
+            // belongs to a bound account).
+            _deleteButton = AddButton(card, "DeleteAccount", "DELETE ACCOUNT",
+                new Vector2(0.05f, 0.255f), new Vector2(0.95f, 0.355f), OnDeleteClicked);
+            _bindButton = AddButton(card, "BindEmail", "BIND EMAIL",
+                new Vector2(0.05f, 0.135f), new Vector2(0.485f, 0.235f), OnBindEmailClicked);
             _signInButton = AddButton(card, "SignIn", "SIGN IN",
                 new Vector2(0.515f, 0.135f), new Vector2(0.95f, 0.235f), OnSignInClicked);
             _signOutButton = AddButton(card, "SignOut", "SIGN OUT",
@@ -171,6 +186,7 @@ namespace LunarDominion.UI
             _hintText.text = "";
             _passwordInput.text = "";
             _stagedSaveSeen = false;
+            _deleteArmed = false;
             RefreshPanel();
             _root.SetActive(true);
         }
@@ -195,19 +211,28 @@ namespace LunarDominion.UI
             bool conflict = _manager.HasPendingConflict;
             SetVisible(_emailInput.gameObject, guestOrOut && !conflict);
             SetVisible(_passwordInput.gameObject, guestOrOut && !conflict);
-            SetVisible(_linkButton.gameObject, guestOrOut && !conflict);
+            SetVisible(_bindButton.gameObject, guestOrOut && !conflict);
             SetVisible(_signInButton.gameObject, guestOrOut && !conflict);
             SetVisible(_signOutButton.gameObject, linked && !conflict);
-            SetVisible(_forgotButton.gameObject, (guestOrOut || linked) && !conflict);
+            // Password reset only makes sense for guests (who
+            // may be about to sign in) and email-bound accounts
+            // — a Google-bound account has no password here.
+            SetVisible(_forgotButton.gameObject,
+                (guestOrOut || (linked && accounts.Binding == AccountBinding.Email)) && !conflict);
             SetVisible(_useCloudButton.gameObject, conflict);
             SetVisible(_keepLocalButton.gameObject, conflict);
+            // One-to-one binding: Google is offered ONLY to an
+            // unbound guest — as its bind choice or as the door
+            // of an existing Google-bound account. A bound
+            // account never sees a second door; it sees Delete.
             SetVisible(_googleButton.gameObject,
-                (guestOrOut || linked) && !conflict && GoogleSignInBridge.IsAvailable);
-            if (_googleButton != null)
+                guestOrOut && !conflict && GoogleSignInBridge.IsAvailable);
+            SetVisible(_deleteButton.gameObject, linked && !conflict);
+            if (_deleteButton != null && !_deleteArmed)
             {
-                var googleLabel = _googleButton.GetComponentInChildren<Text>();
-                if (googleLabel != null)
-                    googleLabel.text = linked ? "LINK GOOGLE" : "CONTINUE WITH GOOGLE";
+                var deleteLabel = _deleteButton.GetComponentInChildren<Text>();
+                if (deleteLabel != null)
+                    deleteLabel.text = "DELETE ACCOUNT";
             }
 
             if (conflict)
@@ -231,14 +256,15 @@ namespace LunarDominion.UI
                     _statusText.text = "Signing in…";
                     break;
                 case AccountStatus.SignedOut:
-                    _statusText.text = "Signed out. Sign in with your email — or just close this and keep playing as a guest.";
+                    _statusText.text = "Signed out. Sign in with your account's sign-in — or just close this and keep playing as a guest.";
                     break;
                 case AccountStatus.SignedInGuest:
-                    _statusText.text = "Guest account\nYour progress saves to the cloud on this device.\nLink an email to use the same account everywhere.";
+                    _statusText.text = "Guest account — not bound to a sign-in yet.\nBind ONE sign-in to this account: an email, or Google.\nChoose carefully — it can't be changed later.";
                     break;
                 case AccountStatus.SignedInLinked:
                     string email = accounts.Email;
                     string line = string.IsNullOrEmpty(email) ? "Signed in." : $"Signed in: {email}";
+                    line += $"\nSign-in: {BindingName(accounts.Binding)}";
                     if (accounts.Role != AccountRole.Player)
                         line += $"\nRole: {accounts.Role}";
                     _statusText.text = line;
@@ -251,6 +277,17 @@ namespace LunarDominion.UI
             if (go != null && go.activeSelf != visible) go.SetActive(visible);
         }
 
+        private static string BindingName(AccountBinding binding)
+        {
+            switch (binding)
+            {
+                case AccountBinding.Email: return "Email and password";
+                case AccountBinding.Google: return "Google";
+                case AccountBinding.Apple: return "Apple";
+                default: return "Guest (not bound)";
+            }
+        }
+
         private void SetHint(string message, bool ok)
         {
             _hintText.color = ok ? HintOk : HintBad;
@@ -261,9 +298,10 @@ namespace LunarDominion.UI
         {
             _busy = busy;
             bool enabled = !busy;
-            if (_linkButton != null) _linkButton.interactable = enabled;
+            if (_bindButton != null) _bindButton.interactable = enabled;
             if (_signInButton != null) _signInButton.interactable = enabled;
             if (_googleButton != null) _googleButton.interactable = enabled;
+            if (_deleteButton != null) _deleteButton.interactable = enabled;
             if (_forgotButton != null) _forgotButton.interactable = enabled;
             if (_signOutButton != null) _signOutButton.interactable = enabled;
             if (_useCloudButton != null) _useCloudButton.interactable = enabled;
@@ -287,7 +325,7 @@ namespace LunarDominion.UI
             return true;
         }
 
-        private async void OnLinkClicked()
+        private async void OnBindEmailClicked()
         {
             if (_busy || _manager == null) return;
             if (!ValidateCredentials(out var email, out var password, true)) return;
@@ -298,12 +336,12 @@ namespace LunarDominion.UI
             SetBusy(false);
             if (ok)
             {
-                SetHint("Email linked — this account now signs in with that email.", true);
+                SetHint("Email bound — this account now signs in with that email.", true);
                 _passwordInput.text = "";
             }
             else
             {
-                SetHint("That didn't work — the email may already be registered. Try signing in instead.", false);
+                SetHint("That didn't work — the email may already belong to another account. Accounts keep the one sign-in they started with; try signing in instead.", false);
             }
             RefreshPanel();
         }
@@ -347,16 +385,18 @@ namespace LunarDominion.UI
             GoogleSignInBridge.SignIn(OnGoogleToken, OnGoogleError);
         }
 
-        /// <summary>Google returned an ID token. Linked account:
-        /// attach Google to it (one-tap sign-ins from then on).
-        /// Guest: link first — same UID, save untouched — and if
-        /// that Google identity already owns an account, fall
+        /// <summary>Google returned an ID token (guest state
+        /// only — a bound account never sees the Google button).
+        /// Bind first: Google attaches to the guest account,
+        /// same UID, save untouched — that bind IS this
+        /// account's one sign-in choice. If that Google identity
+        /// already owns an account, the bind refuses and we fall
         /// back to signing into it (the save safeguard then
-        /// arbitrates, exactly like email sign-in). Patrick's own
-        /// account is email/password with the same Gmail address,
-        /// so his first Google tap lands on the failure hint
-        /// below until he attaches Google from the signed-in
-        /// panel — a one-time, two-minute path.</summary>
+        /// arbitrates, exactly like email sign-in). If the
+        /// Google email belongs to an email-password account,
+        /// both attempts fail by design — under one-to-one
+        /// binding that account keeps its own door — and the
+        /// hint below says so.</summary>
         private async void OnGoogleToken(string idToken)
         {
             bool ok = false;
@@ -365,10 +405,10 @@ namespace LunarDominion.UI
                 var accounts = _manager.Accounts;
                 if (accounts.Status == AccountStatus.SignedInLinked)
                 {
-                    ok = await accounts.LinkGoogleAsync(idToken);
-                    SetHint(ok
-                        ? "Google attached — you can now sign in with Google on any device."
-                        : "Couldn't attach Google — that Google account may already belong to another game account.", ok);
+                    // Unreachable through the panel (the button
+                    // hides for bound accounts); kept as a guard
+                    // so a stray token can never stack a door.
+                    SetHint("This account already has its sign-in — another one can't be added.", false);
                 }
                 else
                 {
@@ -388,7 +428,7 @@ namespace LunarDominion.UI
                     }
                     else
                     {
-                        SetHint("Google sign-in didn't complete. If that Google email matches your password account, sign in with email + password once, then use LINK GOOGLE here.", false);
+                        SetHint("Google sign-in didn't complete. If that Gmail belongs to an email-password account, that account keeps its own sign-in — sign in with email instead, or pick a different Google account.", false);
                     }
                 }
             }
@@ -461,6 +501,37 @@ namespace LunarDominion.UI
             catch { /* the services log their own failures */ }
             SetBusy(false);
             SetHint("Signed out — you're now playing as a guest on this device.", true);
+            RefreshPanel();
+        }
+
+        /// <summary>Delete account — the one-to-one model's
+        /// only route to a different sign-in. Two-tap arm, like
+        /// the boss-fight surrender: the first tap explains and
+        /// relabels the button, the second executes. The
+        /// manager deletes cloud data, the auth identity, and
+        /// the local save, then signs in a fresh guest; the
+        /// fresh start loads on next launch, so the hint tells
+        /// the player to restart right away.</summary>
+        private async void OnDeleteClicked()
+        {
+            if (_busy || _manager == null) return;
+            if (!_deleteArmed)
+            {
+                _deleteArmed = true;
+                var label = _deleteButton.GetComponentInChildren<Text>();
+                if (label != null) label.text = "TAP AGAIN TO DELETE PERMANENTLY";
+                SetHint("This permanently deletes the account, its cloud save, and this device's save. Tap again to confirm.", false);
+                return;
+            }
+            _deleteArmed = false;
+            SetBusy(true);
+            bool ok = false;
+            try { ok = await _manager.DeleteAccountAndResetAsync(); }
+            catch { ok = false; }
+            SetBusy(false);
+            SetHint(ok
+                ? "Account deleted. Restart the app to start fresh."
+                : "Couldn't delete the account — sign in again first (deletion needs a recent sign-in), then retry.", ok);
             RefreshPanel();
         }
     }

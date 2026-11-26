@@ -34,6 +34,13 @@ namespace LunarDominion.Accounts
         /// (users/{uid} — username only, the name other players
         /// see next to scores).</summary>
         Task<bool> PushProfileAsync(string uid, string username);
+
+        /// <summary>Delete every cloud doc owned by this uid
+        /// (save, profile, leaderboard entry) — the cloud side
+        /// of deleting an account under the one-to-one binding
+        /// model. Best effort: returns false if any delete
+        /// failed, and the caller reports what it can.</summary>
+        Task<bool> DeleteAccountDataAsync(string uid);
     }
 
     /// <summary>Leaderboard surface: push the local Robot Lair

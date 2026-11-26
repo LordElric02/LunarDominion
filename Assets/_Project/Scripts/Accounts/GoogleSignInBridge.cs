@@ -3,28 +3,32 @@ using UnityEngine;
 
 namespace LunarDominion.Accounts
 {
-    /// <summary>Bridge to Google's legacy sign-in plugin
-    /// (googlesamples/google-signin-unity v1.0.4): the plugin
-    /// owns the native account picker and hands back a Google
-    /// ID token; FirebaseAccountService already turns tokens
-    /// into sign-ins (LinkGoogleAsync / SignInGoogleAsync), so
-    /// this file is the only plugin-dependent code in the game.
+    /// <summary>Bridge to the Google Sign-In plugin: it owns
+    /// the native account picker and hands back a Google ID
+    /// token; FirebaseAccountService already turns tokens into
+    /// sign-ins (LinkGoogleAsync / SignInGoogleAsync), so this
+    /// file is the only plugin-dependent code in the game.
     ///
-    /// Why the legacy plugin: Google's Nov-2026 Credential
-    /// Manager plugin (siwg) targets Unity 6.5's Gradle
-    /// pipeline — on 6.3 its Kotlin androidlib fails the build
-    /// three different ways (manifest XML, missing kotlin()
-    /// extension, KGP/AGP classloader clash, 2026-11-25). The
-    /// legacy plugin ships a prebuilt Java library — no Kotlin
-    /// compilation in the consuming project — and its C# API
-    /// was verified from the v1.0.4 package source.
+    /// The plugin is the maintained fork harshhks/
+    /// google-signin-unity v1.0.0 (2026-11-25): the SAME C#
+    /// API as the archived googlesamples plugin — this bridge
+    /// needed no code changes — but Android sign-in runs on
+    /// Google's current Credential Manager instead of the
+    /// legacy GoogleSignIn API (removed in play-services-auth
+    /// 22.0.0). API compatibility verified from the fork's
+    /// package source before the swap. History: Google's
+    /// first-party siwg plugin targets Unity 6.5 and failed
+    /// the 6.3 build three ways; the archived 2018 plugin
+    /// built but its ID-token step faulted DeveloperError
+    /// with every console setting verified.
     ///
-    /// Import notes (Patrick, one-time): import
-    /// google-signin-plugin-1.0.4.unitypackage with the
-    /// Assets/PlayServicesResolver and Assets/Parse folders
-    /// UNCHECKED — the project already has Firebase's modern
-    /// EDM resolver, and the plugin's code uses framework
-    /// Tasks, not the 2018 Parse shims.
+    /// Import notes (Patrick, one-time): delete the old
+    /// Assets/GoogleSignIn folder FIRST (the fork's build
+    /// check fails the build while it lingers), then import
+    /// GoogleSignIn-1.0.0.unitypackage with the AuthManager
+    /// folder UNCHECKED (its asmdef references the AppleAuth
+    /// package, which this project does not use) and Samples
+    /// unchecked; Force Resolve afterwards.
     ///
     /// Compiled ONLY with GOOGLE_SIGNIN defined. Without the
     /// define, this stub reports unavailable and the account
@@ -41,7 +45,9 @@ namespace LunarDominion.Accounts
         // Web (OAuth 2.0) client ID for the Firebase project —
         // the client_type 3 entry in google-services.json. A
         // public identifier (it ships inside the app); the
-        // legacy plugin takes it in code, not a settings asset.
+        // plugin accepts it in code — it could also read
+        // Project Settings / google-services.json, but the
+        // explicit const keeps it deterministic.
         private const string WebClientId =
             "594856987727-b14kaq4r4lacralad0enqu3ula3bg8an.apps.googleusercontent.com";
 

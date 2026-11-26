@@ -22,6 +22,21 @@ namespace LunarDominion.Accounts
         SignedInLinked
     }
 
+    /// <summary>Which sign-in an account is BOUND to
+    /// (one-to-one binding, Patrick 2026-11-25): an account
+    /// takes exactly one sign-in when it is created — email,
+    /// Google, or (iOS phase) Apple — and can never take
+    /// another. Changing doors means deleting the account and
+    /// starting over. None = not bound yet (guest / signed
+    /// out / local-only).</summary>
+    public enum AccountBinding
+    {
+        None,
+        Email,
+        Google,
+        Apple
+    }
+
     /// <summary>Role from the Firebase custom claim `role`
     /// (Roadmap Phase 3). No claim = Player. The client reads this
     /// only to decide what to display; Firestore security rules

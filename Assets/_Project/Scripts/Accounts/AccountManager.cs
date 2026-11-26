@@ -271,6 +271,48 @@ namespace LunarDominion.Accounts
             return ok;
         }
 
+        /// <summary>Delete this account and reset the device
+        /// to a fresh guest — the "start over with a different
+        /// door" path of the one-to-one binding model (Patrick
+        /// 2026-11-25). Order matters: the cloud docs go FIRST,
+        /// while the uid can still authenticate against the
+        /// owner-only security rules (after the auth identity
+        /// is deleted, nobody can sign in as that uid to clean
+        /// them up); then the auth identity; then the local
+        /// save file, so the deleted game cannot re-upload
+        /// under the new guest. The fresh start takes effect
+        /// on next launch — the live session keeps its
+        /// in-memory state until then, the same staging rule
+        /// as save conflicts — so the panel tells the player
+        /// to restart right away. The new guest is signed in
+        /// WITHOUT the post-sign-in sync on purpose: syncing
+        /// now would upload this session's (deleted) game
+        /// under the new guest UID. Next launch starts clean
+        /// and syncs then.</summary>
+        public async Task<bool> DeleteAccountAndResetAsync()
+        {
+            if (!CloudAvailable || _controller == null) return false;
+            string uid = Accounts.CurrentUid;
+            try { await CloudSaves.DeleteAccountDataAsync(uid); }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Lunar Dominion] Cloud data delete failed (continuing): {e.Message}");
+            }
+            bool ok = false;
+            try { ok = await Accounts.DeleteAccountAsync(); }
+            catch { ok = false; }
+            if (!ok) return false;
+            ClearConflict();
+            try { _controller.Save.DeleteSave(); }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Lunar Dominion] Local save delete failed: {e.Message}");
+            }
+            try { await Accounts.SignInGuestAsync(); }
+            catch { /* the services log their own failures */ }
+            return true;
+        }
+
         /// <summary>Upload trigger for after major events (boss
         /// results, building completions) and pause/quit: call
         /// AFTER GameController.SaveGame() so the file on disk is

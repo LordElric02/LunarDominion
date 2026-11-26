@@ -38,6 +38,29 @@ namespace LunarDominion.Accounts
         public string Email => _auth != null && _auth.CurrentUser != null ? _auth.CurrentUser.Email ?? "" : "";
         public AccountRole Role { get; private set; } = AccountRole.Player;
 
+        /// <summary>The account's one sign-in door, read off
+        /// the user's provider data ("password" / "google.com"
+        /// / "apple.com"). Guests are unbound (None) until the
+        /// one-time bind happens.</summary>
+        public AccountBinding Binding
+        {
+            get
+            {
+                var user = _auth != null ? _auth.CurrentUser : null;
+                if (user == null || user.IsAnonymous) return AccountBinding.None;
+                if (user.ProviderData != null)
+                {
+                    foreach (var info in user.ProviderData)
+                    {
+                        if (info.ProviderId == GoogleAuthProvider.ProviderId) return AccountBinding.Google;
+                        if (info.ProviderId == "apple.com") return AccountBinding.Apple;
+                        if (info.ProviderId == EmailAuthProvider.ProviderId) return AccountBinding.Email;
+                    }
+                }
+                return string.IsNullOrEmpty(user.Email) ? AccountBinding.None : AccountBinding.Email;
+            }
+        }
+
         public async Task InitializeAsync()
         {
             var dependency = await FirebaseApp.CheckAndFixDependenciesAsync();
@@ -136,7 +159,14 @@ namespace LunarDominion.Accounts
                 else if (current == null)
                     user = (await _auth.CreateUserWithEmailAndPasswordAsync(email, password))?.User;
                 else
-                    return true; // already linked/signed in — nothing to attach
+                {
+                    // One-to-one binding: an account that
+                    // already has its sign-in never takes
+                    // another (Patrick 2026-11-25).
+                    Debug.LogWarning("[Lunar Dominion] Email bind refused — this account already has its sign-in method.");
+                    UpdateFromCurrentUser();
+                    return false;
+                }
                 UpdateFromCurrentUser();
                 return user != null;
             }
@@ -194,7 +224,13 @@ namespace LunarDominion.Accounts
                 else if (current == null)
                     user = await _auth.SignInWithCredentialAsync(credential);
                 else
-                    return true;
+                {
+                    // One-to-one binding: already bound —
+                    // refuse a second sign-in method.
+                    Debug.LogWarning($"[Lunar Dominion] {providerName} bind refused — this account already has its sign-in method.");
+                    UpdateFromCurrentUser();
+                    return false;
+                }
                 UpdateFromCurrentUser();
                 return user != null;
             }
@@ -229,6 +265,31 @@ namespace LunarDominion.Accounts
             if (_auth != null) _auth.SignOut();
             UpdateFromCurrentUser();
             return Task.CompletedTask;
+        }
+
+        /// <summary>Delete the auth identity itself. Firebase
+        /// may refuse when the session is old (requires recent
+        /// login) — the exception lands in the catch and the
+        /// panel asks the player to sign in again and retry.
+        /// Cloud docs and the local save are the manager's
+        /// side of the reset.</summary>
+        public async Task<bool> DeleteAccountAsync()
+        {
+            if (!IsAvailable) return false;
+            var user = _auth.CurrentUser;
+            if (user == null) return false;
+            try
+            {
+                await user.DeleteAsync();
+                UpdateFromCurrentUser();
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Lunar Dominion] Account deletion failed: {e.Message}");
+                UpdateFromCurrentUser();
+                return false;
+            }
         }
 
         // ---- profile & role ----------------------------------------------

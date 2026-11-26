@@ -21,6 +21,7 @@ namespace LunarDominion.Accounts
         public string DisplayName => "";
         public string Email => "";
         public AccountRole Role => AccountRole.Player;
+        public AccountBinding Binding => AccountBinding.None;
 
         public Task InitializeAsync() => Task.CompletedTask;
 
@@ -31,6 +32,7 @@ namespace LunarDominion.Accounts
         public Task<bool> SignInGoogleAsync(string idToken) => NotAvailable("Google sign-in");
         public Task<bool> LinkAppleAsync(string identityToken, string rawNonce) => NotAvailable("Apple link");
         public Task<bool> SignInAppleAsync(string identityToken, string rawNonce) => NotAvailable("Apple sign-in");
+        public Task<bool> DeleteAccountAsync() => NotAvailable("account deletion");
         public Task<bool> SetDisplayNameAsync(string displayName) => NotAvailable("display name");
         public Task<bool> SendPasswordResetAsync(string email) => NotAvailable("password reset");
 

@@ -22,6 +22,9 @@ namespace LunarDominion.Accounts
         public Task<bool> PushProfileAsync(string uid, string username)
             => Task.FromResult(false);
 
+        public Task<bool> DeleteAccountDataAsync(string uid)
+            => Task.FromResult(false);
+
         public Task<bool> PushLairDamageAsync(LeaderboardEntry entry)
             => Task.FromResult(false);
 

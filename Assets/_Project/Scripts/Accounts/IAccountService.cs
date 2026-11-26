@@ -4,14 +4,21 @@ using System.Threading.Tasks;
 namespace LunarDominion.Accounts
 {
     /// <summary>Sign-in surface (Roadmap Phase 1). Guest-first:
-    /// SignInGuestAsync is the background first-run path; the
-    /// Link* methods attach a real identity to that same guest
-    /// account so the UID — and with it the save and scores —
-    /// never changes. Google and Apple arrive as tokens produced
-    /// by their native plugins (Google Sign-In Unity plugin /
-    /// Sign in with Apple), so this layer never depends on them.
-    /// Implementations: LocalAccountService (stub, runs today),
-    /// FirebaseAccountService (behind `#if FIREBASE_SDK`).</summary>
+    /// SignInGuestAsync is the background first-run path.
+    /// ONE-TO-ONE BINDING (Patrick 2026-11-25, supersedes the
+    /// multi-provider linking design): the Link* methods are
+    /// the ONE-TIME bind that attaches the account's single
+    /// sign-in identity to the guest account — the UID, and
+    /// with it the save and scores, never changes — and they
+    /// refuse once an account is bound. An account's door
+    /// (email / Google / Apple) is chosen once and never
+    /// changes; the only way to another door is deleting the
+    /// account and starting over. Google and Apple arrive as
+    /// tokens produced by their native plugins (Google Sign-In
+    /// Unity plugin / Sign in with Apple), so this layer never
+    /// depends on them. Implementations: LocalAccountService
+    /// (stub, runs today), FirebaseAccountService (behind
+    /// `#if FIREBASE_SDK`).</summary>
     public interface IAccountService
     {
         event Action OnStatusChanged;
@@ -40,6 +47,12 @@ namespace LunarDominion.Accounts
         /// <summary>Role claim from the current token.</summary>
         AccountRole Role { get; }
 
+        /// <summary>The sign-in this account is bound to
+        /// (one-to-one). None while the account is an unbound
+        /// guest. The panel displays it and the bind guard
+        /// enforces it.</summary>
+        AccountBinding Binding { get; }
+
         Task InitializeAsync();
 
         /// <summary>Anonymous sign-in — the guest-first entry.</summary>
@@ -63,6 +76,16 @@ namespace LunarDominion.Accounts
         Task<bool> SignInAppleAsync(string identityToken, string rawNonce);
 
         Task SignOutAsync();
+
+        /// <summary>Permanently delete the signed-in account's
+        /// auth identity — the "start over with a different
+        /// door" path of the one-to-one model. Cloud data and
+        /// the local save are the manager's side of the reset
+        /// (AccountManager.DeleteAccountAndResetAsync). May
+        /// fail when Firebase requires a recent sign-in; the
+        /// caller surfaces that and the player retries after
+        /// signing in again.</summary>
+        Task<bool> DeleteAccountAsync();
 
         /// <summary>Force a token refresh so a newly granted
         /// role claim shows up without waiting for expiry.</summary>
