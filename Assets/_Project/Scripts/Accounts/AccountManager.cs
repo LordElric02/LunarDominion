@@ -41,6 +41,13 @@ namespace LunarDominion.Accounts
         /// the local file for next launch. The UI pass wires this
         /// to an Inbox message; today it is logged.</summary>
         public event Action OnCloudSaveStaged;
+        // Raised when the local game has been replaced and the
+        // running session must reload into the new one: the
+        // player chose the account save in a conflict, or
+        // deleted the account for a fresh start. The Bootstrap
+        // answers by reloading the scene in place — the player
+        // never has to close and reopen the app to switch.
+        public event Action OnSessionReload;
 
         /// <summary>One side of a save conflict, in player
         /// terms: whose game it is and how far it got.</summary>
@@ -283,17 +290,25 @@ namespace LunarDominion.Accounts
             _pendingCloudJson = null;
         }
 
-        /// <summary>Player chose the account save: stage it for
-        /// next launch (a live session is never yanked) and
-        /// clear the conflict. From the next launch the device
-        /// plays the account's game, so later syncs match by
-        /// save ID and run automatically again.</summary>
+        /// <summary>Player chose the account save: stage it
+        /// and clear the conflict, then ask for a session
+        /// reload — the Bootstrap swaps the staged save in and
+        /// reloads the scene, so the account's game loads
+        /// right away instead of on a manual relaunch (the
+        /// staged file remains the fallback if the app dies
+        /// before the reload lands). This explicit choice is
+        /// the one case where a live session is replaced on
+        /// the spot; automatic sync staging still never yanks
+        /// one. From here the device plays the account's
+        /// game, so later syncs match by save ID and run
+        /// automatically again.</summary>
         public void ResolveConflictUseCloud()
         {
             if (!HasPendingConflict || _pendingCloudJson == null) return;
             StageSaveForNextLaunch(_pendingCloudJson);
             ClearConflict();
             OnCloudSaveStaged?.Invoke();
+            OnSessionReload?.Invoke();
         }
 
         /// <summary>Player chose this device's save: upload it
@@ -347,6 +362,12 @@ namespace LunarDominion.Accounts
             }
             try { await Accounts.SignInGuestAsync(); }
             catch { /* the services log their own failures */ }
+            // The local save is gone and a fresh guest is
+            // signed in, but this session still holds the
+            // deleted account's game in memory — reload the
+            // scene so the fresh start begins now, not on a
+            // manual relaunch.
+            OnSessionReload?.Invoke();
             return true;
         }
 

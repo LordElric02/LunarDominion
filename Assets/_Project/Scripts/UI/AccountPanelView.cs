@@ -448,7 +448,7 @@ namespace LunarDominion.UI
         {
             if (_busy || _manager == null) return;
             _manager.ResolveConflictUseCloud();
-            SetHint("Account save chosen — restart the app and it loads.", true);
+            SetHint("Loading your account save…", true);
             RefreshPanel();
         }
 
@@ -510,8 +510,8 @@ namespace LunarDominion.UI
         /// relabels the button, the second executes. The
         /// manager deletes cloud data, the auth identity, and
         /// the local save, then signs in a fresh guest; the
-        /// fresh start loads on next launch, so the hint tells
-        /// the player to restart right away.</summary>
+        /// manager then asks for a session reload, so the
+        /// fresh start begins immediately — no manual relaunch.</summary>
         private async void OnDeleteClicked()
         {
             if (_busy || _manager == null) return;
@@ -530,7 +530,7 @@ namespace LunarDominion.UI
             catch { ok = false; }
             SetBusy(false);
             SetHint(ok
-                ? "Account deleted. Restart the app to start fresh."
+                ? "Account deleted — starting fresh…"
                 : "Couldn't delete the account — sign in again first (deletion needs a recent sign-in), then retry.", ok);
             RefreshPanel();
         }

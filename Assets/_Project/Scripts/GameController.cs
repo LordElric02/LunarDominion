@@ -117,8 +117,20 @@ namespace LunarDominion
             OnStateChanged?.Invoke();
         }
 
+        // Set by the Bootstrap for exactly one hand-off: when
+        // the account layer has replaced the local game (the
+        // player chose the account save, or deleted the
+        // account), the outgoing session must not save again —
+        // its pause/quit autosaves would overwrite the
+        // incoming game, or resurrect the deleted one, while
+        // the scene reloads around it. The new scene's
+        // Bootstrap clears the flag before creating its
+        // controller, so the new session saves normally.
+        public static bool SuppressSaves;
+
         public void SaveGame()
         {
+            if (SuppressSaves) return;
             Save.Save(State);
         }
 

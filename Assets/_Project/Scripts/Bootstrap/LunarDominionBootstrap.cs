@@ -8,6 +8,7 @@ using LunarDominion.Save;
 using LunarDominion.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 
 namespace LunarDominion.Bootstrap
 {
@@ -62,6 +63,11 @@ namespace LunarDominion.Bootstrap
 
             var canvas = UIHelpers.CreateCanvas("MainCanvas");
 
+            // Saves are only ever suppressed for the account
+            // reload hand-off (ReloadSession); a fresh scene is
+            // a fresh session and saves normally.
+            GameController.SuppressSaves = false;
+
             // A cloud save staged last session (account sync)
             // becomes the save file BEFORE the controller loads
             // it — see SaveService.StagePendingSave.
@@ -78,6 +84,7 @@ namespace LunarDominion.Bootstrap
             // files/Lunar-Dominion-Firebase-Design.md).
             _accountManager = AccountManager.CreateDefault();
             _accountManager.Initialize(_controller);
+            _accountManager.OnSessionReload += ReloadSession;
 
             _topBar = new GameObject("TopBarView").AddComponent<TopBarView>();
             _topBar.Build(canvas, _controller);
@@ -520,6 +527,24 @@ namespace LunarDominion.Bootstrap
             // lair overrides this via OpenLairView.)
             if (tab == NavTab.Map) _music?.PlayExterior();
             else _music?.PlayBase();
+        }
+
+        // Session reload (2026-11-26, Patrick): the account
+        // layer replaced this device's game — the player chose
+        // the account's save in a conflict, or deleted the
+        // account for a fresh start. Instead of asking them to
+        // close and reopen the app, reload the scene in place:
+        // suppress the outgoing session's saves (its autosaves
+        // would overwrite the incoming game, or resurrect the
+        // deleted one), swap any staged save in, and rebuild.
+        // The Firebase sign-in lives outside the scene and
+        // stays signed in, so the game comes back up as the
+        // account they just picked.
+        private void ReloadSession()
+        {
+            GameController.SuppressSaves = true;
+            SaveService.ApplyPendingSave();
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
 
         private void RefreshAll()
