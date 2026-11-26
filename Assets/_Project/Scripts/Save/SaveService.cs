@@ -21,6 +21,11 @@ namespace LunarDominion.Save
         // Player's chosen name (2026-11-24). Old saves without
         // it load empty and show the default.
         public string Username = "";
+        // Save lineage ID (2026-11-26): see GameState.SaveId.
+        // Old saves without it load empty; SaveService mints
+        // one on load so every save written from now on
+        // carries the ID.
+        public string SaveId = "";
         public int[] BuildingLevels = new int[9];
         // Research (2026-11-01). Old saves without these fields load
         // as unresearched with no research in progress, which is correct.
@@ -66,6 +71,23 @@ namespace LunarDominion.Save
         public int[] OccupationAmounts;
         public int[] OccupationKinds;
         public int[] OccupationTroopCounts;
+        // March records (2026-11-26): one leg of an excursion
+        // per army slot — see GameState.MarchPhase. Old saves
+        // without these fields load with every army home,
+        // which is correct for saves written before marches
+        // persisted (their in-flight marches were session-only
+        // and are simply over).
+        public int[] MarchPhases;
+        public int[] MarchTargetKinds;
+        public int[] MarchTargetIndices;
+        public int[] MarchTargetTiers;
+        public float[] MarchFromXs;
+        public float[] MarchFromZs;
+        public float[] MarchToXs;
+        public float[] MarchToZs;
+        public string[] MarchDepartUtcs;
+        public string[] MarchArriveUtcs;
+        public RosterSlot[] MarchSquads;
         // Boss lair (2026-11-09, ladder 2026-11-10): highest boss level
         // defeated (0 = none yet, up to 15). Old saves load as 0.
         public string BossRespawnUtc = "";
@@ -167,7 +189,8 @@ namespace LunarDominion.Save
                 Helium3 = _balance.StartingHelium3,
                 Energy = _balance.StartingEnergy,
                 LastEnergyDate = DateTime.Now.ToString("yyyy-MM-dd"),
-                LastSaveTimeUtc = DateTime.UtcNow.ToString("o")
+                LastSaveTimeUtc = DateTime.UtcNow.ToString("o"),
+                SaveId = Guid.NewGuid().ToString()
             };
             state.SetLevel(BuildingId.CommandNexus, 1);
             state.SetLevel(BuildingId.HydroponicsDome, 1);
@@ -179,6 +202,12 @@ namespace LunarDominion.Save
         public void Save(GameState state)
         {
             state.LastSaveTimeUtc = DateTime.UtcNow.ToString("o");
+            // Every written save carries the lineage ID: mint
+            // one here if this state somehow has none (a state
+            // built outside NewGame/TryLoad), so the file on
+            // disk is never ID-less from this build on.
+            if (string.IsNullOrEmpty(state.SaveId))
+                state.SaveId = Guid.NewGuid().ToString();
             var data = new SaveData
             {
                 Biomass = state.Biomass,
@@ -196,6 +225,7 @@ namespace LunarDominion.Save
                 LastEnergyDate = state.LastEnergyDate,
                 LastSaveTimeUtc = state.LastSaveTimeUtc,
                 Username = state.Username ?? "",
+                SaveId = state.SaveId ?? "",
                 ProductionCarryBiomass = state.ProductionCarryBiomass,
                 ProductionCarryAlloy = state.ProductionCarryAlloy,
                 ProductionCarryHelium3 = state.ProductionCarryHelium3,
@@ -206,6 +236,17 @@ namespace LunarDominion.Save
                 OccupationAmounts = CopyIntSlots(state.OccupationAmount, 0),
                 OccupationKinds = CopyIntSlots(state.OccupationKind, 0),
                 OccupationTroopCounts = CopyIntSlots(state.OccupationTroops, 0),
+                MarchPhases = CopyIntSlots(state.MarchPhase, 0),
+                MarchTargetKinds = CopyIntSlots(state.MarchTargetKind, 0),
+                MarchTargetIndices = CopyIntSlots(state.MarchTargetIndex, -1),
+                MarchTargetTiers = CopyIntSlots(state.MarchTargetTier, 0),
+                MarchFromXs = CopyFloatSlots(state.MarchFromX),
+                MarchFromZs = CopyFloatSlots(state.MarchFromZ),
+                MarchToXs = CopyFloatSlots(state.MarchToX),
+                MarchToZs = CopyFloatSlots(state.MarchToZ),
+                MarchDepartUtcs = CopyStringSlots(state.MarchDepartUtc),
+                MarchArriveUtcs = CopyStringSlots(state.MarchArriveUtc),
+                MarchSquads = SerializeMarchSquads(state),
                 BossRespawnUtc = state.BossRespawnUtc ?? "",
                 BossLevelDefeated = Math.Max(0, Math.Min(state.BossLevelDefeated, EncounterCatalog.MaxBossLevel)),
                 LairDamageScore = Math.Max(0, state.LairDamageScore),
@@ -254,6 +295,7 @@ namespace LunarDominion.Save
                     LastEnergyDate = data.LastEnergyDate ?? "",
                     LastSaveTimeUtc = data.LastSaveTimeUtc ?? "",
                     Username = data.Username ?? "",
+                    SaveId = data.SaveId ?? "",
                     ProductionCarryBiomass = Math.Max(0f, data.ProductionCarryBiomass),
                     ProductionCarryAlloy = Math.Max(0f, data.ProductionCarryAlloy),
                     ProductionCarryHelium3 = Math.Max(0f, data.ProductionCarryHelium3),
@@ -269,7 +311,12 @@ namespace LunarDominion.Save
                     Inbox = ValidateInbox(data.Inbox),
                     InboxSeeded = data.InboxSeeded
                 };
+                // Pre-ID saves adopt a lineage ID on first load;
+                // it persists with the next Save().
+                if (string.IsNullOrEmpty(state.SaveId))
+                    state.SaveId = Guid.NewGuid().ToString();
                 ApplyOccupations(data, state);
+                ApplyMarches(data, state);
                 if (state.ActiveResearchId < 0)
                 {
                     state.ActiveResearchTargetLevel = 0;
@@ -465,6 +512,19 @@ namespace LunarDominion.Save
             return result;
         }
 
+        private static float[] CopyFloatSlots(float[] source)
+        {
+            var result = new float[GameState.MaxArmies];
+            for (int i = 0; i < GameState.MaxArmies; i++)
+                result[i] = source != null && i < source.Length ? source[i] : 0f;
+            return result;
+        }
+
+        private static float SlotValue(float[] values, int slot, float fallback)
+        {
+            return values != null && slot < values.Length ? values[slot] : fallback;
+        }
+
         private static int SlotValue(int[] values, int slot, int fallback)
         {
             return values != null && slot < values.Length ? values[slot] : fallback;
@@ -497,6 +557,33 @@ namespace LunarDominion.Save
                 state.OccupationAmount[slot] = Math.Max(0, amount);
                 state.OccupationKind[slot] = Math.Max(0, Math.Min(kind, 2));
                 state.OccupationTroops[slot] = Math.Max(0, Math.Min(troops, 8));
+            }
+        }
+
+        // March records (2026-11-26): fill the state's per-slot
+        // march fields from a save. A slot whose phase reads 0
+        // (or whose save predates march persistence) is home.
+        private void ApplyMarches(SaveData data, GameState state)
+        {
+            for (int slot = 0; slot < GameState.MaxArmies; slot++)
+            {
+                state.MarchPhase[slot] = Math.Max(0, Math.Min(SlotValue(data.MarchPhases, slot, 0), 2));
+                state.MarchTargetKind[slot] = SlotValue(data.MarchTargetKinds, slot, 0);
+                state.MarchTargetIndex[slot] = SlotValue(data.MarchTargetIndices, slot, -1);
+                state.MarchTargetTier[slot] = SlotValue(data.MarchTargetTiers, slot, 0);
+                state.MarchFromX[slot] = SlotValue(data.MarchFromXs, slot, 0f);
+                state.MarchFromZ[slot] = SlotValue(data.MarchFromZs, slot, 0f);
+                state.MarchToX[slot] = SlotValue(data.MarchToXs, slot, 0f);
+                state.MarchToZ[slot] = SlotValue(data.MarchToZs, slot, 0f);
+                state.MarchDepartUtc[slot] = SlotValue(data.MarchDepartUtcs, slot, "");
+                state.MarchArriveUtc[slot] = SlotValue(data.MarchArriveUtcs, slot, "");
+                state.MarchSquadSerials[slot] = new List<int>();
+                if (data.MarchSquads != null && slot < data.MarchSquads.Length
+                    && data.MarchSquads[slot] != null && data.MarchSquads[slot].Serials != null)
+                {
+                    foreach (int serial in data.MarchSquads[slot].Serials)
+                        if (serial > 0) state.MarchSquadSerials[slot].Add(serial);
+                }
             }
         }
 
@@ -561,6 +648,23 @@ namespace LunarDominion.Save
                     }
                 }
                 result[army] = new SaveData.RosterSlot { Serials = serials.ToArray() };
+            }
+            return result;
+        }
+
+        // March squads (2026-11-26): the per-slot serial lists
+        // ride in RosterSlot wrappers for the same JsonUtility
+        // reason as the army rosters above.
+        private static SaveData.RosterSlot[] SerializeMarchSquads(GameState state)
+        {
+            var result = new SaveData.RosterSlot[GameState.MaxArmies];
+            for (int slot = 0; slot < GameState.MaxArmies; slot++)
+            {
+                var serials = state.MarchSquadSerials != null && slot < state.MarchSquadSerials.Length
+                    && state.MarchSquadSerials[slot] != null
+                    ? state.MarchSquadSerials[slot].ToArray()
+                    : new int[0];
+                result[slot] = new SaveData.RosterSlot { Serials = serials };
             }
             return result;
         }

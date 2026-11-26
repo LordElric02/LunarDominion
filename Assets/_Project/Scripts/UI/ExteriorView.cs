@@ -2872,6 +2872,47 @@ namespace LunarDominion.UI
         public static int[,] RoadEdgeTable => RoadEdges;
         public static List<Vector3> RoadPathForPaint(Vector3 from, Vector3 to) => RoadPath(from, to);
 
+        // March schedule math (2026-11-26): the excursion
+        // service persists each march leg with a depart/arrive
+        // clock, so it needs the walk's true duration and the
+        // point a march has reached after some seconds — both
+        // derived from the same RoadPath the marker walks, at
+        // the same MarchSpeed, so the schedule and the walk
+        // can never disagree.
+        public static float MarchDurationSeconds(Vector3 from, Vector3 to)
+        {
+            var path = RoadPath(from, to);
+            float length = 0f;
+            Vector2 last = new Vector2(from.x, from.z);
+            foreach (var wp in path)
+            {
+                var p = new Vector2(wp.x, wp.z);
+                length += Vector2.Distance(last, p);
+                last = p;
+            }
+            return length / MarchSpeed;
+        }
+
+        public static Vector3 MarchPositionAt(Vector3 from, Vector3 to, float elapsedSeconds)
+        {
+            var path = RoadPath(from, to);
+            float remain = Mathf.Max(0f, elapsedSeconds) * MarchSpeed;
+            Vector2 last = new Vector2(from.x, from.z);
+            foreach (var wp in path)
+            {
+                var p = new Vector2(wp.x, wp.z);
+                float seg = Vector2.Distance(last, p);
+                if (remain <= seg)
+                {
+                    Vector2 pos = seg > 0f ? Vector2.Lerp(last, p, remain / seg) : p;
+                    return new Vector3(pos.x, 0f, pos.y);
+                }
+                remain -= seg;
+                last = p;
+            }
+            return to;
+        }
+
         /// <summary>Every site that gets a painted clearing and a
         /// painted road leg: (world XZ, clearing radius). Radii are
         /// the baked flatten discs' outer radii (old radii x3):
@@ -2950,18 +2991,48 @@ namespace LunarDominion.UI
             if (_marchMarkers[slot] != null) _marchMarkers[slot].SetActive(false);
         }
 
+        // Farming tracker (2026-11-26): the service reports an
+        // occupation's start (BeginOccupation, and its restore
+        // pass for occupations loaded from the save) and its end
+        // (CompleteOccupation) here, mirroring StartMarch /
+        // CancelMarch. The recorded rows join the march tracker
+        // in RefreshMarchPanel, so a farming army stays findable
+        // — across app restarts included — until the harvest
+        // lands and the return march replaces its row.
+        public void SetFarmRow(int slot, int nodeIndex, string label)
+        {
+            if (slot < 0 || slot >= _farmLabels.Length) return;
+            _farmNodes[slot] = nodeIndex;
+            _farmLabels[slot] = label;
+            RefreshMarchPanel();
+        }
+
+        public void ClearFarmRow(int slot)
+        {
+            if (slot < 0 || slot >= _farmLabels.Length) return;
+            _farmNodes[slot] = -1;
+            _farmLabels[slot] = null;
+            RefreshMarchPanel();
+        }
+
         // Rebuild the march tracker from the current march
-        // state: one row per marching army (labelled by the
-        // service at StartMarch), stacked from the top in army
-        // order, panel sized to fit; hidden when nothing is on
-        // the move or the Map is closed. Called on every march
-        // start, arrival and cancel, and from SetVisible.
+        // and farming state: one row per army out of base
+        // (marching armies labelled by the service at
+        // StartMarch, farming armies at SetFarmRow), stacked
+        // from the top in army order, panel sized to fit;
+        // hidden when every army is home or the Map is
+        // closed. Called on every march start, arrival and
+        // cancel, on every occupation start and end, and
+        // from SetVisible.
         private void RefreshMarchPanel()
         {
             if (_marchPanel == null) return;
             int count = 0;
             for (int slot = 0; slot < GameState.MaxArmies; slot++)
+            {
                 if (_marching[slot] && _marchLabels[slot] != null) count++;
+                else if (_farmLabels[slot] != null) count++;
+            }
             _marchPanel.SetActive(_visible && count > 0);
             if (count == 0) return;
             const float rowH = 56f, gap = 8f, pad = 8f, panelW = 340f;
@@ -2972,9 +3043,11 @@ namespace LunarDominion.UI
             int row = 0;
             for (int slot = 0; slot < GameState.MaxArmies; slot++)
             {
-                if (!_marching[slot] || _marchLabels[slot] == null) continue;
+                bool marching = _marching[slot] && _marchLabels[slot] != null;
+                if (!marching && _farmLabels[slot] == null) continue;
                 var btn = _marchRows[row];
                 _marchRowSlots[row] = slot;
+                _marchRowFarm[row] = !marching;
                 btn.gameObject.SetActive(true);
                 var brt = btn.GetComponent<RectTransform>();
                 float top = 1f - (pad + row * (rowH + gap)) / height;
@@ -2984,20 +3057,26 @@ namespace LunarDominion.UI
                 brt.offsetMin = Vector2.zero;
                 brt.offsetMax = Vector2.zero;
                 var txt = btn.GetComponentInChildren<Text>();
-                if (txt != null) txt.text = _marchLabels[slot];
+                if (txt != null) txt.text = marching ? _marchLabels[slot] : _farmLabels[slot];
                 row++;
             }
             for (int i = row; i < _marchRows.Length; i++)
                 _marchRows[i].gameObject.SetActive(false);
         }
 
-        // March tracker row click: glide the camera to the
-        // army's marker, wherever it is right now.
+        // Tracker row click: glide the camera to the army —
+        // a marching army at its marker, wherever it is right
+        // now; a farming army at the node it is occupying.
         private void OnMarchRowClicked(int row)
         {
             if (row < 0 || row >= _marchRowSlots.Length) return;
             int slot = _marchRowSlots[row];
             if (slot < 0 || slot >= _marchMarkers.Length) return;
+            if (_marchRowFarm[row])
+            {
+                if (NodePosition(_farmNodes[slot], out var farmPos)) GlideTo(farmPos);
+                return;
+            }
             if (!_marching[slot] || _marchMarkers[slot] == null) return;
             GlideTo(_marchMarkers[slot].transform.position);
         }
@@ -3744,6 +3823,21 @@ namespace LunarDominion.UI
             return DataForNodeDef(index);
         }
 
+        // Structured data for a camp slot's CURRENT point, for
+        // restoring a march whose target was this camp (the
+        // slot's tier may have been re-rolled since the march
+        // started — the caller compares it with the tier the
+        // march was sent against). Null when the slot is empty
+        // (defeated, not yet respawned): a restored march to a
+        // vanished camp turns home instead.
+        public MapPointData CampData(int slot)
+        {
+            if (slot < 0 || slot >= CampSlotCount) return null;
+            int tier = _campSlotTier[slot];
+            if (tier <= 0) return null;
+            return CampSlotData(slot, tier);
+        }
+
         // World position of a NodeDefs point by index, for the marker.
         public bool NodePosition(int index, out Vector3 position)
         {
@@ -3857,14 +3951,23 @@ namespace LunarDominion.UI
         private Button _campChip;
         private GameObject _campMenu;
         // March tracker (Patrick, 2026-11-24): a right-middle
-        // list of the armies currently on the move — one row per
+        // list of the armies currently out of base — one row per
         // marching army, all three when all three are out — and
-        // clicking a row glides the camera to that army.
+        // clicking a row glides the camera to that army. Since
+        // 2026-11-26 an army FARMING a node gets a row too
+        // (Patrick: after leaving and coming back he had no way
+        // to find the army he had sent out to farm); its row
+        // glides to the node instead of the marker. A slot is
+        // never marching and farming at once, so the same three
+        // rows cover both.
         private GameObject _marchPanel;
         private GameObject _homeBtnRoot;
         private readonly Button[] _marchRows = new Button[GameState.MaxArmies];
         private readonly int[] _marchRowSlots = new int[GameState.MaxArmies];
+        private readonly bool[] _marchRowFarm = new bool[GameState.MaxArmies];
         private readonly string[] _marchLabels = new string[GameState.MaxArmies];
+        private readonly int[] _farmNodes = new int[GameState.MaxArmies];
+        private readonly string[] _farmLabels = new string[GameState.MaxArmies];
         private int _campFindMaxTier = 1;
         private GameObject _nodeMenu;
         private int _nodeFindMaxLevel = 1;

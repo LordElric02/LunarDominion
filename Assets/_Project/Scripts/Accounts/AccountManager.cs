@@ -49,18 +49,22 @@ namespace LunarDominion.Accounts
             public string Name;
             public int NexusLevel;
             public string SavedTimeUtc;
+            public string SaveId;
         }
 
         /// <summary>MERGE SAFEGUARD (Patrick 2026-11-25): when
-        /// the device save and the account save carry different
-        /// player names they are different games, and the
-        /// newest-wins timestamp rule must NOT pick between
-        /// them — a fresh or passively re-saved game always
-        /// carries the newest stamp (a fresh phone save
-        /// overwrote this account's progressed save twice in one
-        /// day). The sync then stops: nothing is uploaded,
+        /// the device save and the account save are different
+        /// games, the newest-wins timestamp rule must NOT pick
+        /// between them — a fresh or passively re-saved game
+        /// always carries the newest stamp (a fresh phone save
+        /// overwrote this account's progressed save twice in
+        /// one day). The sync then stops: nothing is uploaded,
         /// staged, or pushed until the player chooses in the
-        /// account panel. These hold the pending choice.</summary>
+        /// account panel. These hold the pending choice.
+        /// "Different games" is decided by the save lineage ID
+        /// since 2026-11-26 (see SyncSaveOnSignInAsync); the
+        /// original name comparison remains as the fallback
+        /// for saves written before IDs existed.</summary>
         public SaveSummary PendingLocalSave { get; private set; }
         public SaveSummary PendingCloudSave { get; private set; }
         public bool HasPendingConflict => PendingLocalSave != null && PendingCloudSave != null;
@@ -188,19 +192,51 @@ namespace LunarDominion.Accounts
                 return;
             }
 
-            // Merge safeguard: different player names = different
-            // games. Neither save moves until the player chooses.
+            // Merge safeguard: different games never merge
+            // silently. Lineage is decided by the save ID
+            // (2026-11-26): when both saves carry one, equal
+            // IDs are the same game — a rename included — and
+            // sync automatically, while different IDs are
+            // different games even when the names match (two
+            // fresh "Commander" starts). When either save
+            // predates IDs, the original name rule decides;
+            // and if the names match and only the cloud save
+            // carries an ID, a local win below adopts that ID
+            // first so the lineage converges on the ID rule.
             var localSummary = Summarize(localJson, localTime);
             var cloudSummary = Summarize(cloud.SaveJson, cloud.ClientSaveTimeUtc);
-            if (localSummary != null && cloudSummary != null
-                && !string.Equals(localSummary.Name, cloudSummary.Name, StringComparison.OrdinalIgnoreCase))
+            if (localSummary != null && cloudSummary != null)
             {
-                PendingLocalSave = localSummary;
-                PendingCloudSave = cloudSummary;
-                _pendingCloudJson = cloud.SaveJson;
-                Debug.Log($"[Lunar Dominion] Save conflict: this device has '{localSummary.Name}' (Nexus {localSummary.NexusLevel}), the account has '{cloudSummary.Name}' (Nexus {cloudSummary.NexusLevel}) — waiting for the player's choice in the account panel.");
-                OnSaveConflict?.Invoke();
-                return;
+                bool bothHaveIds = !string.IsNullOrEmpty(localSummary.SaveId)
+                    && !string.IsNullOrEmpty(cloudSummary.SaveId);
+                bool sameGame = bothHaveIds
+                    ? string.Equals(localSummary.SaveId, cloudSummary.SaveId, StringComparison.Ordinal)
+                    : string.Equals(localSummary.Name, cloudSummary.Name, StringComparison.OrdinalIgnoreCase);
+                if (!sameGame)
+                {
+                    PendingLocalSave = localSummary;
+                    PendingCloudSave = cloudSummary;
+                    _pendingCloudJson = cloud.SaveJson;
+                    Debug.Log($"[Lunar Dominion] Save conflict: this device has '{localSummary.Name}' (Nexus {localSummary.NexusLevel}), the account has '{cloudSummary.Name}' (Nexus {cloudSummary.NexusLevel}) — waiting for the player's choice in the account panel.");
+                    OnSaveConflict?.Invoke();
+                    return;
+                }
+                if (!bothHaveIds
+                    && string.IsNullOrEmpty(localSummary.SaveId)
+                    && !string.IsNullOrEmpty(cloudSummary.SaveId)
+                    && !IsNewer(cloud.ClientSaveTimeUtc, localTime))
+                {
+                    // Legacy local save, ID-carrying cloud save,
+                    // same game, and the local save is the one
+                    // about to be uploaded: stamp it with the
+                    // account's lineage ID first. (When the
+                    // cloud save is newer it is staged instead,
+                    // and its ID arrives with it.)
+                    _controller.State.SaveId = cloudSummary.SaveId;
+                    _controller.SaveGame();
+                    localJson = ReadLocalSaveJson();
+                    localTime = _controller.State.LastSaveTimeUtc ?? "";
+                }
             }
 
             ClearConflict();
@@ -235,7 +271,8 @@ namespace LunarDominion.Accounts
                 Name = name.Length == 0 ? "Commander" : name,
                 NexusLevel = data.BuildingLevels != null && data.BuildingLevels.Length > 0
                     ? data.BuildingLevels[0] : 1,
-                SavedTimeUtc = savedTimeUtc ?? ""
+                SavedTimeUtc = savedTimeUtc ?? "",
+                SaveId = data.SaveId ?? ""
             };
         }
 
@@ -250,7 +287,7 @@ namespace LunarDominion.Accounts
         /// next launch (a live session is never yanked) and
         /// clear the conflict. From the next launch the device
         /// plays the account's game, so later syncs match by
-        /// name and run automatically again.</summary>
+        /// save ID and run automatically again.</summary>
         public void ResolveConflictUseCloud()
         {
             if (!HasPendingConflict || _pendingCloudJson == null) return;

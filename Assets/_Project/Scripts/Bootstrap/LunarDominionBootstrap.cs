@@ -176,6 +176,10 @@ namespace LunarDominion.Bootstrap
             new GameObject("SfxDirector").AddComponent<SfxDirector>();
 
             _controller.OnStateChanged += RefreshAll;
+            // March restore (2026-11-26): replay any excursion
+            // leg that was in flight when the app last closed,
+            // before the first refresh paints the base state.
+            _excursions.RestoreMarches();
             RefreshAll();
 
             // In-game splash: artwork holds ~2s over the finished base,

@@ -22,6 +22,15 @@ namespace LunarDominion.Core
         public string EffectiveUsername =>
             string.IsNullOrWhiteSpace(Username) ? "Commander" : Username.Trim();
 
+        // Save lineage ID (2026-11-26): a GUID minted once when
+        // a game is created (or when a pre-ID save first loads)
+        // and carried in every save of that game forever. The
+        // cloud merge safeguard compares IDs, not names, so
+        // renaming the player no longer reads as a different
+        // game; two games that merely share a name (two fresh
+        // "Commander" starts) still read as different games.
+        public string SaveId = "";
+
         // Indexed by (int)BuildingId. All buildings start at level 1 once unlocked;
         // locked buildings are stored as 0 and shown as locked in the UI.
         // Research Lab (2026-11-01) is index 7; Hospital (2026-11-09) is
@@ -121,6 +130,31 @@ namespace LunarDominion.Core
         public int[] OccupationAmount = new int[MaxArmies];
         public int[] OccupationKind = new int[MaxArmies];
         public int[] OccupationTroops = new int[MaxArmies];
+
+        // March record (2026-11-26, Patrick): an army sent out
+        // keeps travelling while the app is closed, so each leg
+        // of an excursion is persisted as it starts — phase
+        // (0 = home, 1 = outbound, 2 = returning), the target
+        // point (MapPointKind + Index + camp tier at send time),
+        // the leg's endpoints (XZ; Y is terrain), its depart /
+        // arrive UTC, and the squad as unit serials (the roster
+        // snapshot StartExcursion took, in save-stable form).
+        // On load, MapExcursionService.RestoreMarches replays
+        // the record against the clock: still travelling →
+        // resume mid-route; arrived while closed → the fight
+        // or occupation resolves with its true times, chaining
+        // into the return leg or home as needed.
+        public int[] MarchPhase = new int[MaxArmies];
+        public int[] MarchTargetKind = new int[MaxArmies];
+        public int[] MarchTargetIndex = { -1, -1, -1 };
+        public int[] MarchTargetTier = new int[MaxArmies];
+        public float[] MarchFromX = new float[MaxArmies];
+        public float[] MarchFromZ = new float[MaxArmies];
+        public float[] MarchToX = new float[MaxArmies];
+        public float[] MarchToZ = new float[MaxArmies];
+        public string[] MarchDepartUtc = { "", "", "" };
+        public string[] MarchArriveUtc = { "", "", "" };
+        public List<int>[] MarchSquadSerials = new List<int>[MaxArmies];
 
         // Standing armies (2026-11-12, Patrick — replaces the
         // send-time squads): up to MaxArmies standing armies are

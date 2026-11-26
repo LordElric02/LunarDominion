@@ -188,6 +188,16 @@ namespace LunarDominion.Expeditions
                 {
                     _slots[slot].Occupying = true;
                     _slots[slot].Point = view != null ? view.NodeData(state.OccupiedNodeIndex[slot]) : null;
+                    // Farming tracker (2026-11-26): a restored
+                    // occupation gets its tracker row right away,
+                    // so the army is findable from the Map the
+                    // moment the player comes back to the game.
+                    if (view != null)
+                    {
+                        var kind = (MapPointKind)Math.Max(0, Math.Min(state.OccupationKind[slot], 2));
+                        view.SetFarmRow(slot, state.OccupiedNodeIndex[slot],
+                            "Army " + (slot + 1) + " \u2014 Farming " + ResourceName(kind));
+                    }
                 }
             }
             // Restore camp positions/visibility from the save: a camp
@@ -451,6 +461,12 @@ namespace LunarDominion.Expeditions
             // squad (heroes first — they lead the formation).
             _view.SetSquadComposition(slotIndex, CompositionOf(slot));
             slot.Marching = true;
+            // March record (2026-11-26): persist the leg before
+            // it starts walking, and save immediately — if the
+            // app closes mid-march, RestoreMarches picks the
+            // army up exactly where the clock says it is.
+            WriteMarchRecord(slotIndex, 1, point, new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), DateTime.UtcNow);
+            _saveGame?.Invoke();
             OnExcursionStateChanged?.Invoke();
             // Outbound: castle (origin) to the point, 1 unit above ground.
             _view.StartMarch(slotIndex, new Vector3(0f, 1f, 0f), point.Position + new Vector3(0f, 1f, 0f), () => OnArrivedAtTarget(slotIndex),
@@ -603,10 +619,14 @@ namespace LunarDominion.Expeditions
         // Cancel anymore — an excursion ends by arriving, fighting,
         // and marching home.
 
-        private void OnArrivedAtTarget(int slotIndex)
+        private void OnArrivedAtTarget(int slotIndex, DateTime? arrivedUtc = null)
         {
             var slot = _slots[slotIndex];
             var point = slot.Point;
+            // The outbound leg is over; whatever happens next
+            // (an occupation, or the return leg a fight starts)
+            // writes its own march record.
+            ClearMarchRecord(slotIndex);
             if (point == null)
             {
                 FinishMarch(slotIndex);
@@ -622,10 +642,10 @@ namespace LunarDominion.Expeditions
                 // Node: the army stays and farms it (occupation) instead
                 // of collecting instantly. The return march starts when
                 // the occupation completes.
-                BeginOccupation(slotIndex, point);
+                BeginOccupation(slotIndex, point, arrivedUtc);
                 return;
             }
-            FightCamp(slotIndex, point);
+            FightCamp(slotIndex, point, arrivedUtc);
             // Nodes start an occupation (the return march waits until it
             // completes); camps and the boss fight — FightCamp/FightBoss
             // play the animation, show the result, and start the return
@@ -636,6 +656,7 @@ namespace LunarDominion.Expeditions
         {
             var slot = _slots[slotIndex];
             slot.Marching = false;
+            ClearMarchRecord(slotIndex);
             slot.Point = null;
             slot.Squad = null;
             slot.HeroSquad = null;
@@ -649,14 +670,17 @@ namespace LunarDominion.Expeditions
         // the node, the node turns amber, and the harvest lands when
         // the time is up (CompleteOccupation). The occupation is saved
         // immediately, so it survives an app restart.
-        private void BeginOccupation(int slotIndex, MapPointData point)
+        private void BeginOccupation(int slotIndex, MapPointData point, DateTime? startedUtc = null)
         {
             var slot = _slots[slotIndex];
             int troops = Math.Max(1, (slot.Squad != null ? slot.Squad.Count : 0) + (slot.HeroSquad != null ? slot.HeroSquad.Count : 0));
             float minutes = OccupationMinutesPerTroop / troops;
             EnsureOccupationArrays();
             _state.OccupiedNodeIndex[slotIndex] = point.Index;
-            _state.OccupationEndUtc[slotIndex] = DateTime.UtcNow.AddMinutes(minutes).ToString("o");
+            // A load-time replay passes the march's true arrival
+            // as the start, so the farming clock is honest about
+            // the time that passed while the app was closed.
+            _state.OccupationEndUtc[slotIndex] = (startedUtc ?? DateTime.UtcNow).AddMinutes(minutes).ToString("o");
             _state.OccupationAmount[slotIndex] = point.Amount;
             _state.OccupationKind[slotIndex] = (int)point.Kind;
             _state.OccupationTroops[slotIndex] = troops;
@@ -664,6 +688,8 @@ namespace LunarDominion.Expeditions
             slot.Marching = false;
             slot.Occupying = true;
             _view.SetSquadParked(slotIndex);
+            _view.SetFarmRow(slotIndex, point.Index,
+                "Army " + (slotIndex + 1) + " \u2014 Farming " + ResourceName(point.Kind));
             _notifyChanged?.Invoke();
             OnExcursionStateChanged?.Invoke();
             string resourceName = ResourceName(point.Kind);
@@ -717,6 +743,7 @@ namespace LunarDominion.Expeditions
             _state.NodeLevel[nodeIndex] = RollNodeLevel();
             if (_view != null) _view.SetNodeLevel(nodeIndex, _state.NodeLevel[nodeIndex]);
             ClearOccupation(slotIndex);
+            _view.ClearFarmRow(slotIndex);
             _saveGame?.Invoke();
             _notifyChanged?.Invoke();
             var body = new StringBuilder();
@@ -753,6 +780,233 @@ namespace LunarDominion.Expeditions
             _state.OccupationAmount[slotIndex] = 0;
             _state.OccupationKind[slotIndex] = 0;
             _state.OccupationTroops[slotIndex] = 0;
+        }
+
+        // ---- March persistence (2026-11-26, Patrick) ----
+        // Every excursion leg writes a record into the save as
+        // it starts (GameState.March*); RestoreMarches replays
+        // the records on load so an army sent out before the
+        // app closed is wherever the clock says it should be.
+
+        private void EnsureMarchArrays()
+        {
+            _state.MarchPhase = NormalizeIntSlots(_state.MarchPhase, 0);
+            _state.MarchTargetKind = NormalizeIntSlots(_state.MarchTargetKind, 0);
+            _state.MarchTargetIndex = NormalizeIntSlots(_state.MarchTargetIndex, -1);
+            _state.MarchTargetTier = NormalizeIntSlots(_state.MarchTargetTier, 0);
+            _state.MarchDepartUtc = NormalizeStringSlots(_state.MarchDepartUtc);
+            _state.MarchArriveUtc = NormalizeStringSlots(_state.MarchArriveUtc);
+            if (_state.MarchFromX == null || _state.MarchFromX.Length != ArmySlotCount) _state.MarchFromX = new float[ArmySlotCount];
+            if (_state.MarchFromZ == null || _state.MarchFromZ.Length != ArmySlotCount) _state.MarchFromZ = new float[ArmySlotCount];
+            if (_state.MarchToX == null || _state.MarchToX.Length != ArmySlotCount) _state.MarchToX = new float[ArmySlotCount];
+            if (_state.MarchToZ == null || _state.MarchToZ.Length != ArmySlotCount) _state.MarchToZ = new float[ArmySlotCount];
+            if (_state.MarchSquadSerials == null || _state.MarchSquadSerials.Length != ArmySlotCount)
+            {
+                var lists = new List<int>[ArmySlotCount];
+                for (int i = 0; i < ArmySlotCount; i++)
+                    lists[i] = _state.MarchSquadSerials != null && i < _state.MarchSquadSerials.Length && _state.MarchSquadSerials[i] != null
+                        ? _state.MarchSquadSerials[i] : new List<int>();
+                _state.MarchSquadSerials = lists;
+            }
+            for (int i = 0; i < ArmySlotCount; i++)
+                if (_state.MarchSquadSerials[i] == null) _state.MarchSquadSerials[i] = new List<int>();
+        }
+
+        // Persist the leg that is starting: its phase, target,
+        // endpoints, depart/arrive clock (the arrival derived
+        // from the road path the marker will actually walk),
+        // and the slot's squad as unit serials.
+        private void WriteMarchRecord(int slotIndex, int phase, MapPointData target, Vector3 from, Vector3 to, DateTime departUtc)
+        {
+            EnsureMarchArrays();
+            float seconds = ExteriorView.MarchDurationSeconds(from, to);
+            _state.MarchPhase[slotIndex] = phase;
+            _state.MarchTargetKind[slotIndex] = target != null ? (int)target.Kind : -1;
+            _state.MarchTargetIndex[slotIndex] = target != null ? target.Index : -1;
+            _state.MarchTargetTier[slotIndex] = target != null ? target.Tier : 0;
+            _state.MarchFromX[slotIndex] = from.x;
+            _state.MarchFromZ[slotIndex] = from.z;
+            _state.MarchToX[slotIndex] = to.x;
+            _state.MarchToZ[slotIndex] = to.z;
+            _state.MarchDepartUtc[slotIndex] = departUtc.ToString("o");
+            _state.MarchArriveUtc[slotIndex] = departUtc.AddSeconds(seconds).ToString("o");
+            var serials = _state.MarchSquadSerials[slotIndex];
+            serials.Clear();
+            var slot = _slots[slotIndex];
+            if (slot.Squad != null)
+                foreach (var unit in slot.Squad)
+                    if (unit != null && unit.Serial > 0) serials.Add(unit.Serial);
+            if (slot.HeroSquad != null)
+                foreach (var unit in slot.HeroSquad)
+                    if (unit != null && unit.Serial > 0) serials.Add(unit.Serial);
+        }
+
+        private void ClearMarchRecord(int slotIndex)
+        {
+            EnsureMarchArrays();
+            _state.MarchPhase[slotIndex] = 0;
+            _state.MarchTargetKind[slotIndex] = -1;
+            _state.MarchTargetIndex[slotIndex] = -1;
+            _state.MarchTargetTier[slotIndex] = 0;
+            _state.MarchDepartUtc[slotIndex] = "";
+            _state.MarchArriveUtc[slotIndex] = "";
+            _state.MarchSquadSerials[slotIndex].Clear();
+        }
+
+        // Rebuild a slot's squad snapshot from the persisted
+        // serials — the same units StartExcursion snapshotted,
+        // resolved against the loaded save (army, injured and
+        // heroes alike: a unit hurt on the way still walks
+        // home with its army).
+        private void RestoreSquadFromSerials(int slotIndex)
+        {
+            var slot = _slots[slotIndex];
+            slot.Squad = new List<OwnedUnit>();
+            slot.HeroSquad = new List<OwnedUnit>();
+            var serials = _state.MarchSquadSerials != null && slotIndex < _state.MarchSquadSerials.Length
+                ? _state.MarchSquadSerials[slotIndex] : null;
+            if (serials == null || serials.Count == 0) return;
+            var bySerial = new Dictionary<int, OwnedUnit>();
+            foreach (var list in new[] { _state.Army, _state.Injured, _state.Heroes })
+            {
+                if (list == null) continue;
+                foreach (var unit in list)
+                    if (unit != null && unit.Serial > 0 && !bySerial.ContainsKey(unit.Serial))
+                        bySerial[unit.Serial] = unit;
+            }
+            foreach (int serial in serials)
+            {
+                if (!bySerial.TryGetValue(serial, out var unit)) continue;
+                if (unit.Id == UnitId.HeroReyes || unit.Id == UnitId.HeroVega || unit.Id == UnitId.HeroOkafor
+                    || unit.Id == UnitId.HeroWard)
+                    slot.HeroSquad.Add(unit);
+                else
+                    slot.Squad.Add(unit);
+            }
+        }
+
+        private bool _marchesRestored;
+
+        /// <summary>March restore (2026-11-26, Patrick): called
+        /// once by the Bootstrap after the save has loaded and
+        /// every view exists. Each persisted leg is replayed
+        /// against the clock — an army sent out before the app
+        /// closed is exactly where it should be now: still
+        /// marching (resumed mid-route from the position the
+        /// elapsed time puts it at), arrived while closed (a
+        /// camp fight resolved, a node occupation begun at its
+        /// true arrival and completed too if its time also
+        /// passed), on its way home, or back. Results land in
+        /// the Inbox through the usual events.</summary>
+        public void RestoreMarches()
+        {
+            if (_marchesRestored) return;
+            _marchesRestored = true;
+            EnsureMarchArrays();
+            var now = DateTime.UtcNow;
+            bool any = false;
+            for (int slot = 0; slot < ArmySlotCount; slot++)
+            {
+                int s = slot;
+                int phase = _state.MarchPhase[s];
+                if (phase == 0) continue;
+                any = true;
+                if (!DateTime.TryParse(_state.MarchDepartUtc[s], null, DateTimeStyles.RoundtripKind, out var depart)
+                    || !DateTime.TryParse(_state.MarchArriveUtc[s], null, DateTimeStyles.RoundtripKind, out var arrive))
+                {
+                    ClearMarchRecord(s);
+                    continue;
+                }
+                var from = new Vector3(_state.MarchFromX[s], 1f, _state.MarchFromZ[s]);
+                var to = new Vector3(_state.MarchToX[s], 1f, _state.MarchToZ[s]);
+                RestoreSquadFromSerials(s);
+                if (phase == 2)
+                {
+                    // Return leg: home if its time ran out,
+                    // otherwise resume the walk from where the
+                    // elapsed time puts the marker.
+                    if (now >= arrive) { FinishMarch(s); continue; }
+                    _slots[s].Marching = true;
+                    _view.SetSquadComposition(s, CompositionOf(_slots[s], s));
+                    float elapsedHome = (float)(now - depart).TotalSeconds;
+                    _view.StartMarch(s, ExteriorView.MarchPositionAt(from, to, elapsedHome), to,
+                        () => FinishMarch(s), "Army " + (s + 1) + " \u2192 Base");
+                    continue;
+                }
+                // Outbound: rebuild the target point.
+                int kindInt = _state.MarchTargetKind[s];
+                int index = _state.MarchTargetIndex[s];
+                MapPointData point = null;
+                if (kindInt == (int)MapPointKind.Camp)
+                {
+                    point = _view.CampData(index - ExteriorView.CampSlotIndexBase);
+                    if (point != null && point.Tier != _state.MarchTargetTier[s]) point = null;
+                }
+                else if (index >= 0)
+                {
+                    point = _view.NodeData(index);
+                }
+                if (point == null)
+                {
+                    // The target is gone (its camp was destroyed
+                    // by another army and the slot re-rolled
+                    // while this army was in flight): the army
+                    // reaches the site at its arrival time and
+                    // turns home from there.
+                    float backSeconds = ExteriorView.MarchDurationSeconds(to, new Vector3(0f, 1f, 0f));
+                    var homeArrive = arrive.AddSeconds(backSeconds);
+                    OnExcursionResult?.Invoke("Army " + (s + 1) + " \u2014 target gone",
+                        "The camp Army " + (s + 1) + " was marching to is no longer there, so the army turned home.");
+                    if (now >= homeArrive) { ClearMarchRecord(s); continue; }
+                    _state.MarchPhase[s] = 2;
+                    _state.MarchFromX[s] = to.x;
+                    _state.MarchFromZ[s] = to.z;
+                    _state.MarchToX[s] = 0f;
+                    _state.MarchToZ[s] = 0f;
+                    _state.MarchDepartUtc[s] = arrive.ToString("o");
+                    _state.MarchArriveUtc[s] = homeArrive.ToString("o");
+                    _slots[s].Marching = true;
+                    _view.SetSquadComposition(s, CompositionOf(_slots[s], s));
+                    float elapsedTurn = (float)(now - arrive).TotalSeconds;
+                    _view.StartMarch(s, ExteriorView.MarchPositionAt(to, new Vector3(0f, 1f, 0f), elapsedTurn),
+                        new Vector3(0f, 1f, 0f), () => FinishMarch(s), "Army " + (s + 1) + " \u2192 Base");
+                    continue;
+                }
+                _slots[s].Point = point;
+                if (now < arrive)
+                {
+                    _slots[s].Marching = true;
+                    _view.SetSquadComposition(s, CompositionOf(_slots[s], s));
+                    float elapsedOut = (float)(now - depart).TotalSeconds;
+                    _view.StartMarch(s, ExteriorView.MarchPositionAt(from, to, elapsedOut),
+                        point.Position + new Vector3(0f, 1f, 0f), () => OnArrivedAtTarget(s),
+                        "Army " + (s + 1) + " \u2192 " + point.Title);
+                    continue;
+                }
+                // Arrived while the app was closed: resolve with
+                // the true arrival time, then settle a return
+                // leg that has also already run its course.
+                OnArrivedAtTarget(s, arrive);
+                if (point.Kind != MapPointKind.Camp && point.Kind != MapPointKind.BossLair)
+                {
+                    // Node: the occupation began at the arrival;
+                    // complete it now if its time also passed
+                    // (the Map is closed at startup, so the
+                    // harvest lands and the army is home).
+                    CheckOccupationDue();
+                }
+                else if (_state.MarchPhase[s] == 2
+                    && DateTime.TryParse(_state.MarchArriveUtc[s], null, DateTimeStyles.RoundtripKind, out var homeArrive)
+                    && now >= homeArrive)
+                {
+                    FinishMarch(s);
+                }
+            }
+            if (any)
+            {
+                _saveGame?.Invoke();
+                OnExcursionStateChanged?.Invoke();
+            }
         }
 
         // Enemy camp field (2026-11-10, replaces the 3 fixed camps):
@@ -1138,7 +1392,7 @@ namespace LunarDominion.Expeditions
             return $"{Math.Max(1, m)} min";
         }
 
-        private void FightCamp(int slotIndex, MapPointData point)
+        private void FightCamp(int slotIndex, MapPointData point, DateTime? arrivedUtc = null)
         {
             var slot = _slots[slotIndex];
             var encounter = EncounterForTier(point.Tier);
@@ -1150,7 +1404,7 @@ namespace LunarDominion.Expeditions
             if (encounter == null || (squad.Count == 0 && heroSquad.Count == 0))
             {
                 OnExcursionResult?.Invoke(point.Title, "Could not start the fight.");
-                StartReturnMarch(slotIndex, point);
+                StartReturnMarch(slotIndex, point, arrivedUtc);
                 return;
             }
             // Same fight as the Expeditions menu: energy spent at start,
@@ -1178,7 +1432,7 @@ namespace LunarDominion.Expeditions
                     // rolled by Nexus level. Losing leaves the camp in
                     // place, so the player can retry.
                     if (result.Victory) VanishCampSlot(SlotForPoint(point));
-                    StartReturnMarch(slotIndex, point);
+                    StartReturnMarch(slotIndex, point, arrivedUtc);
                 };
                 // On the Map, the simulated fight plays first
                 // (~4-5s, 2026-11-16) and the bookkeeping runs when
@@ -1192,7 +1446,7 @@ namespace LunarDominion.Expeditions
             else
             {
                 OnExcursionResult?.Invoke(point.Title, reason);
-                StartReturnMarch(slotIndex, point);
+                StartReturnMarch(slotIndex, point, arrivedUtc);
             }
         }
 
@@ -1269,8 +1523,13 @@ namespace LunarDominion.Expeditions
         }
 
         // Return march: back to the castle, then the excursion ends.
-        private void StartReturnMarch(int slotIndex, MapPointData point)
+        // The leg is persisted like the outbound one (2026-11-26);
+        // a load-time replay passes the moment the army notionally
+        // set off home as departUtc so its clock stays honest.
+        private void StartReturnMarch(int slotIndex, MapPointData point, DateTime? departUtc = null)
         {
+            WriteMarchRecord(slotIndex, 2, point, point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), departUtc ?? DateTime.UtcNow);
+            _saveGame?.Invoke();
             _view.StartMarch(slotIndex, point.Position + new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), () => FinishMarch(slotIndex),
                 "Army " + (slotIndex + 1) + " \u2192 Base");
         }
