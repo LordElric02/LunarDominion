@@ -108,7 +108,7 @@ namespace LunarDominion.Accounts
                 ex = agg.InnerException;
             var signInEx = ex as Google.GoogleSignIn.SignInException;
             if (signInEx != null)
-                return "Google sign-in failed: " + signInEx.Status + ".";
+                return signInEx.Message;
             return "Google sign-in failed: " + ex.Message;
         }
 #else
