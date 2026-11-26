@@ -49,7 +49,7 @@ namespace LunarDominion.Accounts
         // Project Settings / google-services.json, but the
         // explicit const keeps it deterministic.
         private const string WebClientId =
-            "594856987727-b14kaq4r4lacralad0enqu3ula3bg8an.apps.googleusercontent.com";
+            "594856987727-bl4kaq4r4lacra1ad0enqu3ula3bg8an.apps.googleusercontent.com";
 
         private static bool _configured;
 
