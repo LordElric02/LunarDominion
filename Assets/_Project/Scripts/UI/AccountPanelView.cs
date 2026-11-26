@@ -46,7 +46,6 @@ namespace LunarDominion.UI
         private Button _forgotButton;
         private Button _signOutButton;
         private Button _useCloudButton;
-        private Button _keepLocalButton;
         private bool _busy;
         private bool _stagedSaveSeen;
         private bool _deleteArmed;
@@ -97,10 +96,8 @@ namespace LunarDominion.UI
                 new Vector2(0.515f, 0.135f), new Vector2(0.95f, 0.235f), OnSignInClicked);
             _signOutButton = AddButton(card, "SignOut", "SIGN OUT",
                 new Vector2(0.05f, 0.135f), new Vector2(0.95f, 0.235f), OnSignOutClicked);
-            _useCloudButton = AddButton(card, "UseAccountSave", "USE ACCOUNT SAVE",
-                new Vector2(0.05f, 0.135f), new Vector2(0.485f, 0.235f), OnUseCloudClicked);
-            _keepLocalButton = AddButton(card, "KeepThisSave", "KEEP THIS SAVE",
-                new Vector2(0.515f, 0.135f), new Vector2(0.95f, 0.235f), OnKeepLocalClicked);
+            _useCloudButton = AddButton(card, "UseAccountSave", "CONFIRM USER SWITCH",
+                new Vector2(0.05f, 0.135f), new Vector2(0.95f, 0.235f), OnUseCloudClicked);
             _forgotButton = AddButton(card, "Forgot", "FORGOT PASSWORD",
                 new Vector2(0.05f, 0.03f), new Vector2(0.485f, 0.115f), OnForgotClicked);
             AddButton(card, "Close", "CLOSE",
@@ -220,7 +217,6 @@ namespace LunarDominion.UI
             SetVisible(_forgotButton.gameObject,
                 (guestOrOut || (linked && accounts.Binding == AccountBinding.Email)) && !conflict);
             SetVisible(_useCloudButton.gameObject, conflict);
-            SetVisible(_keepLocalButton.gameObject, conflict);
             // One-to-one binding: Google is offered ONLY to an
             // unbound guest — as its bind choice or as the door
             // of an existing Google-bound account. A bound
@@ -305,7 +301,6 @@ namespace LunarDominion.UI
             if (_forgotButton != null) _forgotButton.interactable = enabled;
             if (_signOutButton != null) _signOutButton.interactable = enabled;
             if (_useCloudButton != null) _useCloudButton.interactable = enabled;
-            if (_keepLocalButton != null) _keepLocalButton.interactable = enabled;
         }
 
         private bool ValidateCredentials(out string email, out string password, bool requirePasswordLength)
@@ -449,20 +444,6 @@ namespace LunarDominion.UI
             if (_busy || _manager == null) return;
             _manager.ResolveConflictUseCloud();
             SetHint("Loading your account save…", true);
-            RefreshPanel();
-        }
-
-        private async void OnKeepLocalClicked()
-        {
-            if (_busy || _manager == null) return;
-            SetBusy(true);
-            bool ok = false;
-            try { ok = await _manager.ResolveConflictKeepLocalAsync(); }
-            catch { ok = false; }
-            SetBusy(false);
-            SetHint(ok
-                ? "Done — this device's save is now your account save."
-                : "Couldn't reach your account — check your connection and try again.", ok);
             RefreshPanel();
         }
 
