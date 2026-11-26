@@ -139,10 +139,23 @@ namespace LunarDominion.Units
 
         public int CountOwned(UnitId id)
         {
-            int count = 0;
-            // Heroes live in the Heroes list, regular units in the Army.
-            var list = IsHeroUnit(id) ? _state.Heroes : _state.Army;
+            // Heroes live in the Heroes list. Regular units live
+            // in the Army, with the fallen waiting in Injured —
+            // owned means BOTH lists (2026-11-26: this counter
+            // used to read the Army alone, while promotion picks
+            // its candidate from Army + Injured, so promoting an
+            // injured unit charged the player and changed no
+            // number anywhere — the converted unit sat invisible
+            // in the Hospital queue; Patrick hit exactly that
+            // promoting Astral Knights to Eternal Wardens).
+            if (IsHeroUnit(id)) return CountIn(_state.Heroes, id);
+            return CountIn(_state.Army, id) + CountIn(_state.Injured, id);
+        }
+
+        private static int CountIn(List<OwnedUnit> list, UnitId id)
+        {
             if (list == null) return 0;
+            int count = 0;
             foreach (var unit in list)
             {
                 if (unit != null && unit.Id == id) count++;
