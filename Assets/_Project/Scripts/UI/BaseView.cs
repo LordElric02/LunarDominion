@@ -1662,6 +1662,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitNexusMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitNexusSmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -1827,6 +1841,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitMarineMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitMarineSmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -1994,6 +2022,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitAegisMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitAegisSmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2151,6 +2193,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitNovaMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitNovaSmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2322,6 +2378,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitHospitalMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitHospitalSmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2486,6 +2556,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitHydroponicsMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitHydroponicsSmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2645,6 +2729,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitHeliumMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitHeliumSmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2811,6 +2909,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitAlloyMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitAlloySmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -2977,6 +3089,20 @@ namespace LunarDominion.UI
                         mat.SetFloat("_Metallic", KitLabMetallic);
                     if (mat.HasProperty("_Smoothness"))
                         mat.SetFloat("_Smoothness", KitLabSmoothness);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        // Glow push (Patrick, 2026-11-26): the kit's lit
+                        // windows and rings carry real emission - boost what
+                        // is already there (never invent it on black) so more
+                        // of it crosses the bloom threshold, like the glowing
+                        // windows in his reference image.
+                        var emission = mat.GetColor("_EmissionColor");
+                        if (emission.r > 0.01f || emission.g > 0.01f || emission.b > 0.01f)
+                        {
+                            mat.SetColor("_EmissionColor", emission * 1.6f);
+                            mat.EnableKeyword("_EMISSION");
+                        }
+                    }
                 }
 
                 // One tap collider wrapping the whole assembly, in the
@@ -4711,11 +4837,11 @@ namespace LunarDominion.UI
             color.postExposure.overrideState = true;
             color.postExposure.value = 0.35f;
             color.contrast.overrideState = true;
-            color.contrast.value = 8f;
+            color.contrast.value = 13f;
             color.saturation.overrideState = true;
-            color.saturation.value = 22f;
+            color.saturation.value = 25f;
             color.colorFilter.overrideState = true;
-            color.colorFilter.value = new Color(1.04f, 0.99f, 0.92f);
+            color.colorFilter.value = new Color(1.06f, 0.98f, 0.89f);
 
             _basePostVolume.profile = profile;
         }
