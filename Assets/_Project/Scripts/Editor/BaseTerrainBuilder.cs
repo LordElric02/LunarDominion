@@ -60,18 +60,22 @@ namespace LunarDominion.Editor
         // ReliefRun metres past the pad edge, capped at
         // ReliefMax, modulated by rolling Perlin variation so the
         // rim is not a uniform cone.
-        private const float ReliefMax = 6.5f;
-        private const float ReliefRun = 38f;
+        private const float ReliefMax = 9f;
+        private const float ReliefRun = 30f;
 
         // Phase 5 horizon fill: past the foothills the ground
-        // keeps climbing into a rocky rim range — rim growth
-        // starts RimStart metres past the pad edge and reaches
-        // full RimMax height by RimFull, so the base camera
-        // (max distance 64) always faces highland, never the
-        // terrain's edge.
-        private const float RimStart = 34f;
-        private const float RimFull = 190f;
-        private const float RimMax = 30f;
+        // keeps climbing into a rocky rim range. The band is
+        // tuned to the base camera's actual view: at distance
+        // 64 and its fixed down-pitch, the farthest ground in
+        // frame is only ~115 m from the centre — the first
+        // tuning (rim full at 190 m) put the whole range
+        // outside the frame and the visible band read as flat
+        // lawn (Patrick's Play video, 2026-11-27). Rim growth
+        // now starts just past the wall apron and is full by
+        // 85 m, inside the frame.
+        private const float RimStart = 8f;
+        private const float RimFull = 85f;
+        private const float RimMax = 24f;
 
         private const int HeightmapResolution = 1025;
         private const int AlphamapResolution = 2048;
@@ -367,7 +371,7 @@ namespace LunarDominion.Editor
                         // 0.9 cap so grass still shows through.
                         if (rockCh >= 0 && dHex > 0f)
                         {
-                            float band = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(55f, 150f, dHex));
+                            float band = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(18f, 70f, dHex));
                             float fleck = 0.65f + 0.35f * Mathf.PerlinNoise(wx * 0.02f + 5.3f, wz * 0.02f + 9.1f);
                             float distRock = 0.9f * band * fleck;
                             if (distRock > rockW) rockW = distRock;
