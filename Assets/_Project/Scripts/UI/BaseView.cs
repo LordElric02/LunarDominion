@@ -47,6 +47,8 @@ namespace LunarDominion.UI
         // every wall piece. (The ground mesh is not among them —
         // since 2026-11-14 it never shows at all; see BuildGround.)
         private GameObject _pavedGo;
+        private GameObject _terrainGo;
+        private static TerrainData s_baseTerrainData;
         private readonly System.Collections.Generic.List<GameObject> _wallPieces =
             new System.Collections.Generic.List<GameObject>();
         // Reactor animation (2026-11-06): the Nexus FBX keeps the reactor
@@ -530,6 +532,52 @@ namespace LunarDominion.UI
             }
         }
 
+        // Route 2 (2026-11-27): build the base's Unity Terrain
+        // (BaseTerrainBuilder's data) in WORLD space — a Terrain
+        // cannot live under the 45-degree layout root, so it is
+        // unparented and toggled by SetEnvironmentVisible like
+        // the paved floor it replaces. No TerrainCollider: the
+        // old grounds had none either, and a collider would
+        // swallow building taps. Returns false when the data is
+        // missing so BuildGround falls back to the legacy floor.
+        private bool TryBuildBaseTerrain()
+        {
+            TerrainData data = null;
+            Material mat = null;
+            try
+            {
+                data = Resources.Load<TerrainData>("Terrain/BaseTerrain");
+                mat = Resources.Load<Material>("Terrain/BaseTerrainMat");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[BaseView] Base terrain failed to load: " + e.Message);
+            }
+            if (data == null) return false;
+
+            var go = new GameObject("BaseTerrain");
+            go.transform.position = new Vector3(-96f, 0f, -96f);
+            var terrain = go.AddComponent<Terrain>();
+            terrain.terrainData = data;
+            if (mat != null) terrain.materialTemplate = mat;
+            _terrainGo = go;
+            s_baseTerrainData = data;
+            return true;
+        }
+
+        /// <summary>Height of the base terrain at a world
+        /// position (0 on the building pad and wherever the
+        /// terrain data is absent). Mirrors ExteriorView's
+        /// TerrainHeight for the base's own ground.</summary>
+        public static float BaseGroundHeight(float worldX, float worldZ)
+        {
+            var data = s_baseTerrainData;
+            if (data == null) return 0f;
+            float u = Mathf.Clamp01((worldX + 96f) / 192f);
+            float v = Mathf.Clamp01((worldZ + 96f) / 192f);
+            return data.GetInterpolatedHeight(u, v);
+        }
+
         // 2026-11-07: sculpted terrain — a Blender heightfield mesh
         // (TerrainMesh.fbx in Resources/Models/) that replaces the
         // flat ground plane. Flat (height 0) inside the wall, gentle
@@ -544,6 +592,17 @@ namespace LunarDominion.UI
         // the tap logic already treats as an empty tap.
         private void BuildGround()
         {
+            // Route 2 (2026-11-27): the Unity Terrain built by
+            // BaseTerrainBuilder is the base floor when its data
+            // loads — it replaces the paved hex below (the old
+            // LunarGround has been inactive since 2026-11-14).
+            // The terrain assets are untracked binaries like the
+            // exterior's, so a checkout without them falls back
+            // to the legacy ground + paving exactly as before;
+            // the legacy path retires only after the new floor
+            // passes Patrick's Play checks.
+            if (TryBuildBaseTerrain()) return;
+
             GameObject terrainPrefab = null;
             try
             {
@@ -4956,11 +5015,14 @@ namespace LunarDominion.UI
         /// and road paving would otherwise show around the castle.
         /// The ground mesh is not toggled here — since 2026-11-14
         /// it never shows at all (moon sand removed, BuildGround).
+        /// The Route 2 base terrain IS toggled here, with the
+        /// paving it replaces (2026-11-27).
         /// Buildings are toggled separately by SetVisible; rocks,
         /// props, debris and the planet stay as they were.</summary>
         public void SetEnvironmentVisible(bool visible)
         {
             if (_pavedGo != null) _pavedGo.SetActive(visible);
+            if (_terrainGo != null) _terrainGo.SetActive(visible);
             foreach (var go in _wallPieces)
             {
                 if (go != null) go.SetActive(visible);
