@@ -875,6 +875,31 @@ namespace LunarDominion.UI
                 if (marker.Go != null) marker.Go.name = tier > 0 ? CampTitleForTier(tier) : "Empty Camp Slot";
             }
             if (tier > 0) BuildSlotStructure(slot, tier);
+            // Tap target grows with the fortress (Patrick
+            // 2026-11-26): the fixed 14-unit box from
+            // BuildCampSlots sat at the centre of a 46-78 unit
+            // structure, so most taps on the visible fortress
+            // missed it entirely. Size the slot's box to the
+            // tier's footprint; an emptied slot returns to the
+            // small default (it is never shown anyway).
+            if (marker != null && marker.Go != null)
+            {
+                var tapBox = marker.Go.GetComponent<BoxCollider>();
+                if (tapBox != null)
+                {
+                    if (tier > 0)
+                    {
+                        float fp = CampStructureFootprints[tier];
+                        tapBox.center = new Vector3(0f, 13f, 0f);
+                        tapBox.size = new Vector3(fp, 30f, fp);
+                    }
+                    else
+                    {
+                        tapBox.center = new Vector3(0f, 4f, 0f);
+                        tapBox.size = new Vector3(14f, 9f, 14f);
+                    }
+                }
+            }
             ApplySlotVisibility(slot);
         }
 
@@ -2558,6 +2583,45 @@ namespace LunarDominion.UI
                         hitPoint = true;
                         break;
                     }
+                }
+            }
+            // Camp proximity fallback (Patrick 2026-11-26): even
+            // with the footprint-sized tap box, a tap on sloped
+            // ground can be discarded by the 15-unit raycast grace
+            // above while plainly landing ON a fortress. If the
+            // raycast found no point, project the tap onto the
+            // ground plane at each live camp's height (the same
+            // projection the squad tap-to-focus below uses) and
+            // select the nearest camp whose footprint disc - plus
+            // a small margin - the tap landed in.
+            if (!hitPoint)
+            {
+                float bestSq = float.MaxValue;
+                MapPointData bestCamp = null;
+                for (int slot = 0; slot < CampSlotCount; slot++)
+                {
+                    if (_campSlotTier[slot] <= 0 || !_campSlotVisible[slot]) continue;
+                    var campMarker = _campSlotMarkers[slot];
+                    if (campMarker == null || campMarker.Go == null || campMarker.Data == null) continue;
+                    if (ray.direction.y > -0.001f) continue;
+                    Vector3 c = campMarker.Go.transform.position;
+                    float tPlane = (c.y - ray.origin.y) / ray.direction.y;
+                    if (tPlane <= 0f) continue;
+                    Vector3 p = ray.GetPoint(tPlane);
+                    float dx = p.x - c.x;
+                    float dz = p.z - c.z;
+                    float distSq = dx * dx + dz * dz;
+                    float radius = CampStructureFootprints[_campSlotTier[slot]] * 0.5f + 10f;
+                    if (distSq < radius * radius && distSq < bestSq)
+                    {
+                        bestSq = distSq;
+                        bestCamp = campMarker.Data;
+                    }
+                }
+                if (bestCamp != null)
+                {
+                    OnMapPointSelected?.Invoke(bestCamp);
+                    hitPoint = true;
                 }
             }
             // Tap-to-focus (Phase 2): a tap near one of your own
