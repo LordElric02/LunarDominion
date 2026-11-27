@@ -38,6 +38,10 @@ namespace LunarDominion.UI
         // are children of this object, so the whole base turns 45 degrees
         // while the ground plane and mountains stay unrotated.
         private GameObject _layoutRoot;
+        // Base-only post grade (ACES + colour + bloom), enabled
+        // only while the Base tab is open - see
+        // BuildBasePostProcessing / SetVisible.
+        private Volume _basePostVolume;
         // Base environment pieces the Map tab hides (see
         // SetEnvironmentVisible): the paved interior plane and
         // every wall piece. (The ground mesh is not among them —
@@ -288,6 +292,7 @@ namespace LunarDominion.UI
             bloom.scatter.overrideState = true;
             bloom.scatter.value = 0.7f;
             bloomVolume.profile = bloomProfile;
+            BuildBasePostProcessing();
 
             // Ground 132 wide by 132 deep (2026-11-13 redesign;
             // was 56x48), so it runs past all four frame edges from
@@ -4660,9 +4665,63 @@ namespace LunarDominion.UI
             if (!hitBuilding) OnEmptyBaseTapped?.Invoke();
         }
 
+        /// <summary>Base grade pass (Patrick 2026-11-26, matching
+        /// his AI-polished base reference): a global Volume that
+        /// lives only while the Base tab is open - SetVisible
+        /// enables it, so the Map (priority 15) and the lair (20)
+        /// keep their own grades and nothing leaks (the item 8
+        /// lesson). Priority 12 sits above this view's always-on
+        /// Bloom volume (10), so while the base is open this
+        /// profile's Bloom replaces it. ACES for the filmic
+        /// highlight roll-off, a warm colour filter, and a stronger
+        /// contrast / saturation lift than the Map's gentle grade -
+        /// the reference look is warm, punchy and glossy. Tune the
+        /// numbers here, one line each.</summary>
+        private void BuildBasePostProcessing()
+        {
+            if (_basePostVolume != null) return;
+            var postGo = new GameObject("Base Post Volume");
+            _basePostVolume = postGo.AddComponent<Volume>();
+            _basePostVolume.isGlobal = true;
+            _basePostVolume.priority = 12f;
+            _basePostVolume.enabled = false;
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+
+            var tonemapping = profile.Add<Tonemapping>();
+            tonemapping.active = true;
+            tonemapping.mode.overrideState = true;
+            tonemapping.mode.value = TonemappingMode.ACES;
+
+            var bloom = profile.Add<Bloom>();
+            bloom.active = true;
+            bloom.threshold.overrideState = true;
+            bloom.threshold.value = 0.85f;
+            bloom.intensity.overrideState = true;
+            bloom.intensity.value = 0.6f;
+            bloom.scatter.overrideState = true;
+            bloom.scatter.value = 0.7f;
+
+            var color = profile.Add<ColorAdjustments>();
+            color.active = true;
+            color.postExposure.overrideState = true;
+            color.postExposure.value = 0.05f;
+            color.contrast.overrideState = true;
+            color.contrast.value = 12f;
+            color.saturation.overrideState = true;
+            color.saturation.value = 16f;
+            color.colorFilter.overrideState = true;
+            color.colorFilter.value = new Color(1.04f, 0.99f, 0.92f);
+
+            _basePostVolume.profile = profile;
+        }
+
         public void SetVisible(bool visible)
         {
             _visible = visible;
+            // The base grade lives only while the Base tab is
+            // open (mirrors the Map's post volume): leaving the
+            // tab hands the frame back to the Map / lair grades.
+            if (_basePostVolume != null) _basePostVolume.enabled = visible;
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
             // The support vehicle hides with the buildings (fix
             // 2026-11-20): it is in neither the building list nor
