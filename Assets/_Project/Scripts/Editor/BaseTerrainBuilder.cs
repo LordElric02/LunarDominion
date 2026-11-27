@@ -14,10 +14,11 @@ namespace LunarDominion.Editor
     /// same treatment as the transplant (TerrainTransplantBuilder
     /// is the template for everything here).
     ///
-    /// PHASE 1 ONLY: build the TerrainData and a scene preview.
-    /// No runtime change — BaseView still builds the old ground
-    /// (TerrainMesh FBX + paved hex) until the later phases swap
-    /// it over, so the base is never broken mid-flight.
+    /// PHASES 1-2: build the TerrainData, a scene preview, and
+    /// the splat paint. No runtime change — BaseView still builds
+    /// the old ground (TerrainMesh FBX + paved hex) until the
+    /// later phases swap it over, so the base is never broken
+    /// mid-flight.
     ///
     /// Geometry facts this bake depends on (all read from
     /// BaseView.cs, 2026-11-27):
@@ -39,6 +40,7 @@ namespace LunarDominion.Editor
     /// Menu:
     ///   Lunar Dominion/Base Terrain/1. Build Base Terrain Data
     ///   Lunar Dominion/Base Terrain/2. Create Base Terrain In Scene
+    ///   Lunar Dominion/Base Terrain/3. Paint Splat Map (Phase 2)
     /// </summary>
     public static class BaseTerrainBuilder
     {
@@ -190,6 +192,236 @@ namespace LunarDominion.Editor
                       "in the same place — hide or delete the old ground objects (or this " +
                       "preview) to compare, and expect z-fighting where the two pads overlap.");
             LogProbes(data);
+        }
+
+        // ---- Phase 2 surface paint ----
+        // The interior in the exterior's language: pad dirt as
+        // the fill, the road network as worn dirt TRACKS (a
+        // second earth layer — no painted markings, no dashes),
+        // worked-earth discs under the building plots, and
+        // outside the walls the transplant's rules: grass base,
+        // rock by slope. The road network is transcribed from
+        // BuildGroundPavedSand.py's ROAD_SEGMENTS (layout space,
+        // half-width 1.5) so the tracks land exactly where the
+        // painted roads — and the rover — run today.
+        private static readonly Vector4[] RoadSegments =
+        {
+            new Vector4(-31.5f, 14.25f, 31.5f, 14.25f),     // ring north
+            new Vector4(-31.5f, -14.25f, 31.5f, -14.25f),   // ring south
+            new Vector4(-31.5f, -17.25f, -31.5f, 17.25f),   // ring west
+            new Vector4(31.5f, -17.25f, 31.5f, 17.25f),     // ring east
+            new Vector4(-41.25f, 0f, 54f, 0f),              // main street: Lab to the gate
+            new Vector4(0f, 9f, 0f, 20.25f),                // north spine to Helium-3
+            new Vector4(0f, -24.25f, 0f, -9f),              // south spine to Aegis
+        };
+        private const float RoadCoreHalfWidth = 1.5f;   // the painted road's half-width
+        private const float RoadFeather = 3.4f;         // track weight reaches 0 here
+        private const float PlazaRadius = 6.0f;         // the paved texture's plaza disc
+        private const float PlazaFeather = 7.6f;
+
+        // Building plots (layout space) with worn-disc radii
+        // matched to each building's footprint class.
+        private static readonly (string name, float x, float z, float r)[] PlotDiscs =
+        {
+            ("Nexus",     0f,     0f,   15f),
+            ("Hydro",    -31.5f,  21f,  11f),
+            ("Alloy",     31.5f,  21f,  11f),
+            ("Helium",    0f,     24f,  11f),
+            ("Marine",   -28.5f, -22f,  11f),
+            ("Nova",      28.5f, -22f,  11f),
+            ("Aegis",     0f,    -28f,  11f),
+            ("Lab",      -45f,    0f,   12f),
+            ("Hospital",  45f,    0f,   12f),
+        };
+        private const float PlotDiscStrength = 0.5f;
+
+        [MenuItem("Lunar Dominion/Base Terrain/3. Paint Splat Map (Phase 2)")]
+        public static void PaintSplatMap()
+        {
+            var data = AssetDatabase.LoadAssetAtPath<TerrainData>(TerrainAssetPath);
+            if (data == null)
+            {
+                EditorUtility.DisplayDialog("No base terrain data yet",
+                    "Run 'Lunar Dominion/Base Terrain/1. Build Base Terrain Data' first.", "OK");
+                return;
+            }
+
+            // Layer picks. The pad dirt is the Phase 1 layer; the
+            // track wants a SECOND earth layer so the roads read
+            // against the fill — searched by Path/Trail/Sand/
+            // Ground, excluding the pad pick. Every TerrainLayer
+            // in the project is logged, so if the track pick is
+            // wrong the Console names what the pack actually has.
+            var padDirt = FindTerrainLayerByKeywords("Dirt", "Path", "Ground", "Sand", "Soil");
+            var track = FindTrackLayer(padDirt);
+            var grass = FindTerrainLayer("Grass_Moss_TerrainLayer");
+            var rock = FindTerrainLayerByKeywords("Rock");
+            LogAllTerrainLayers();
+            if (padDirt == null)
+            {
+                EditorUtility.DisplayDialog("No dirt layer found",
+                    "No TerrainLayer matching Dirt/Path/Ground/Sand/Soil exists in the project — " +
+                    "the paint cannot run. The Console lists every layer found.", "OK");
+                return;
+            }
+            if (track == null)
+            {
+                Debug.LogWarning("[BaseTerrain] No second earth layer for the road tracks — " +
+                                 "roads will paint in the pad dirt (no contrast). Layer inventory is logged above.");
+                track = padDirt;
+            }
+
+            var layers = new System.Collections.Generic.List<TerrainLayer> { padDirt };
+            int dirtCh = 0;
+            int trackCh = -1, grassCh = -1, rockCh = -1;
+            if (track != padDirt) { trackCh = layers.Count; layers.Add(track); }
+            else trackCh = dirtCh;
+            if (grass != null) { grassCh = layers.Count; layers.Add(grass); }
+            if (rock != null) { rockCh = layers.Count; layers.Add(rock); }
+            data.terrainLayers = layers.ToArray();
+            int channels = layers.Count;
+
+            int ares = data.alphamapResolution;
+            var alpha = new float[ares, ares, channels];
+            try
+            {
+                for (int y = 0; y < ares; y++)
+                {
+                    if (y % 128 == 0)
+                    {
+                        EditorUtility.DisplayProgressBar("Painting base terrain",
+                            "Compositing dirt, tracks, grass and rock...", y / (float)ares);
+                    }
+                    float wz = -TerrainHalf + (y / (float)(ares - 1)) * TerrainSize;
+                    for (int x = 0; x < ares; x++)
+                    {
+                        float wx = -TerrainHalf + (x / (float)(ares - 1)) * TerrainSize;
+                        var lp = LayoutYawInverse * new Vector3(wx, 0f, wz);
+                        float lx = lp.x, lz = lp.z;
+                        float dHex = SignedOutsideDistance(lx, lz);
+
+                        // Track weight: road segments + plaza.
+                        float trackW = 0f;
+                        for (int s = 0; s < RoadSegments.Length; s++)
+                        {
+                            var seg = RoadSegments[s];
+                            float dist = SegmentDistance(lx, lz, seg.x, seg.y, seg.z, seg.w);
+                            float w = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(RoadCoreHalfWidth, RoadFeather, dist));
+                            if (w > trackW) trackW = w;
+                        }
+                        float pr = Mathf.Sqrt(lx * lx + lz * lz);
+                        float plazaW = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(PlazaRadius, PlazaFeather, pr));
+                        if (plazaW > trackW) trackW = plazaW;
+                        // Worked earth under the buildings.
+                        for (int p = 0; p < PlotDiscs.Length; p++)
+                        {
+                            var plot = PlotDiscs[p];
+                            float dx = lx - plot.x, dz = lz - plot.z;
+                            float dist = Mathf.Sqrt(dx * dx + dz * dz);
+                            float w = PlotDiscStrength * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(plot.r * 0.55f, plot.r, dist)));
+                            if (w > trackW) trackW = w;
+                        }
+
+                        // Base fill: dirt inside the pad, grass
+                        // fading in outside the wall apron.
+                        float grassBase = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(2f, 9f, dHex));
+                        float dirtBase = 1f - grassBase;
+
+                        // Rock by slope, on the grass side only.
+                        float rockW = 0f;
+                        if (rockCh >= 0 && grassBase > 0f)
+                        {
+                            float u = (wx + TerrainHalf) / TerrainSize;
+                            float v = (wz + TerrainHalf) / TerrainSize;
+                            rockW = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(12f, 24f, data.GetSteepness(u, v)));
+                        }
+
+                        float tW = trackW;
+                        float dW = dirtBase * (1f - tW);
+                        float gW = grassBase * (1f - rockW) * (1f - tW);
+                        float rW = grassBase * rockW * (1f - tW);
+                        // Missing layers fold into the dirt.
+                        if (grassCh < 0) { dW += gW; gW = 0f; }
+                        if (rockCh < 0) { dW += rW; rW = 0f; }
+                        float sum = dW + tW + gW + rW;
+                        if (sum <= 0f) { dW = 1f; sum = 1f; }
+                        if (trackCh == dirtCh)
+                        {
+                            // Fallback (single earth layer): the
+                            // track weight folds into the dirt.
+                            alpha[y, x, dirtCh] = (dW + tW) / sum;
+                        }
+                        else
+                        {
+                            alpha[y, x, dirtCh] = dW / sum;
+                            alpha[y, x, trackCh] = tW / sum;
+                        }
+                        if (grassCh >= 0) alpha[y, x, grassCh] = gW / sum;
+                        if (rockCh >= 0) alpha[y, x, rockCh] = rW / sum;
+                    }
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+            data.SetAlphamaps(0, 0, alpha);
+            EditorUtility.SetDirty(data);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[BaseTerrain] Splat painted at " + ares + " with " + channels + " layers: " +
+                      "dirt=" + padDirt.name + " (ch " + dirtCh + "), track=" + track.name + " (ch " + trackCh + "), " +
+                      "grass=" + (grass != null ? grass.name : "MISSING") + ", rock=" + (rock != null ? rock.name : "MISSING") + ". " +
+                      "Re-run item 2 to refresh the preview, or check it in Play after Phase 3.");
+        }
+
+        // Distance from a point to a segment (the Python
+        // generator's dist_and_arclen without the arc length).
+        private static float SegmentDistance(float px, float pz, float ax, float az, float bx, float bz)
+        {
+            float abx = bx - ax, abz = bz - az;
+            float ab2 = abx * abx + abz * abz;
+            float t = ab2 > 0f ? Mathf.Clamp01(((px - ax) * abx + (pz - az) * abz) / ab2) : 0f;
+            float cx = ax + t * abx, cz = az + t * abz;
+            float dx = px - cx, dz = pz - cz;
+            return Mathf.Sqrt(dx * dx + dz * dz);
+        }
+
+        // The track layer: a second earth layer, distinct from
+        // the pad dirt. Path/Trail first (a path layer is made
+        // for tracks), then Sand/Ground.
+        private static TerrainLayer FindTrackLayer(TerrainLayer exclude)
+        {
+            string[] guids = AssetDatabase.FindAssets("t:TerrainLayer");
+            foreach (var kw in new[] { "Path", "Trail", "Sand", "Ground" })
+            {
+                foreach (var g in guids)
+                {
+                    var layer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(AssetDatabase.GUIDToAssetPath(g));
+                    if (layer != null && layer != exclude &&
+                        layer.name.IndexOf(kw, StringComparison.OrdinalIgnoreCase) >= 0)
+                        return layer;
+                }
+            }
+            return null;
+        }
+
+        private static TerrainLayer FindTerrainLayer(string exactName)
+        {
+            string[] guids = AssetDatabase.FindAssets(exactName + " t:TerrainLayer");
+            if (guids.Length == 0) return null;
+            return AssetDatabase.LoadAssetAtPath<TerrainLayer>(AssetDatabase.GUIDToAssetPath(guids[0]));
+        }
+
+        private static void LogAllTerrainLayers()
+        {
+            string[] guids = AssetDatabase.FindAssets("t:TerrainLayer");
+            var names = new System.Collections.Generic.List<string>();
+            foreach (var g in guids)
+            {
+                var layer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(AssetDatabase.GUIDToAssetPath(g));
+                if (layer != null) names.Add(layer.name);
+            }
+            Debug.Log("[BaseTerrain] TerrainLayers in project (" + names.Count + "): " + string.Join(", ", names));
         }
 
         // The Phase 1 height field, in WORLD space. Inside the
