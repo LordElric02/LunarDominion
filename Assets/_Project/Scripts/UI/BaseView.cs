@@ -4969,6 +4969,15 @@ namespace LunarDominion.UI
             color.colorFilter.value = new Color(1.06f, 0.98f, 0.89f);
 
             _basePostVolume.profile = profile;
+            // Sync to the view's current visibility: the Base
+            // tab is the startup tab, so its SetVisible(true)
+            // can run before this volume exists (or not fire
+            // again until a tab change) — without this the
+            // first view of a session renders UNGRADED and the
+            // grade only kicks in after a Map round-trip
+            // (Patrick, 2026-11-27: leaving the base and coming
+            // back changed its colour).
+            _basePostVolume.enabled = _visible;
         }
 
         public void SetVisible(bool visible)
