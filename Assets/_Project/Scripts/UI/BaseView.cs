@@ -1411,8 +1411,8 @@ namespace LunarDominion.UI
         // Green treatment dials for the kit Marine (Patrick,
         // 2026-11-20: "greenish with a shine"): metalness and
         // gloss applied to the instanced kit materials at load.
-        private const float KitMarineMetallic = 0.5f;
-        private const float KitMarineSmoothness = 0.6f;
+        private const float KitMarineMetallic = 0.55f;
+        private const float KitMarineSmoothness = 0.85f;
 
         // Kit Aegis instance scale: 0.5 for the 2026-11-20 Vol 2
         // rebuild (Circular_Room_01 drum + one corridor connector
@@ -1424,8 +1424,8 @@ namespace LunarDominion.UI
         // Treatment dials for the kit building (base colour
         // scheme, Patrick, 2026-11-20): metalness and gloss
         // applied to the instanced kit materials at load.
-        private const float KitAegisMetallic = 0.5f;
-        private const float KitAegisSmoothness = 0.5f;
+        private const float KitAegisMetallic = 0.55f;
+        private const float KitAegisSmoothness = 0.85f;
 
         // Kit Nova instance scale: the shared 0.375 (Room_Small_01
         // is a compact assembly). One-line tuning knob.
@@ -1439,7 +1439,7 @@ namespace LunarDominion.UI
         // scheme, Patrick, 2026-11-20): metalness and gloss
         // applied to the instanced kit materials at load.
         private const float KitNovaMetallic = 0.6f;
-        private const float KitNovaSmoothness = 0.45f;
+        private const float KitNovaSmoothness = 0.8f;
 
         // Kit Hospital instance scale: 0.75, double the shared
         // 0.375 — at 0.375 the hand-built 6x12 flat-stack read
@@ -1450,8 +1450,8 @@ namespace LunarDominion.UI
         // Treatment dials for the kit building (base colour
         // scheme, Patrick, 2026-11-20): metalness and gloss
         // applied to the instanced kit materials at load.
-        private const float KitHospitalMetallic = 0.3f;
-        private const float KitHospitalSmoothness = 0.75f;
+        private const float KitHospitalMetallic = 0.4f;
+        private const float KitHospitalSmoothness = 0.85f;
 
         // Kit Hydroponics instance scale: the Vol 2 Circular_Room_01
         // drum is natively ~12 units across and ~10 tall (measured
@@ -1465,8 +1465,8 @@ namespace LunarDominion.UI
         // Treatment dials for the kit building (base colour
         // scheme, Patrick, 2026-11-20): metalness and gloss
         // applied to the instanced kit materials at load.
-        private const float KitHydroponicsMetallic = 0.3f;
-        private const float KitHydroponicsSmoothness = 0.55f;
+        private const float KitHydroponicsMetallic = 0.4f;
+        private const float KitHydroponicsSmoothness = 0.8f;
 
         // Kit Helium instance scale: the Vol 2 Pillar_Tank_01 silo
         // is natively ~6.5 units across its feet and ~8 tall
@@ -1480,8 +1480,8 @@ namespace LunarDominion.UI
         // Treatment dials for the kit building (base colour
         // scheme, Patrick, 2026-11-20): metalness and gloss
         // applied to the instanced kit materials at load.
-        private const float KitHeliumMetallic = 0.5f;
-        private const float KitHeliumSmoothness = 0.65f;
+        private const float KitHeliumMetallic = 0.55f;
+        private const float KitHeliumSmoothness = 0.85f;
 
         // Kit Alloy instance scale (NON-uniform): the Vol 2
         // Geo_Reactor_01 processing tower is natively ~2 units
@@ -1500,8 +1500,8 @@ namespace LunarDominion.UI
         // Treatment dials for the kit building (base colour
         // scheme, Patrick, 2026-11-20): metalness and gloss
         // applied to the instanced kit materials at load.
-        private const float KitAlloyMetallic = 0.55f;
-        private const float KitAlloySmoothness = 0.5f;
+        private const float KitAlloyMetallic = 0.6f;
+        private const float KitAlloySmoothness = 0.85f;
 
         // Kit Lab instance scale: the Vol 2 Room_Small_2_Window_01
         // is natively SMALLER than its sibling rooms (~6.5 across
@@ -1517,8 +1517,8 @@ namespace LunarDominion.UI
         // Treatment dials for the kit building (base colour
         // scheme, Patrick, 2026-11-20): metalness and gloss
         // applied to the instanced kit materials at load.
-        private const float KitLabMetallic = 0.4f;
-        private const float KitLabSmoothness = 0.6f;
+        private const float KitLabMetallic = 0.5f;
+        private const float KitLabSmoothness = 0.85f;
 
         /// <summary>Instantiate the Scifi-Kit Nexus (Resources/Models/
         /// NexusKit — a local-only prefab) at the Nexus plot if it can
