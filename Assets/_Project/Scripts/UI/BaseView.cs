@@ -1396,7 +1396,11 @@ namespace LunarDominion.UI
         // blend went to 0.6 toward a deeper blue and metallic
         // dropped to 0.6 - high metalness greys the tint, since
         // metal takes its colour from reflections, not the albedo.
-        private const float KitNexusMetallic = 0.6f;
+        // Sharper-hue pass (Patrick, 2026-11-27, against a vivid
+        // cobalt reference): metallic down to 0.35 and the blue
+        // blend up to 0.8 toward (0.02, 0.25, 1.0) - saturation
+        // carried by the albedo, gloss kept by smoothness 0.9.
+        private const float KitNexusMetallic = 0.35f;
         private const float KitNexusSmoothness = 0.9f;
 
         // Two-tone core fraction (Patrick, 2026-11-27): pieces
@@ -1706,7 +1710,7 @@ namespace LunarDominion.UI
                         else
                         {
                             mat.color = Color.Lerp(mat.color,
-                                new Color(0.05f, 0.28f, 0.95f, mat.color.a), 0.6f);
+                                new Color(0.02f, 0.25f, 1.0f, mat.color.a), 0.8f);
                         }
                         partColors[rend] = mat.color;
                     }
