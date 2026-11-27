@@ -328,12 +328,22 @@ namespace LunarDominion.Editor
                         float dirtBase = 1f - grassBase;
 
                         // Rock by slope, on the grass side only.
+                        // Band 20-32 degrees, capped at 0.75: the
+                        // first bake used the transplant-style
+                        // 12-24 band and the relief's rolling
+                        // slopes landed in it almost everywhere,
+                        // so the whole outside read as a dark rock
+                        // field and the grass vanished (Patrick's
+                        // Scene-view video, 2026-11-27). This
+                        // terrain is far gentler than the exterior's
+                        // HeightScale-6 landscape; rock is a garnish
+                        // here, not the base coat.
                         float rockW = 0f;
                         if (rockCh >= 0 && grassBase > 0f)
                         {
                             float u = (wx + TerrainHalf) / TerrainSize;
                             float v = (wz + TerrainHalf) / TerrainSize;
-                            rockW = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(12f, 24f, data.GetSteepness(u, v)));
+                            rockW = 0.75f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(20f, 32f, data.GetSteepness(u, v)));
                         }
 
                         float tW = trackW;
