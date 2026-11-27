@@ -31,7 +31,9 @@ namespace LunarDominion.Editor
     ///    the wall hexagon lives.
     ///  - The old ground square is 132x132 in layout space; its
     ///    rotated corners reach 66 * sqrt(2) = 93.3 in world, so a
-    ///    192x192 terrain centred on the origin covers it.
+    ///    192x192 terrain centred on the origin covered it —
+    ///    Phase 5 (2026-11-27) grew the terrain to 512x512 with a
+    ///    rocky rim range so the horizon is filled.
     ///  - The pad is the wall hexagon scaled by 1.04 (the same
     ///    apron the paved floor uses), held at exactly y = 0 so
     ///    every building, wall piece and the rover keep their
@@ -44,14 +46,16 @@ namespace LunarDominion.Editor
     /// </summary>
     public static class BaseTerrainBuilder
     {
-        // Terrain footprint: 192x192 world units, centred on the
-        // origin; the object is placed at (-96, 0, -96).
-        private const float TerrainSize = 192f;
-        private const float TerrainHalf = TerrainSize / 2f;   // 96
+        // Terrain footprint: 512x512 world units, centred on the
+        // origin; the object is placed at (-256, 0, -256).
+        // (192x192 through Phase 4; Phase 5 grew it to fill the
+        // horizon — see the rim terms in BaseGroundHeight.)
+        private const float TerrainSize = 512f;
+        private const float TerrainHalf = TerrainSize / 2f;   // 256
         // Height span of the TerrainData: heights are stored
         // normalised, so this is the ceiling the relief is
         // normalised against. The pad is height 0.
-        private const float HeightSpan = 16f;
+        private const float HeightSpan = 48f;
         // Gentle relief outside the pad: full rise by
         // ReliefRun metres past the pad edge, capped at
         // ReliefMax, modulated by rolling Perlin variation so the
@@ -59,8 +63,18 @@ namespace LunarDominion.Editor
         private const float ReliefMax = 6.5f;
         private const float ReliefRun = 38f;
 
-        private const int HeightmapResolution = 513;
-        private const int AlphamapResolution = 1024;
+        // Phase 5 horizon fill: past the foothills the ground
+        // keeps climbing into a rocky rim range — rim growth
+        // starts RimStart metres past the pad edge and reaches
+        // full RimMax height by RimFull, so the base camera
+        // (max distance 64) always faces highland, never the
+        // terrain's edge.
+        private const float RimStart = 34f;
+        private const float RimFull = 190f;
+        private const float RimMax = 30f;
+
+        private const int HeightmapResolution = 1025;
+        private const int AlphamapResolution = 2048;
 
         // Resources/Terrain/ alongside the exterior's assets, so
         // the Phase 3 runtime can load them the same way.
@@ -72,9 +86,9 @@ namespace LunarDominion.Editor
         // (0.60, 0.56, 0.52), main e57be603). Recorded as the
         // target, NOT applied here: TerrainLayer has no tint
         // field and URP Terrain/Lit has no global colour, so
-        // there is nothing honest to write it into in Phase 1.
-        // The base grade (postExposure 0.10) currently carries
-        // the mood; Phase 3 settles the mechanism.
+        // there is nothing honest to write it into. (The base
+        // grade that briefly carried the mood was retired
+        // 2026-11-27 — Patrick prefers the ungraded look.)
         private static readonly Color DirtMoodTint = new Color(0.60f, 0.56f, 0.52f);
 
         // The wall hexagon in layout space (BaseView's corners,
@@ -345,6 +359,19 @@ namespace LunarDominion.Editor
                             float v = (wz + TerrainHalf) / TerrainSize;
                             rockW = 0.75f * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(20f, 32f, data.GetSteepness(u, v)));
                         }
+                        // Phase 5: the rim range is rocky by
+                        // distance as well as by slope — past the
+                        // foothills the highland takes over, with
+                        // a Perlin fleck breaking the band so it
+                        // does not read as a uniform ring, and a
+                        // 0.9 cap so grass still shows through.
+                        if (rockCh >= 0 && dHex > 0f)
+                        {
+                            float band = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(55f, 150f, dHex));
+                            float fleck = 0.65f + 0.35f * Mathf.PerlinNoise(wx * 0.02f + 5.3f, wz * 0.02f + 9.1f);
+                            float distRock = 0.9f * band * fleck;
+                            if (distRock > rockW) rockW = distRock;
+                        }
 
                         float tW = trackW;
                         float dW = dirtBase * (1f - tW);
@@ -434,11 +461,14 @@ namespace LunarDominion.Editor
             Debug.Log("[BaseTerrain] TerrainLayers in project (" + names.Count + "): " + string.Join(", ", names));
         }
 
-        // The Phase 1 height field, in WORLD space. Inside the
+        // The height field, in WORLD space. Inside the
         // (apron-scaled) wall hexagon: exactly 0. Outside: a
         // smooth rise over ReliefRun metres to ReliefMax, rolled
         // by two Perlin octaves so the rim reads as ground, not
-        // as a cone. Deterministic — same bake every run.
+        // as a cone — and past the foothills, the Phase 5 rim
+        // range keeps climbing (RimStart..RimFull) with a
+        // craggier octave, so the horizon is highland all the
+        // way out. Deterministic — same bake every run.
         private static float BaseGroundHeight(float wx, float wz)
         {
             // World -> layout (the frame the hexagon lives in).
@@ -449,7 +479,12 @@ namespace LunarDominion.Editor
             float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(d / ReliefRun));
             float rolling = 0.65f + 0.35f * Mathf.PerlinNoise(wx * 0.021f + 13.7f, wz * 0.021f + 4.2f);
             float swell = 1.2f * Mathf.PerlinNoise(wx * 0.006f + 3.1f, wz * 0.006f + 8.4f);
-            return ReliefMax * t * rolling + swell * t;
+            float height = ReliefMax * t * rolling + swell * t;
+
+            float rimT = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(RimStart, RimFull, d));
+            float crag = 0.70f + 0.45f * Mathf.PerlinNoise(wx * 0.013f + 7.9f, wz * 0.013f + 1.3f);
+            height += RimMax * rimT * crag;
+            return height;
         }
 
         // Signed distance from a layout-space point to the
@@ -559,6 +594,7 @@ namespace LunarDominion.Editor
                 ("Lab plot",       -45f,     0f,   true),
                 ("south outside",   0f,    -70f,  false),
                 ("north-east out",  90f,    60f,  false),
+                ("rim far south",   0f,    -230f, false),
             };
             foreach (var p in probes)
             {

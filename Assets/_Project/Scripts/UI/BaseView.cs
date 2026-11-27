@@ -556,7 +556,7 @@ namespace LunarDominion.UI
             if (data == null) return false;
 
             var go = new GameObject("BaseTerrain");
-            go.transform.position = new Vector3(-96f, 0f, -96f);
+            go.transform.position = new Vector3(-256f, 0f, -256f);
             var terrain = go.AddComponent<Terrain>();
             terrain.terrainData = data;
             if (mat != null) terrain.materialTemplate = mat;
@@ -573,8 +573,8 @@ namespace LunarDominion.UI
         {
             var data = s_baseTerrainData;
             if (data == null) return 0f;
-            float u = Mathf.Clamp01((worldX + 96f) / 192f);
-            float v = Mathf.Clamp01((worldZ + 96f) / 192f);
+            float u = Mathf.Clamp01((worldX + 256f) / 512f);
+            float v = Mathf.Clamp01((worldZ + 256f) / 512f);
             return data.GetInterpolatedHeight(u, v);
         }
 
