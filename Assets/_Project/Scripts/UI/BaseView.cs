@@ -1602,12 +1602,18 @@ namespace LunarDominion.UI
                 }
                 Bounds bounds = new Bounds();
                 bool hasBounds = false;
+                // Per-piece geometry centres in the same root-local
+                // frame, captured for the two-tone classification
+                // in the treatment loop below.
+                var pieceCenters = new Dictionary<Renderer, Vector3>();
                 var toLocal = go.transform.worldToLocalMatrix;
                 foreach (var mf in meshFilters)
                 {
                     if (mf.sharedMesh == null) continue;
                     var m = toLocal * mf.transform.localToWorldMatrix;
                     var mb = mf.sharedMesh.bounds;
+                    Bounds pieceBounds = new Bounds();
+                    bool pieceHas = false;
                     for (int i = 0; i < 8; i++)
                     {
                         var corner = new Vector3(
@@ -1615,12 +1621,23 @@ namespace LunarDominion.UI
                             (i & 2) == 0 ? mb.min.y : mb.max.y,
                             (i & 4) == 0 ? mb.min.z : mb.max.z);
                         var p = m.MultiplyPoint3x4(corner);
+                        if (!pieceHas)
+                        {
+                            pieceBounds = new Bounds(p, Vector3.zero);
+                            pieceHas = true;
+                        }
+                        else pieceBounds.Encapsulate(p);
                         if (!hasBounds)
                         {
                             bounds = new Bounds(p, Vector3.zero);
                             hasBounds = true;
                         }
                         else bounds.Encapsulate(p);
+                    }
+                    if (pieceHas)
+                    {
+                        var pieceRend = mf.GetComponent<Renderer>();
+                        if (pieceRend != null) pieceCenters[pieceRend] = pieceBounds.center;
                     }
                 }
                 if (!hasBounds)
@@ -1665,15 +1682,21 @@ namespace LunarDominion.UI
                         // reference the Nexus hub is white and the
                         // outer pieces are blue, so the tint target
                         // depends on where the piece sits. Classify
-                        // by the piece origin's distance from the
-                        // measured assembly centre - root-local
-                        // space, the same frame `bounds` was
-                        // measured in, and invariant under the
-                        // recentring above - normalised by the
+                        // by the piece's measured GEOMETRY centre -
+                        // not its transform origin: kit pivots sit
+                        // at connection points, so the origin rule
+                        // misjudged real pieces (Patrick's close-up,
+                        // 2026-11-27: the shoulder left of the
+                        // antenna read blue, the right semi-circle
+                        // read white). Centres come from the
+                        // measurement pass above, root-local, the
+                        // same frame as `bounds`, normalised by the
                         // bounding-sphere radius: inside
                         // KitNexusCoreFraction the piece blends
                         // toward white, outside toward cobalt.
-                        Vector3 pieceLocal = go.transform.worldToLocalMatrix.MultiplyPoint3x4(rend.transform.position);
+                        Vector3 pieceLocal;
+                        if (!pieceCenters.TryGetValue(rend, out pieceLocal))
+                            pieceLocal = go.transform.worldToLocalMatrix.MultiplyPoint3x4(rend.transform.position);
                         float coreDist = (pieceLocal - bounds.center).magnitude / bounds.extents.magnitude;
                         if (coreDist < KitNexusCoreFraction)
                         {
