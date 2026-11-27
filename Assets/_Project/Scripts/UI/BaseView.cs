@@ -1399,6 +1399,13 @@ namespace LunarDominion.UI
         private const float KitNexusMetallic = 0.6f;
         private const float KitNexusSmoothness = 0.9f;
 
+        // Two-tone core fraction (Patrick, 2026-11-27): pieces
+        // whose origin sits within this fraction of the assembly's
+        // bounding-sphere radius from its centre get the white
+        // treatment; the rest get the blue. His reference: white
+        // hub, blue outskirts. One-line tuning knob.
+        private const float KitNexusCoreFraction = 0.38f;
+
         // Kit Marine instance scale: 0.7 (Patrick, 2026-11-20).
         // The 2026-11-20 barracks assembly is built from Small
         // parts, so the shared 0.375 (calibrated on the Large
@@ -1654,8 +1661,30 @@ namespace LunarDominion.UI
                     // skips renderers with no captured colour.
                     if (mat.HasProperty("_Color"))
                     {
-                        mat.color = Color.Lerp(mat.color,
-                            new Color(0.05f, 0.28f, 0.95f, mat.color.a), 0.6f);
+                        // Two-tone (Patrick, 2026-11-27): in his
+                        // reference the Nexus hub is white and the
+                        // outer pieces are blue, so the tint target
+                        // depends on where the piece sits. Classify
+                        // by the piece origin's distance from the
+                        // measured assembly centre - root-local
+                        // space, the same frame `bounds` was
+                        // measured in, and invariant under the
+                        // recentring above - normalised by the
+                        // bounding-sphere radius: inside
+                        // KitNexusCoreFraction the piece blends
+                        // toward white, outside toward cobalt.
+                        Vector3 pieceLocal = go.transform.worldToLocalMatrix.MultiplyPoint3x4(rend.transform.position);
+                        float coreDist = (pieceLocal - bounds.center).magnitude / bounds.extents.magnitude;
+                        if (coreDist < KitNexusCoreFraction)
+                        {
+                            mat.color = Color.Lerp(mat.color,
+                                new Color(0.93f, 0.95f, 0.98f, mat.color.a), 0.7f);
+                        }
+                        else
+                        {
+                            mat.color = Color.Lerp(mat.color,
+                                new Color(0.05f, 0.28f, 0.95f, mat.color.a), 0.6f);
+                        }
                         partColors[rend] = mat.color;
                     }
                     if (mat.HasProperty("_Metallic"))
