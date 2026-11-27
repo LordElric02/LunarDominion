@@ -1387,11 +1387,12 @@ namespace LunarDominion.UI
         // applied to the instanced kit materials at load. Silver era
         // (Patrick, 2026-11-18/20): metallic 0.75, smoothness 0.8,
         // the brightest, cleanest metal in the base. Blue experiment
-        // (Patrick, 2026-11-26): metallic 0.9, smoothness 0.9 to go
-        // with the cobalt tint in TryAddKitNexus - if the metal
-        // reads too dark in the base lighting, metallic is the dial
-        // to walk back first.
-        private const float KitNexusMetallic = 0.9f;
+        // (Patrick, 2026-11-26): the first look at metallic 0.9 with
+        // a 0.75 tint blend crushed the Nexus to a dark navy slab -
+        // corrected same night to metallic 0.8 and a 0.45 blend
+        // toward a brighter blue, so the pale panels stay pale
+        // (two-tone, like Patrick's reference image).
+        private const float KitNexusMetallic = 0.8f;
         private const float KitNexusSmoothness = 0.9f;
 
         // Kit Marine instance scale: 0.7 (Patrick, 2026-11-20).
@@ -1650,7 +1651,7 @@ namespace LunarDominion.UI
                     if (mat.HasProperty("_Color"))
                     {
                         mat.color = Color.Lerp(mat.color,
-                            new Color(0.10f, 0.32f, 0.95f, mat.color.a), 0.75f);
+                            new Color(0.16f, 0.40f, 0.98f, mat.color.a), 0.45f);
                         partColors[rend] = mat.color;
                     }
                     if (mat.HasProperty("_Metallic"))
@@ -4704,9 +4705,9 @@ namespace LunarDominion.UI
             var color = profile.Add<ColorAdjustments>();
             color.active = true;
             color.postExposure.overrideState = true;
-            color.postExposure.value = 0.05f;
+            color.postExposure.value = 0.35f;
             color.contrast.overrideState = true;
-            color.contrast.value = 12f;
+            color.contrast.value = 8f;
             color.saturation.overrideState = true;
             color.saturation.value = 16f;
             color.colorFilter.overrideState = true;
