@@ -236,7 +236,7 @@ namespace LunarDominion.UI
             // (was 1.25 white) so the base reads vivid and the shadows
             // have definition, and a stronger cool fill (was 0.35) so
             // the faces turned away from the sun stay readable.
-            light.intensity = 1.5f;
+            light.intensity = 1.8f;
             light.color = new Color(1.0f, 0.96f, 0.88f);
             lightGo.transform.position = new Vector3(5f, 10f, 0f);
             lightGo.transform.LookAt(Vector3.zero);
@@ -248,7 +248,7 @@ namespace LunarDominion.UI
             var fillGo = new GameObject("Fill Light");
             var fill = fillGo.AddComponent<Light>();
             fill.type = LightType.Directional;
-            fill.intensity = 0.5f;
+            fill.intensity = 0.35f;
             fill.color = new Color(0.8f, 0.85f, 1f);
             fillGo.transform.position = new Vector3(-5f, 8f, -5f);
             fillGo.transform.LookAt(Vector3.zero);
@@ -1391,8 +1391,12 @@ namespace LunarDominion.UI
         // a 0.75 tint blend crushed the Nexus to a dark navy slab -
         // corrected same night to metallic 0.8 and a 0.45 blend
         // toward a brighter blue, so the pale panels stay pale
-        // (two-tone, like Patrick's reference image).
-        private const float KitNexusMetallic = 0.8f;
+        // (two-tone, like Patrick's reference image). Second
+        // correction: the 0.45 blend still read powdery, so the
+        // blend went to 0.6 toward a deeper blue and metallic
+        // dropped to 0.6 - high metalness greys the tint, since
+        // metal takes its colour from reflections, not the albedo.
+        private const float KitNexusMetallic = 0.6f;
         private const float KitNexusSmoothness = 0.9f;
 
         // Kit Marine instance scale: 0.7 (Patrick, 2026-11-20).
@@ -1651,7 +1655,7 @@ namespace LunarDominion.UI
                     if (mat.HasProperty("_Color"))
                     {
                         mat.color = Color.Lerp(mat.color,
-                            new Color(0.16f, 0.40f, 0.98f, mat.color.a), 0.45f);
+                            new Color(0.05f, 0.28f, 0.95f, mat.color.a), 0.6f);
                         partColors[rend] = mat.color;
                     }
                     if (mat.HasProperty("_Metallic"))
@@ -4709,7 +4713,7 @@ namespace LunarDominion.UI
             color.contrast.overrideState = true;
             color.contrast.value = 8f;
             color.saturation.overrideState = true;
-            color.saturation.value = 16f;
+            color.saturation.value = 22f;
             color.colorFilter.overrideState = true;
             color.colorFilter.value = new Color(1.04f, 0.99f, 0.92f);
 
