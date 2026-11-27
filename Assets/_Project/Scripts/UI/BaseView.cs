@@ -1378,14 +1378,16 @@ namespace LunarDominion.UI
         // centrepiece). One-line tuning knob.
         private const float KitNexusScale = 0.5f;
 
-        // Silver treatment dials for the kit Nexus (Patrick, 2026-11-18:
-        // "more silverish and shiny"): metalness and gloss applied to
-        // the instanced kit materials at load. Raised 2026-11-20
-        // (metallic 0.65 -> 0.75, smoothness 0.65 -> 0.8) as part of
-        // the base colour scheme: the Nexus stays the brightest,
-        // cleanest metal in the base.
-        private const float KitNexusMetallic = 0.75f;
-        private const float KitNexusSmoothness = 0.8f;
+        // Treatment dials for the kit Nexus: metalness and gloss
+        // applied to the instanced kit materials at load. Silver era
+        // (Patrick, 2026-11-18/20): metallic 0.75, smoothness 0.8,
+        // the brightest, cleanest metal in the base. Blue experiment
+        // (Patrick, 2026-11-26): metallic 0.9, smoothness 0.9 to go
+        // with the cobalt tint in TryAddKitNexus - if the metal
+        // reads too dark in the base lighting, metallic is the dial
+        // to walk back first.
+        private const float KitNexusMetallic = 0.9f;
+        private const float KitNexusSmoothness = 0.9f;
 
         // Kit Marine instance scale: 0.7 (Patrick, 2026-11-20).
         // The 2026-11-20 barracks assembly is built from Small
@@ -1627,10 +1629,12 @@ namespace LunarDominion.UI
                     // the treatment below and Highlight() never touch
                     // the shared kit materials.
                     var mat = rend.material;
-                    // Silver treatment (Patrick, 2026-11-18): cool the
-                    // tint toward silver and raise metalness/gloss,
+                    // Blue treatment (Patrick, 2026-11-26,
+                    // experiment; silver 2026-11-18 before it): blend
+                    // the tint strongly toward a cobalt blue and
+                    // raise metalness/gloss (the KitNexus dials),
                     // THEN capture the colour, so Highlight() restores
-                    // the silvered base, not the kit's original paint.
+                    // the treated base, not the kit's original paint.
                     // Alpha is preserved so the glass stays glass.
                     // The hologram's particle/additive materials have
                     // no _Color property: reading or writing .color on
@@ -1641,7 +1645,7 @@ namespace LunarDominion.UI
                     if (mat.HasProperty("_Color"))
                     {
                         mat.color = Color.Lerp(mat.color,
-                            new Color(0.82f, 0.85f, 0.90f, mat.color.a), 0.55f);
+                            new Color(0.10f, 0.32f, 0.95f, mat.color.a), 0.75f);
                         partColors[rend] = mat.color;
                     }
                     if (mat.HasProperty("_Metallic"))
