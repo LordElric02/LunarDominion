@@ -592,9 +592,12 @@ namespace LunarDominion.UI
 
             // Regolith texture (GroundRegolith.png in
             // Resources/Textures/). If it loads, it replaces the flat
-            // colour: the PNG is authored in sRGB at the ground's
-            // colour, so the material colour goes to white — colour x
-            // texture would double-darken it. Tiled (19,19) across
+            // colour. The material colour was white while the PNG
+            // carried the full colour; since 2026-11-27 it is the
+            // dirt-darkening tint below (Patrick's reference: the
+            // ground reads a deeper warm brown-grey), applied to
+            // both ground materials so the dirt inside and outside
+            // the walls darkens together. Tiled (19,19) across
             // the 132x132 ground (2026-11-13; was (8,7) across
             // 56x48 — same texel density), Wrap Mode Repeat. If the
             // PNG is missing,
@@ -606,7 +609,7 @@ namespace LunarDominion.UI
                 regolith.wrapMode = TextureWrapMode.Repeat;
                 groundRenderer.material.mainTexture = regolith;
                 groundRenderer.material.mainTextureScale = new Vector2(19f, 19f);
-                groundRenderer.material.color = Color.white;
+                groundRenderer.material.color = new Color(0.60f, 0.56f, 0.52f);
             }
             // Ground normal map (GroundRegolith_Normal.png in
             // Resources/Textures/, from BuildGroundTextureV2.py). Same
@@ -719,14 +722,16 @@ namespace LunarDominion.UI
                 // march marker), then the texture goes on that material.
                 // White so the paving shows at full brightness.
                 SetPrimitiveColor(rend, Color.white);
-                // URP Lit, texture as _BaseMap. The PNG is authored in
-                // sRGB at the paving's colour, so the material colour
-                // goes to white — colour x texture would double-darken.
-                // One tile across the whole plane (no repeat): the
-                // markings are positioned, not tiled.
+                // URP Lit, texture as _BaseMap. One tile across the
+                // whole plane (no repeat): the markings are
+                // positioned, not tiled. The material colour is the
+                // dirt-darkening tint (2026-11-27, matching the
+                // regolith outside): the diffuse - sand and painted
+                // roads alike - goes deeper, while the emission
+                // markings ride on their own map and stay bright.
                 rend.material.mainTexture = paved;
                 rend.material.mainTextureScale = Vector2.one;
-                rend.material.color = Color.white;
+                rend.material.color = new Color(0.60f, 0.56f, 0.52f);
                 var pavedNormal = Resources.Load<Texture2D>("Textures/GroundPaved_Normal");
                 if (pavedNormal != null)
                 {
@@ -4891,7 +4896,12 @@ namespace LunarDominion.UI
             var color = profile.Add<ColorAdjustments>();
             color.active = true;
             color.postExposure.overrideState = true;
-            color.postExposure.value = 0.35f;
+            // 0.35 while the grade was new (compensating ACES);
+            // Patrick found the base still too bright against his
+            // reference (2026-11-27), so exposure drops to 0.10 -
+            // the whole Base view dims, dirt tint compounding on
+            // the ground only.
+            color.postExposure.value = 0.10f;
             color.contrast.overrideState = true;
             color.contrast.value = 13f;
             color.saturation.overrideState = true;
