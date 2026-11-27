@@ -4969,24 +4969,23 @@ namespace LunarDominion.UI
             color.colorFilter.value = new Color(1.06f, 0.98f, 0.89f);
 
             _basePostVolume.profile = profile;
-            // Sync to the view's current visibility: the Base
-            // tab is the startup tab, so its SetVisible(true)
-            // can run before this volume exists (or not fire
-            // again until a tab change) — without this the
-            // first view of a session renders UNGRADED and the
-            // grade only kicks in after a Map round-trip
-            // (Patrick, 2026-11-27: leaving the base and coming
-            // back changed its colour).
-            _basePostVolume.enabled = _visible;
+            // The volume starts (and stays) disabled: Patrick
+            // prefers the ungraded, less-warm look (2026-11-27,
+            // after seeing both on the new terrain). SetVisible
+            // keeps it off; the profile above is preserved so
+            // the grade can be revived in one line there.
         }
 
         public void SetVisible(bool visible)
         {
             _visible = visible;
-            // The base grade lives only while the Base tab is
-            // open (mirrors the Map's post volume): leaving the
-            // tab hands the frame back to the Map / lair grades.
-            if (_basePostVolume != null) _basePostVolume.enabled = visible;
+            // The base grade stays OFF (Patrick, 2026-11-27):
+            // he prefers the ungraded, less-warm look — the
+            // view a session used to open with before the grade
+            // kicked in after a tab round-trip. The volume is
+            // still built (BuildBasePostProcessing) so the
+            // grade can return with a one-line change here.
+            if (_basePostVolume != null) _basePostVolume.enabled = false;
             foreach (var go in _buildingObjects.Values) go.SetActive(visible);
             // The support vehicle hides with the buildings (fix
             // 2026-11-20): it is in neither the building list nor
