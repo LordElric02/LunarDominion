@@ -147,6 +147,7 @@ namespace LunarDominion.UI
         private readonly RawImage[] _portraitImages = new RawImage[4];
         private readonly Image[] _portraitHpFills = new Image[4];
         private readonly GameObject[] _portraitSlashes = new GameObject[4];
+        private readonly Text[] _portraitLevels = new Text[4];
         private readonly UnitId[] _portraitIds = new UnitId[4];
         private int _actingPortrait = -1;
         private readonly Image[] _cardFrames = new Image[4];
@@ -2197,6 +2198,18 @@ namespace LunarDominion.UI
                 slash.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -32f);
                 slash.gameObject.SetActive(false);
                 _portraitSlashes[i] = slash.gameObject;
+                // Level badge (Patrick, 2026-11-28): a small
+                // dark plate in the frame's top-left corner, in
+                // the same translucent style as the HP bar's
+                // backing plate, carrying the hero's level.
+                PlatePiece(frame.transform, "PortraitLevelBg" + i,
+                    new Color(0f, 0f, 0f, 0.55f),
+                    new Vector2(0.07f, 0.79f), new Vector2(0.70f, 0.95f),
+                    Vector2.zero, Vector2.zero);
+                _portraitLevels[i] = UIHelpers.LabelInRect(frame.gameObject,
+                    "PortraitLevel" + i, "Lv 1", 16, Color.white,
+                    new Rect(0.12f, 0.79f, 0.70f, 0.95f), TextAnchor.MiddleLeft);
+                _portraitLevels[i].raycastTarget = false;
             }
 
             // The action fan: hidden until the acting hero is
@@ -3591,6 +3604,8 @@ namespace LunarDominion.UI
                 _portraitImages[i].color = hero.Alive
                     ? Color.white : new Color(0.35f, 0.35f, 0.35f, 1f);
                 _portraitSlashes[i].SetActive(!hero.Alive);
+                if (_portraitLevels[i] != null)
+                    _portraitLevels[i].text = "Lv " + hero.Level;
                 if (hero.Alive && !hero.Acted && !_turnFight.Finished
                     && _turnFight.SelectedHero == i)
                     _actingPortrait = i;
