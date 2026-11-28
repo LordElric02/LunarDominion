@@ -1850,26 +1850,33 @@ namespace LunarDominion.UI
         // The hero figure build (same shapes as RefreshHeroFigures:
         // capsule body, sphere head, coloured ground disc) as a
         // standalone root the combatant can move and tip over.
+        // The visual lives under a "HeroModelNormal" container and
+        // gets an illuminated twin under "HeroModelSelected"
+        // (Patrick 2026-11-27): the turn fight lights the acting
+        // hero by swapping models instead of pulsing the disc.
         private GameObject BuildCombatFigure(UnitDefinition def, Color color)
         {
             var fig = new GameObject("HeroFigure_" + def.DisplayName);
-            if (!TryAddHeroModel(fig, def))
+            var normal = new GameObject("HeroModelNormal");
+            normal.transform.SetParent(fig.transform, false);
+            if (!TryAddHeroModel(normal, def))
             {
                 var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 body.name = "HeroBody";
-                body.transform.SetParent(fig.transform, false);
+                body.transform.SetParent(normal.transform, false);
                 body.transform.localPosition = new Vector3(0f, 1.3f, 0f);
                 body.transform.localScale = new Vector3(1.0f, 1.3f, 1.0f);
                 SetColor(body.GetComponent<Renderer>(), color);
                 Destroy(body.GetComponent<Collider>());
                 var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 head.name = "HeroHead";
-                head.transform.SetParent(fig.transform, false);
+                head.transform.SetParent(normal.transform, false);
                 head.transform.localPosition = new Vector3(0f, 2.9f, 0f);
                 head.transform.localScale = Vector3.one * 0.8f;
                 SetColor(head.GetComponent<Renderer>(), new Color(0.85f, 0.75f, 0.65f));
                 Destroy(head.GetComponent<Collider>());
             }
+            AddSelectedTwin(fig, normal, color);
             var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             disc.name = "HeroDisc";
             disc.transform.SetParent(fig.transform, false);
@@ -1878,6 +1885,46 @@ namespace LunarDominion.UI
             SetColor(disc.GetComponent<Renderer>(), color);
             Destroy(disc.GetComponent<Collider>());
             return fig;
+        }
+
+        // The illuminated "selected" twin of a hero figure
+        // (Patrick 2026-11-27): a full copy of the normal model
+        // with brightened base colours and a strong emissive in
+        // the hero's colour, parked inactive under the figure.
+        // TurnBasedBossFight swaps it in for the acting hero.
+        // Materials follow the walker-tint pattern — per-renderer
+        // instantiated copies, so the shared model assets and the
+        // normal model's materials are never touched. The clone
+        // inherits the normal model's collider-stripped state.
+        private static void AddSelectedTwin(GameObject fig, GameObject normal, Color color)
+        {
+            var twin = Instantiate(normal);
+            twin.name = "HeroModelSelected";
+            twin.transform.SetParent(fig.transform, false);
+            twin.transform.localPosition = normal.transform.localPosition;
+            twin.transform.localRotation = normal.transform.localRotation;
+            twin.transform.localScale = normal.transform.localScale;
+            foreach (var renderer in twin.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                var mats = renderer.materials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var mat = mats[i];
+                    if (mat == null) continue;
+                    if (mat.HasProperty("_BaseColor"))
+                        mat.SetColor("_BaseColor", mat.GetColor("_BaseColor") * 1.5f);
+                    else if (mat.HasProperty("_Color"))
+                        mat.SetColor("_Color", mat.GetColor("_Color") * 1.5f);
+                    if (mat.HasProperty("_EmissionColor"))
+                    {
+                        mat.SetColor("_EmissionColor", color * 2.2f);
+                        mat.EnableKeyword("_EMISSION");
+                    }
+                }
+                renderer.materials = mats;
+            }
+            twin.SetActive(false);
         }
 
         private void CleanupRealtimeCombatants()

@@ -19,6 +19,8 @@ namespace LunarDominion.Boss
         public Vector3 Home;
         public Quaternion OrigRot;
         public Transform Disc;
+        public Transform ModelNormal;
+        public Transform ModelSelected;
         public int MaxHp;
         public int Hp;
         public int Atk;
@@ -340,6 +342,10 @@ namespace LunarDominion.Boss
                 hero.Hp = hero.MaxHp;
                 var disc = hero.Figure.transform.Find("HeroDisc");
                 hero.Disc = disc;
+                hero.ModelNormal = hero.Figure.transform.Find("HeroModelNormal");
+                hero.ModelSelected = hero.Figure.transform.Find("HeroModelSelected");
+                if (hero.ModelSelected != null)
+                    hero.ModelSelected.gameObject.SetActive(false);
             }
             BossMaxHp = bossMaxHp;
             BossHp = bossMaxHp;
@@ -2177,15 +2183,24 @@ namespace LunarDominion.Boss
                 pos.y += Mathf.Sin(Time.time * 2.2f + i * 1.7f) * 0.25f;
                 drone.Figure.transform.position = pos;
             }
-            // The selected hero's disc pulses.
+            // The acting hero's figure swaps to its illuminated
+            // "selected" model (Patrick 2026-11-27: the pulsing
+            // ground disc was not intuitive, so the disc is now
+            // just a static base). Lit means "waiting for your
+            // order" — the same window the disc pulse used: the
+            // hero un-lights while their own action animates
+            // (Busy) and once they have acted. SetActive only
+            // fires on an actual change.
             for (int i = 0; i < Heroes.Count; i++)
             {
                 var hero = Heroes[i];
-                if (hero.Disc == null) continue;
-                float s = 1.6f;
-                if (i == SelectedHero && !Busy && hero.Alive && !hero.Acted)
-                    s = 1.6f + Mathf.Sin(Time.time * 5f) * 0.18f;
-                hero.Disc.localScale = new Vector3(s, 0.1f, s);
+                if (hero.ModelSelected == null || hero.ModelNormal == null) continue;
+                bool lit = i == SelectedHero && !Busy && hero.Alive && !hero.Acted;
+                if (hero.ModelSelected.gameObject.activeSelf != lit)
+                {
+                    hero.ModelSelected.gameObject.SetActive(lit);
+                    hero.ModelNormal.gameObject.SetActive(!lit);
+                }
             }
             // The slam telegraph ring breathes at the boss's feet.
             if (_slamRing != null)
