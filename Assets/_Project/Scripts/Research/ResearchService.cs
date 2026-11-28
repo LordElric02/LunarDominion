@@ -201,6 +201,20 @@ namespace LunarDominion.Research
             return true;
         }
 
+        /// <summary>DEV/test helper (2026-11-27, Patrick's request):
+        /// finish the active research immediately. The cost was
+        /// already paid in full by StartResearch — this only moves
+        /// the finish time into the past and runs the normal
+        /// completion path, so the level is granted by exactly the
+        /// same rules as a waited-out timer. Returns true when a
+        /// level was granted; false when nothing is researching.</summary>
+        public bool CompleteActiveNow()
+        {
+            if (!IsResearching) return false;
+            _state.ActiveResearchFinishUtc = DateTime.UtcNow.AddMinutes(-1).ToString("o");
+            return TryComplete(DateTime.UtcNow, out _);
+        }
+
         private void ClearActive()
         {
             _state.ActiveResearchId = -1;
