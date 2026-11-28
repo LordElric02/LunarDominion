@@ -1849,12 +1849,14 @@ namespace LunarDominion.UI
         }
 
         // The hero figure build (same shapes as RefreshHeroFigures:
-        // capsule body, sphere head, coloured ground disc) as a
-        // standalone root the combatant can move and tip over.
-        // The visual lives under a "HeroModelNormal" container and
-        // gets an illuminated twin under "HeroModelSelected"
-        // (Patrick 2026-11-27): the turn fight lights the acting
-        // hero by swapping models instead of pulsing the disc.
+        // capsule body, sphere head) as a standalone root the
+        // combatant can move and tip over. The visual lives under
+        // a "HeroModelNormal" container and gets an illuminated
+        // twin under "HeroModelSelected" (Patrick 2026-11-27):
+        // the turn fight lights the acting hero by swapping
+        // models. (The coloured ground disc the figures used to
+        // stand on was removed 2026-11-28 at Patrick's direction:
+        // the lit model made it redundant.)
         private GameObject BuildCombatFigure(UnitDefinition def, Color color)
         {
             var fig = new GameObject("HeroFigure_" + def.DisplayName);
@@ -1878,13 +1880,6 @@ namespace LunarDominion.UI
                 Destroy(head.GetComponent<Collider>());
             }
             AddSelectedTwin(fig, normal, color);
-            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            disc.name = "HeroDisc";
-            disc.transform.SetParent(fig.transform, false);
-            disc.transform.localPosition = new Vector3(0f, 0.05f, 0f);
-            disc.transform.localScale = new Vector3(1.6f, 0.1f, 1.6f);
-            SetColor(disc.GetComponent<Renderer>(), color);
-            Destroy(disc.GetComponent<Collider>());
             return fig;
         }
 

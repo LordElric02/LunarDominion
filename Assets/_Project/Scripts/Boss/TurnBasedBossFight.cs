@@ -18,7 +18,6 @@ namespace LunarDominion.Boss
         public GameObject Figure;
         public Vector3 Home;
         public Quaternion OrigRot;
-        public Transform Disc;
         public Transform ModelNormal;
         public Transform ModelSelected;
         public int MaxHp;
@@ -340,8 +339,6 @@ namespace LunarDominion.Boss
                 hero.Home = hero.Figure.transform.position;
                 hero.OrigRot = hero.Figure.transform.rotation;
                 hero.Hp = hero.MaxHp;
-                var disc = hero.Figure.transform.Find("HeroDisc");
-                hero.Disc = disc;
                 hero.ModelNormal = hero.Figure.transform.Find("HeroModelNormal");
                 hero.ModelSelected = hero.Figure.transform.Find("HeroModelSelected");
                 if (hero.ModelSelected != null)
