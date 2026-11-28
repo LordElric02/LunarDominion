@@ -71,6 +71,15 @@ namespace LunarDominion.Boss
 
         private Transform _bossRoot;
         private Pose _home;
+        // The framing exactly as captured at fight start.
+        // Phase2Push moves the WORKING home (_home) closer for
+        // the rest of its fight, but the camera must be handed
+        // back at the true home: restoring the pushed home and
+        // letting the next fight capture it ratcheted the
+        // framing tighter every fight (Patrick, 2026-11-28 —
+        // a long chain of fights in one session zoomed the
+        // lair view in to roughly half its field of view).
+        private Pose _trueHome;
         private Pose _cur;
         private Pose _from;
         private Pose _to;
@@ -94,6 +103,9 @@ namespace LunarDominion.Boss
         public Vector3 HomePos => _home.Pos;
         public Quaternion HomeRot => _home.Rot;
         public float HomeFov => _home.Fov;
+        public Vector3 TrueHomePos => _trueHome.Pos;
+        public Quaternion TrueHomeRot => _trueHome.Rot;
+        public float TrueHomeFov => _trueHome.Fov;
 
         private Vector3 BossPos => _bossRoot != null
             ? _bossRoot.position
@@ -113,6 +125,7 @@ namespace LunarDominion.Boss
                 Fov = cam.fieldOfView,
                 Roll = 0f,
             };
+            _trueHome = _home;
             _cur = _home;
             _from = _home;
             _to = _home;

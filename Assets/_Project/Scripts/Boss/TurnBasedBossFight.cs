@@ -1639,9 +1639,14 @@ namespace LunarDominion.Boss
             EndHitStop();
             if (_cam != null && Director != null)
             {
-                _cam.transform.position = Director.HomePos;
-                _cam.transform.rotation = Director.HomeRot;
-                _cam.fieldOfView = Director.HomeFov;
+                // Restore the TRUE home captured at Begin, not
+                // the working home: Phase2Push moved the working
+                // home closer mid-fight, and handing that back
+                // made every fight in a session start tighter
+                // than the last (camera drift, fixed 2026-11-28).
+                _cam.transform.position = Director.TrueHomePos;
+                _cam.transform.rotation = Director.TrueHomeRot;
+                _cam.fieldOfView = Director.TrueHomeFov;
                 Director.Release();
             }
             else if (_cam != null) _cam.transform.position = _camBasePos;
