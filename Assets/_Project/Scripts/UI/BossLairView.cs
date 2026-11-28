@@ -1889,8 +1889,10 @@ namespace LunarDominion.UI
 
         // The illuminated "selected" twin of a hero figure
         // (Patrick 2026-11-27): a full copy of the normal model
-        // with brightened base colours and a strong emissive in
-        // the hero's colour, parked inactive under the figure.
+        // with brightened base colours and an emissive in the
+        // hero's colour, parked inactive under the figure.
+        // (Glow halved the same evening: Patrick found the first
+        // pass — base x1.5, emission x2.2 — very bright.)
         // TurnBasedBossFight swaps it in for the acting hero.
         // Materials follow the walker-tint pattern — per-renderer
         // instantiated copies, so the shared model assets and the
@@ -1913,12 +1915,12 @@ namespace LunarDominion.UI
                     var mat = mats[i];
                     if (mat == null) continue;
                     if (mat.HasProperty("_BaseColor"))
-                        mat.SetColor("_BaseColor", mat.GetColor("_BaseColor") * 1.5f);
+                        mat.SetColor("_BaseColor", mat.GetColor("_BaseColor") * 1.25f);
                     else if (mat.HasProperty("_Color"))
-                        mat.SetColor("_Color", mat.GetColor("_Color") * 1.5f);
+                        mat.SetColor("_Color", mat.GetColor("_Color") * 1.25f);
                     if (mat.HasProperty("_EmissionColor"))
                     {
-                        mat.SetColor("_EmissionColor", color * 2.2f);
+                        mat.SetColor("_EmissionColor", color * 1.1f);
                         mat.EnableKeyword("_EMISSION");
                     }
                 }
